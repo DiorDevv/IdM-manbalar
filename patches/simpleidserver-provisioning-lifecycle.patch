@@ -1,0 +1,892 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/IdServerBuilderExtensions.cs b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/IdServerBuilderExtensions.cs
+index 85563ed..441ca96 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/IdServerBuilderExtensions.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/IdServerBuilderExtensions.cs
+@@ -20,6 +20,7 @@ public static class IdServerBuilderExtensions
+     {
+         builder.Services.AddTransient<IIdProviderAuthService, LDAPAuthenticationService>();
+         builder.Services.AddTransient<IProvisioningService, LDAPProvisioningService>();
++        builder.Services.AddTransient<IIdentityStateProvider, LDAPProvisioningService>();
+         builder.Services.AddTransient<IDataSeeder, ConfigureLdapProvisioningDataSeeder>();
+         builder.Services.AddTransient<IDataSeeder, InitLdapConfigurationDefDataseeder>();
+         builder.AutomaticConfigurationOptions.Add<LDAPRepresentationsExtractionJobOptions>();
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPAuthenticationService.cs b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPAuthenticationService.cs
+index 42a27cb..09d5ea1 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPAuthenticationService.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPAuthenticationService.cs
+@@ -25,7 +25,10 @@ namespace SimpleIdServer.IdServer.Provisioning.LDAP
+ 
+         public bool Authenticate(User user, IdentityProvisioning identityProvisioning, string password)
+         {
+-            var distinguishedName = user.OAuthUserClaims.Single(c => c.Name == Constants.LDAPDistinguishedName).Value;
++            // An LDAP simple bind with an empty password is an "unauthenticated bind" (RFC 4513 5.1.2) which many servers accept.
++            if (string.IsNullOrEmpty(password)) return false;
++            var distinguishedName = user.OAuthUserClaims.SingleOrDefault(c => c.Name == Constants.LDAPDistinguishedName)?.Value;
++            if (string.IsNullOrWhiteSpace(distinguishedName)) return false;
+             var section = _configuration.GetSection($"{identityProvisioning.Name}:{typeof(LDAPRepresentationsExtractionJobOptions).Name}");
+             var options = section.Get<LDAPRepresentationsExtractionJobOptions>() ?? new LDAPRepresentationsExtractionJobOptions();
+             var credentials = new NetworkCredential(distinguishedName, password);
+@@ -34,6 +37,7 @@ namespace SimpleIdServer.IdServer.Provisioning.LDAP
+                 try
+                 {
+                     ldapConnection.SessionOptions.ProtocolVersion = 3;
++                    if (options.UseSsl) ldapConnection.SessionOptions.SecureSocketLayer = true;
+                     ldapConnection.Bind();
+                     return true;
+                 }
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPRepresentationsExtractionJobOptions.cs b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPRepresentationsExtractionJobOptions.cs
+index be515c5..362681b 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPRepresentationsExtractionJobOptions.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/LDAPRepresentationsExtractionJobOptions.cs
+@@ -11,6 +11,8 @@ public class LDAPRepresentationsExtractionJobOptions
+     public string Server { get; set; }
+     [ConfigurationRecord("Port", null, order: 1)]
+     public int Port { get; set; } = 389;
++    [ConfigurationRecord("Use SSL (LDAPS)", "Connect with LDAPS (usually port 636). Required for Active Directory in production.", order: 1)]
++    public bool UseSsl { get; set; } = false;
+     [ConfigurationRecord("Bind DN", "DN of the LDAP admin, which will be used by IdServer to access LDAP Server", order: 2)]
+     public string BindDN { get; set; }
+     [ConfigurationRecord("Bind Credentials", "Password of LDAP admin.", 3, null, CustomConfigurationRecordType.PASSWORD)]
+@@ -53,6 +55,15 @@ public class LDAPRepresentationsExtractionJobOptions
+     public string ModificationDateAttribute { get; set; } = "modificationDate";
+     [ConfigurationRecord("Batch size", "Number of records", order: 16)]
+     public int BatchSize { get; set; } = 1;
++
++    #region Deprovisioning
++
++    [ConfigurationRecord("Disabled users LDAP filter", "LDAP filter matching the disabled users, they are blocked. Active Directory: (userAccountControl:1.2.840.113556.1.4.803:=2)", order: 17)]
++    public string DisabledUserFilter { get; set; }
++    [ConfigurationRecord("Max percentage of users blocked in one run", "Safety limit: when more users would be blocked, nothing is blocked and an error is logged", order: 18)]
++    public int MaxDeprovisioningPercentage { get; set; } = 20;
++
++    #endregion
+ }
+ 
+ public enum LoadingStrategies
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/Services/LDAPProvisioningService.cs b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/Services/LDAPProvisioningService.cs
+index 84d03ec..6234e99 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/Services/LDAPProvisioningService.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Provisioning.LDAP/Services/LDAPProvisioningService.cs
+@@ -4,13 +4,12 @@ using Microsoft.Extensions.Configuration;
+ using SimpleIdServer.IdServer.Domains;
+ using System.DirectoryServices.Protocols;
+ using System.Net;
+-using System.Security.Principal;
+ using System.Text;
+ using System.Text.Json;
+ 
+ namespace SimpleIdServer.IdServer.Provisioning.LDAP.Services;
+ 
+-public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentationsExtractionJobOptions>
++public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentationsExtractionJobOptions>, IIdentityStateProvider
+ {
+     public LDAPProvisioningService(IConfiguration configuration) : base(configuration)
+     {
+@@ -34,7 +33,7 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+         int page = 1;
+         var options = GetOptions(definition);
+         var pr = new PageResultRequestControl(options.BatchSize);
+-        var request = new SearchRequest(options.UsersDN, $"(&{string.Join(string.Empty, options.UserObjectClasses.Split(',').Select(o => $"(objectClass={o})"))})", SearchScope.Subtree);
++        var request = new SearchRequest(options.UsersDN, $"(&{string.Join(string.Empty, options.UserObjectClasses.Split(',').Select(o => $"(objectClass={o})"))})", SearchScope.Subtree, GetRequestedAttributes(options));
+         request.Controls.Add(pr);
+         using (var connection = BuildConnection(options))
+         {
+@@ -63,7 +62,7 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+         int currentPage = 1;
+         var options = GetOptions(definition);
+         var pr = new PageResultRequestControl(options.BatchSize);
+-        var request = new SearchRequest(options.UsersDN, $"(&{string.Join(string.Empty, options.UserObjectClasses.Split(',').Select(o => $"(objectClass={o})"))})", SearchScope.Subtree);
++        var request = new SearchRequest(options.UsersDN, $"(&{string.Join(string.Empty, options.UserObjectClasses.Split(',').Select(o => $"(objectClass={o})"))})", SearchScope.Subtree, GetRequestedAttributes(options));
+         request.Controls.Add(pr);
+         using (var connection = BuildConnection(options))
+         {
+@@ -105,11 +104,16 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+             {
+                 var userGroups = ResolveUserGroups(userId, entry, options, ldapConnection, definition);
+                 groups.AddRange(userGroups);
+-                user.GroupIds = userGroups.Select(g => g.Id).ToList();
++                user.GroupIds = userGroups.Select(g => g.Id).Distinct().OrderBy(i => i, StringComparer.Ordinal).ToList();
++                // With posixGroup/memberUid (and AD memberOf back-links) a membership change does not change the user's
++                // modification date: include the memberships in the version so that the user is imported again.
++                user.Version = $"{version}|{HashGroupIds(user.GroupIds)}";
+             }
+         }
+ 
+-        return new ExtractedResult { Users = users, Groups = groups };
++        // Several users of the same page can belong to the same group: return each group once,
++        // otherwise EF Core / MERGE fails with "another instance with the same key".
++        return new ExtractedResult { Users = users, Groups = groups.GroupBy(g => g.Id).Select(g => g.First()).ToList() };
+     }
+ 
+     private List<ExtractedGroup> ResolveUserGroups(string userId, SearchResultEntry userEntry, LDAPRepresentationsExtractionJobOptions options, LdapConnection connection, IdentityProvisioningDefinition definition)
+@@ -122,7 +126,7 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+             var groupObjectClassLst = options.GroupObjectClasses.Split(',');
+             foreach(var groupObjectClass in groupObjectClassLst)
+             {
+-                var request = new SearchRequest(options.GroupsDN, $"(&(objectClass={groupObjectClass})({options.MembershipLDAPAttribute}={userGroupId}))", SearchScope.OneLevel);
++                var request = new SearchRequest(options.GroupsDN, $"(&(objectClass={groupObjectClass})({options.MembershipLDAPAttribute}={userGroupId}))", SearchScope.OneLevel, GetRequestedAttributes(options));
+                 var response = (SearchResponse)connection.SendRequest(request);
+                 var entries = response.Entries;
+                 if (entries.Count == 0) continue;
+@@ -134,19 +138,16 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+ 
+         if(options.RetrievingStrategies == LoadingStrategies.LOAD_FROM_USER_MEMBEROF_ATTRIBUTE)
+         {
+-            foreach(DirectoryAttribute attr in userEntry.Attributes)
++            if (!userEntry.Attributes.Contains(options.MemberOfAttribute)) return result;
++            var groupDns = (string[])userEntry.Attributes[options.MemberOfAttribute].GetValues(typeof(string));
++            foreach (var dn in groupDns ?? Array.Empty<string>())
+             {
+-                if (attr.Name != options.MemberOfAttribute) continue;
+-                var values = (string[])attr.GetValues(typeof(string));
+-                if (values == null || values.Count() > 1) continue;
+-                var dn = values.First();
+-                var splitted = dn.Split(',');
+-                var rootDN = splitted.Skip(1).Join(",");
+-                var request = new SearchRequest(rootDN, $"({splitted.First()})", System.DirectoryServices.Protocols.SearchScope.OneLevel);
+-                var response = (SearchResponse)connection.SendRequest(request);
+-                var entries = response.Entries;
+-                if (entries.Count == 0) continue;
+-                result.AddRange(ExtractGroups(userId, entries, options, definition));
++                var request = new SearchRequest(dn, "(objectClass=*)", SearchScope.Base, GetRequestedAttributes(options));
++                SearchResponse response;
++                try { response = (SearchResponse)connection.SendRequest(request); }
++                catch (DirectoryOperationException) { continue; } // the group is outside the readable tree
++                if (response.Entries.Count == 0) continue;
++                result.AddRange(ExtractGroups(userId, response.Entries, options, definition));
+             }
+         }
+ 
+@@ -179,7 +180,9 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+         {
+             if (!entry.Attributes.Contains(mappingRule.From))
+             {
+-                if (mappingRule.From == "distinguishedName") lst.Add(entry.DistinguishedName);
++                // Values are matched to the mapping rules by position: a missing attribute must keep its slot,
++                // otherwise the next values are stored under the wrong attributes (e.g. title saved as department).
++                lst.Add(mappingRule.From == "distinguishedName" ? entry.DistinguishedName : null);
+                 continue;
+             }
+ 
+@@ -199,7 +202,7 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+             {
+                 var records = new List<string>();
+                 foreach (var record in entry.Attributes[mappingRule.From])
+-                    records.Add(Encoding.UTF8.GetString((byte[])record));
++                    records.Add(record is byte[] bytes ? Encoding.UTF8.GetString(bytes) : record.ToString());
+ 
+                 lst.Add(JsonSerializer.Serialize(records));
+             }
+@@ -213,13 +216,27 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+     {
+         var attributeName = isUser ? options.UserIdLDAPAttribute : options.GroupIdLDAPAttribute;
+         if (!entry.Attributes.Contains(attributeName)) return entry.DistinguishedName;
+-        var result = entry.Attributes[attributeName][0];
+-        var payload = result as byte[];
+-        if(payload != null)
+-        {
+-            return (new SecurityIdentifier(payload, 0)).ToString();
+-        }
++        var attribute = entry.Attributes[attributeName];
++        // Binary identifiers of Active Directory. DirectoryAttribute returns a string whenever the bytes happen to be
++        // valid UTF-8, so always read them as bytes; objectGUID was previously decoded as a SID.
++        if (string.Equals(attributeName, "objectGUID", StringComparison.OrdinalIgnoreCase))
++            return new Guid((byte[])attribute.GetValues(typeof(byte[]))[0]).ToString();
++        if (string.Equals(attributeName, "objectSid", StringComparison.OrdinalIgnoreCase))
++            return FormatSid((byte[])attribute.GetValues(typeof(byte[]))[0]);
++        var result = attribute[0];
++        if (result is byte[] payload) return FormatSid(payload);
++        return result.ToString();
++    }
+ 
++    /// <summary>
++    /// Binary SID to its string form (S-1-5-21-...), without System.Security.Principal (Windows only).
++    /// </summary>
++    private static string FormatSid(byte[] sid)
++    {
++        var authority = 0UL;
++        for (var i = 2; i < 8; i++) authority = (authority << 8) | sid[i];
++        var result = new StringBuilder($"S-{sid[0]}-{authority}");
++        for (var i = 0; i < sid[1]; i++) result.Append('-').Append(BitConverter.ToUInt32(sid, 8 + 4 * i));
+         return result.ToString();
+     }
+ 
+@@ -229,11 +246,63 @@ public class LDAPProvisioningService : BaseProvisioningService<LDAPRepresentatio
+         return entry.Attributes[options.ModificationDateAttribute][0].ToString();
+     }
+     
++    private static string HashGroupIds(IEnumerable<string> groupIds)
++    {
++        var payload = Encoding.UTF8.GetBytes(string.Join("\n", groupIds));
++        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(payload))[..16];
++    }
++
++    public Task<IdentityStates> GetUserStates(IdentityProvisioningDefinition definition, CancellationToken cancellationToken)
++    {
++        var options = GetOptions(definition);
++        var usersFilter = $"(&{string.Join(string.Empty, options.UserObjectClasses.Split(',').Select(o => $"(objectClass={o})"))})";
++        var result = new IdentityStates { MaxBlockPercentage = options.MaxDeprovisioningPercentage };
++        using (var connection = BuildConnection(options))
++        {
++            result.ExistingUserIds = SearchUserIds(connection, options, usersFilter);
++            if (!string.IsNullOrWhiteSpace(options.DisabledUserFilter))
++            {
++                var disabledFilter = options.DisabledUserFilter.Trim();
++                if (!disabledFilter.StartsWith("(")) disabledFilter = $"({disabledFilter})";
++                result.DisabledUserIds = SearchUserIds(connection, options, $"(&{usersFilter}{disabledFilter})");
++            }
++        }
++
++        return Task.FromResult(result);
++    }
++
++    private HashSet<string> SearchUserIds(LdapConnection connection, LDAPRepresentationsExtractionJobOptions options, string filter)
++    {
++        var result = new HashSet<string>();
++        var pr = new PageResultRequestControl(Math.Max(options.BatchSize, 100));
++        var request = new SearchRequest(options.UsersDN, filter, SearchScope.Subtree, options.UserIdLDAPAttribute);
++        request.Controls.Add(pr);
++        while (true)
++        {
++            var response = (SearchResponse)connection.SendRequest(request);
++            foreach (SearchResultEntry entry in response.Entries)
++                result.Add(GetRepresentationId(entry, options, true));
++            var pageResponse = response.Controls.OfType<PageResultResponseControl>().FirstOrDefault();
++            if (pageResponse == null || !pageResponse.Cookie.Any()) break;
++            pr.Cookie = pageResponse.Cookie;
++        }
++
++        return result;
++    }
++
++    private static string[] GetRequestedAttributes(LDAPRepresentationsExtractionJobOptions options)
++    {
++        // "*" = all user attributes. Operational attributes (modifyTimestamp, whenChanged) must be requested by name.
++        if (string.IsNullOrWhiteSpace(options.ModificationDateAttribute)) return new[] { "*" };
++        return new[] { "*", options.ModificationDateAttribute };
++    }
++
+     private LdapConnection BuildConnection(LDAPRepresentationsExtractionJobOptions options)
+     {
+         var credentials = new NetworkCredential(options.BindDN, options.BindCredentials);
+         var connection = new LdapConnection(new LdapDirectoryIdentifier(options.Server, options.Port), credentials, AuthType.Basic);
+         connection.SessionOptions.ProtocolVersion = 3;
++        if (options.UseSsl) connection.SessionOptions.SecureSocketLayer = true;
+         connection.Bind();
+         return connection;
+     }
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Jobs/IdentityProvisioningSyncJob.cs b/src/IdServer/SimpleIdServer.IdServer/Jobs/IdentityProvisioningSyncJob.cs
+new file mode 100644
+index 0000000..c18d0cf
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer/Jobs/IdentityProvisioningSyncJob.cs
+@@ -0,0 +1,99 @@
++// Copyright (c) SimpleIdServer. All rights reserved.
++// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
++using Hangfire;
++using MassTransit;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.Logging;
++using SimpleIdServer.IdServer.Helpers;
++using SimpleIdServer.IdServer.Provisioning;
++using SimpleIdServer.IdServer.Stores;
++using System;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace SimpleIdServer.IdServer.Jobs;
++
++/// <summary>
++/// Scheduled synchronization: for every enabled identity provisioning instance of every realm, extract the users
++/// from the source and import them automatically (the import then runs the deprovisioning).
++/// </summary>
++[AutomaticRetry(Attempts = 0)]
++public class IdentityProvisioningSyncJob : BaseJob
++{
++    /// <summary>
++    /// When the latest process is younger than this and not imported yet, it is considered running: no new process is launched.
++    /// An older unfinished process is considered failed.
++    /// </summary>
++    private static readonly TimeSpan RunningProcessTimeout = TimeSpan.FromMinutes(30);
++    private readonly IConfiguration _configuration;
++    private readonly IRealmRepository _realmRepository;
++    private readonly IIdentityProvisioningStore _identityProvisioningStore;
++    private readonly ITransactionBuilder _transactionBuilder;
++    private readonly IBusControl _busControl;
++    private readonly ILogger<IdentityProvisioningSyncJob> _logger;
++
++    public IdentityProvisioningSyncJob(
++        IRealmRepository realmRepository,
++        IIdentityProvisioningStore identityProvisioningStore,
++        ITransactionBuilder transactionBuilder,
++        IBusControl busControl,
++        IRecurringJobStatusRepository recurringJobStatusRepository,
++        IConfiguration configuration,
++        ILogger<IdentityProvisioningSyncJob> logger) : base(recurringJobStatusRepository)
++    {
++        _configuration = configuration;
++        _realmRepository = realmRepository;
++        _identityProvisioningStore = identityProvisioningStore;
++        _transactionBuilder = transactionBuilder;
++        _busControl = busControl;
++        _logger = logger;
++    }
++
++    protected override async Task ExecuteInternal()
++    {
++        // Comma separated names of the provisioning definitions to synchronize (e.g. "LDAP"). Empty: all enabled instances.
++        var names = (_configuration["IdentityProvisioningSync:Definitions"] ?? string.Empty)
++            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
++        var realms = await _realmRepository.GetAll(CancellationToken.None);
++        foreach (var realm in realms)
++        {
++            var instances = await _identityProvisioningStore.Search(realm.Name, new SearchRequest { Skip = 0, Take = int.MaxValue }, CancellationToken.None);
++            foreach (var instance in instances.Content.Where(i => i.IsEnabled))
++            {
++                var instanceWithDefinition = await _identityProvisioningStore.Get(realm.Name, instance.Id, CancellationToken.None);
++                if (names.Any() && !names.Contains(instanceWithDefinition.Definition.Name, StringComparer.OrdinalIgnoreCase)) continue;
++                await Launch(realm.Name, instance.Id);
++            }
++        }
++    }
++
++    private async Task Launch(string realm, string instanceId)
++    {
++        string processId;
++        using (var transaction = _transactionBuilder.Build())
++        {
++            var instance = await _identityProvisioningStore.Get(realm, instanceId, CancellationToken.None);
++            var latest = instance.Processes.OrderByDescending(p => p.CreateDateTime).FirstOrDefault();
++            if (latest != null && latest.EndImportDateTime == null && latest.CreateDateTime > DateTime.UtcNow - RunningProcessTimeout)
++            {
++                _logger.LogInformation("Synchronization of '{Instance}' skipped: the process '{ProcessId}' is still running", instance.Definition.Name, latest.Id);
++                return;
++            }
++
++            processId = instance.Launch();
++            _identityProvisioningStore.Update(instance);
++            await transaction.Commit(CancellationToken.None);
++            _logger.LogInformation("Synchronization of '{Instance}' launched, process '{ProcessId}'", instance.Definition.Name, processId);
++        }
++
++        var sendEndpoint = await _busControl.GetSendEndpoint(new Uri($"queue:{ExtractUsersConsumer.Queuename}"));
++        await sendEndpoint.Send(new StartExtractUsersCommand
++        {
++            InstanceId = instanceId,
++            Realm = realm,
++            ProcessId = processId,
++            AutoImport = true
++        });
++    }
++}
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/CheckUsersExtractedCommand.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/CheckUsersExtractedCommand.cs
+index c452b36..13ebedb 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/Provisioning/CheckUsersExtractedCommand.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/CheckUsersExtractedCommand.cs
+@@ -7,4 +7,8 @@ public class CheckUsersExtractedCommand
+     public string InstanceId { get; set; }
+     public string ProcessId { get; set; }
+     public string Realm { get; set; }
++    /// <summary>
++    /// Start the import as soon as the extraction is finished (scheduled synchronization).
++    /// </summary>
++    public bool AutoImport { get; set; }
+ }
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/ExtractUsersConsumer.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/ExtractUsersConsumer.cs
+index 4083744..7b45072 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/Provisioning/ExtractUsersConsumer.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/ExtractUsersConsumer.cs
+@@ -73,7 +73,8 @@ public class ExtractUsersConsumer :
+             {
+                 InstanceId = message.InstanceId,
+                 ProcessId = message.ProcessId,
+-                Realm = message.Realm
++                Realm = message.Realm,
++                AutoImport = message.AutoImport
+             });
+         }
+     }
+@@ -139,6 +140,17 @@ public class ExtractUsersConsumer :
+                 instance.FinishExtract(message.ProcessId);
+                 _identityProvisioningStore.Update(instance);
+                 await transaction.Commit(context.CancellationToken);
++                if (message.AutoImport)
++                {
++                    var importDestination = await context.GetSendEndpoint(new Uri($"queue:{ImportUsersConsumer.Queuename}"));
++                    await importDestination.Send(new StartImportUsersCommand
++                    {
++                        InstanceId = message.InstanceId,
++                        ProcessId = message.ProcessId,
++                        Realm = message.Realm
++                    });
++                }
++
+                 return;
+             }
+ 
+@@ -147,7 +159,8 @@ public class ExtractUsersConsumer :
+             {
+                 InstanceId = message.InstanceId,
+                 ProcessId = message.ProcessId,
+-                Realm = message.Realm
++                Realm = message.Realm,
++                AutoImport = message.AutoImport
+             });
+         }
+     }
+@@ -198,7 +211,8 @@ public class ExtractUsersConsumer :
+             });
+         }
+ 
+-        return extractedRepresentations;
++        // The same representation must not appear twice in one batch: BulkUpdate (EF / MERGE) rejects duplicated keys.
++        return extractedRepresentations.GroupBy(r => r.RepresentationId).Select(g => g.First()).ToList();
+     }
+ }
+ 
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/IIdentityStateProvider.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/IIdentityStateProvider.cs
+new file mode 100644
+index 0000000..5f04311
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/IIdentityStateProvider.cs
+@@ -0,0 +1,35 @@
++// Copyright (c) SimpleIdServer. All rights reserved.
++// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
++using SimpleIdServer.IdServer.Domains;
++using System.Collections.Generic;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace SimpleIdServer.IdServer.Provisioning;
++
++/// <summary>
++/// Implemented by provisioning sources that can list the current state of every identity (not only the changed ones),
++/// so that identities removed or disabled in the source can be blocked in the identity server (deprovisioning).
++/// </summary>
++public interface IIdentityStateProvider
++{
++    string Name { get; }
++    Task<IdentityStates> GetUserStates(IdentityProvisioningDefinition definition, CancellationToken cancellationToken);
++}
++
++public class IdentityStates
++{
++    /// <summary>
++    /// Identifiers of all users present in the source, enabled or not.
++    /// </summary>
++    public HashSet<string> ExistingUserIds { get; set; } = new HashSet<string>();
++    /// <summary>
++    /// Identifiers of the users present but disabled in the source.
++    /// </summary>
++    public HashSet<string> DisabledUserIds { get; set; } = new HashSet<string>();
++    /// <summary>
++    /// Safety limit: when more than this percentage of the provisioned users would be blocked in one run,
++    /// nothing is blocked (the source is probably misconfigured or partially unavailable).
++    /// </summary>
++    public int MaxBlockPercentage { get; set; } = 20;
++}
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/ImportUsersConsumer.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/ImportUsersConsumer.cs
+index 652df61..8041fbd 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/Provisioning/ImportUsersConsumer.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/ImportUsersConsumer.cs
+@@ -1,6 +1,7 @@
+ ﻿// Copyright (c) SimpleIdServer. All rights reserved.
+ // Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
+ using MassTransit;
++using Microsoft.Extensions.Logging;
+ using SimpleIdServer.IdServer.Domains;
+ using SimpleIdServer.IdServer.Stores;
+ using System;
+@@ -8,6 +9,7 @@ using System.Collections.Generic;
+ using System.Linq;
+ using System.Reflection;
+ using System.Text.Json.Nodes;
++using System.Threading;
+ using System.Threading.Tasks;
+ using System.Transactions;
+ 
+@@ -25,6 +27,8 @@ public class ImportUsersConsumer :
+     private readonly ITransactionBuilder _transactionBuilder;
+     private readonly IUserRepository _userRepository;
+     private readonly IGroupRepository _groupRepository;
++    private readonly IUserDeprovisioningService _deprovisioningService;
++    private readonly ILogger<ImportUsersConsumer> _logger;
+     public const string Queuename = "import-users";
+ 
+     public ImportUsersConsumer(
+@@ -32,8 +36,12 @@ public class ImportUsersConsumer :
+         IProvisioningStagingStore provisioningStagingStore,
+         ITransactionBuilder transactionBuilder,
+         IUserRepository userRepository,
+-        IGroupRepository groupRepository)
++        IGroupRepository groupRepository,
++        IUserDeprovisioningService deprovisioningService,
++        ILogger<ImportUsersConsumer> logger)
+     {
++        _deprovisioningService = deprovisioningService;
++        _logger = logger;
+         _identityProvisioningStore = identityProvisioningStore;
+         _provisioningStagingStore = provisioningStagingStore;
+         _transactionBuilder = transactionBuilder;
+@@ -56,6 +64,7 @@ public class ImportUsersConsumer :
+                 idProvisioning.FinishImport(message.ProcessId);
+                 _identityProvisioningStore.Update(idProvisioning);
+                 await transaction.Commit(context.CancellationToken);
++                await Deprovision(message.InstanceId, message.Realm, context.CancellationToken);
+                 return;
+             }
+ 
+@@ -121,6 +130,7 @@ public class ImportUsersConsumer :
+                 instance.FinishImport(message.ProcessId);
+                 _identityProvisioningStore.Update(instance);
+                 await transaction.Commit(context.CancellationToken);
++                await Deprovision(message.InstanceId, message.Realm, context.CancellationToken);
+                 return;
+             }
+ 
+@@ -153,6 +163,11 @@ public class ImportUsersConsumer :
+             groupUsers.AddRange(extraction.GroupUsers);
+         }
+ 
++        // Remove duplicated keys inside the batch: BulkUpdate (EF / MERGE) rejects them.
++        groups = groups.GroupBy(g => g.Id).Select(g => g.First()).ToList();
++        users = users.GroupBy(u => u.Id).Select(u => u.First()).ToList();
++        userClaims = userClaims.GroupBy(c => c.Id).Select(c => c.First()).ToList();
++        groupUsers = groupUsers.GroupBy(g => (g.UsersId, g.GroupsId)).Select(g => g.First()).ToList();
+         await _groupRepository.BulkUpdate(groups);
+         await _groupRepository.BulkUpdate(groups.Select(g => new GroupRealm
+         {
+@@ -167,6 +182,54 @@ public class ImportUsersConsumer :
+             RealmsName = realm
+         }).ToList());
+         await _userRepository.BulkUpdate(groupUsers);
++        await RemoveObsoleteMemberships(extractedUsers);
++    }
++
++    /// <summary>
++    /// The extracted user carries all its groups: memberships of groups coming from the same source that are no longer listed are removed.
++    /// Memberships of groups created in the identity server (unknown to the source) are kept.
++    /// </summary>
++    private async Task RemoveObsoleteMemberships(IEnumerable<ExtractedRepresentationStaging> extractedUsers)
++    {
++        var extractedGroupIds = extractedUsers
++            .Where(u => u.GroupIds != null)
++            .GroupBy(u => u.RepresentationId)
++            .ToDictionary(g => g.Key, g => g.First().GroupIds.Where(i => !string.IsNullOrWhiteSpace(i)).ToHashSet());
++        if (!extractedGroupIds.Any()) return;
++        var users = await _userRepository.GetUsersById(extractedGroupIds.Keys, CancellationToken.None);
++        var obsolete = users
++            .SelectMany(u => u.Groups.Where(g => !extractedGroupIds[u.Id].Contains(g.GroupsId)).Select(g => (User: u, Membership: g)))
++            .ToList();
++        if (!obsolete.Any()) return;
++        var sourceGroupIds = (await _provisioningStagingStore.GetLastExtractedRepresentations(obsolete.Select(o => o.Membership.GroupsId).Distinct().ToList(), CancellationToken.None))
++            .Select(r => r.ExternalId)
++            .ToHashSet();
++        foreach (var (user, membership) in obsolete.Where(o => sourceGroupIds.Contains(o.Membership.GroupsId)))
++        {
++            user.Groups.Remove(membership);
++            _userRepository.Update(user);
++            _logger.LogInformation("User '{UserId}' is no longer a member of the group '{GroupId}' in the source, membership removed", user.Id, membership.GroupsId);
++        }
++    }
++
++    private async Task Deprovision(string instanceId, string realm, CancellationToken cancellationToken)
++    {
++        try
++        {
++            using (var transaction = _transactionBuilder.Build())
++            {
++                var instance = await _identityProvisioningStore.Get(realm, instanceId, cancellationToken);
++                var result = await _deprovisioningService.Execute(instance, realm, cancellationToken);
++                await transaction.Commit(cancellationToken);
++                if (!result.IsSkipped)
++                    _logger.LogInformation("Deprovisioning of '{Instance}': {NbBlocked} blocked, {NbUnblocked} unblocked", instance.Definition.Name, result.NbBlocked, result.NbUnblocked);
++            }
++        }
++        catch (Exception ex)
++        {
++            // The import itself succeeded: a failure here (e.g. the source is unreachable) must not undo it.
++            _logger.LogError(ex, "Deprovisioning of the identity provisioning '{InstanceId}' failed", instanceId);
++        }
+     }
+ 
+     private Group ExtractGroup(IdentityProvisioning idProvisioning, ExtractedRepresentationStaging extractedGroup)
+@@ -184,6 +247,7 @@ public class ImportUsersConsumer :
+             foreach(var kvp in jObj)
+             {
+                 var mappingRule = mappingRules.Single(r => r.Id == kvp.Key);
++                if (kvp.Value == null) continue;
+                 switch(mappingRule.MapperType)
+                 {
+                     case MappingRuleTypes.GROUPNAME:
+@@ -224,9 +288,11 @@ public class ImportUsersConsumer :
+             foreach(var kvp in jObj)
+             {
+                 var mappingRule = mappingRules.Single(r => r.Id == kvp.Key);
+-                var serializedValue = jObj[kvp.Key].ToJsonString();
+-                if (string.IsNullOrWhiteSpace(serializedValue)) continue;
+-                var extractedValues = ExtractValues(serializedValue);
++                if (kvp.Value == null) continue;
++                // GetValue returns the decoded string: ToJsonString kept JSON escapes ("bo\u0027lim" instead of "bo'lim").
++                var rawValue = kvp.Value.GetValue<string>();
++                if (string.IsNullOrWhiteSpace(rawValue)) continue;
++                var extractedValues = ExtractValues(rawValue);
+                 foreach (var value in extractedValues)
+                 {
+                     switch (mappingRule.MapperType)
+@@ -269,17 +335,23 @@ public class ImportUsersConsumer :
+ 
+         return new ExtractionUserResult { UserClaims = userClaims, User = user, GroupUsers = groupUsers };
+ 
+-        List<string> ExtractValues(string serializedValue)
++        // A multi-valued attribute is stored as a serialized JSON array, a single value as the plain string.
++        List<string> ExtractValues(string rawValue)
+         {
+-            try
+-            {
+-                var jArr = JsonArray.Parse(serializedValue) as JsonArray;
+-                return jArr.Select(r => r.AsValue().GetValue<string>()).ToList();
+-            }
+-            catch
++            if (rawValue.TrimStart().StartsWith("["))
+             {
+-                return new List<string> { serializedValue.Trim('"') };
++                try
++                {
++                    var jArr = JsonNode.Parse(rawValue) as JsonArray;
++                    if (jArr != null) return jArr.Select(r => r.GetValue<string>()).ToList();
++                }
++                catch (Exception ex) when (ex is System.Text.Json.JsonException || ex is InvalidOperationException)
++                {
++                    // Not a JSON array of strings: a plain value which happens to start with '['.
++                }
+             }
++
++            return new List<string> { rawValue };
+         }
+     }
+ 
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/StartExtractUsersCommand.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/StartExtractUsersCommand.cs
+index 8d57cfd..9b88eac 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/Provisioning/StartExtractUsersCommand.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/StartExtractUsersCommand.cs
+@@ -8,4 +8,8 @@ public class StartExtractUsersCommand
+     public string InstanceId { get; set; } = null!;
+     public string Realm { get; set; } = null!;
+     public string ProcessId { get; set; } = null!;
++    /// <summary>
++    /// Start the import as soon as the extraction is finished (scheduled synchronization).
++    /// </summary>
++    public bool AutoImport { get; set; }
+ }
+\ No newline at end of file
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Provisioning/UserDeprovisioningService.cs b/src/IdServer/SimpleIdServer.IdServer/Provisioning/UserDeprovisioningService.cs
+new file mode 100644
+index 0000000..79a347d
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer/Provisioning/UserDeprovisioningService.cs
+@@ -0,0 +1,157 @@
++// Copyright (c) SimpleIdServer. All rights reserved.
++// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
++using Microsoft.Extensions.Logging;
++using SimpleIdServer.IdServer.Domains;
++using SimpleIdServer.IdServer.Helpers;
++using SimpleIdServer.IdServer.Stores;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace SimpleIdServer.IdServer.Provisioning;
++
++public interface IUserDeprovisioningService
++{
++    Task<DeprovisioningResult> Execute(IdentityProvisioning instance, string realm, CancellationToken cancellationToken);
++}
++
++public class DeprovisioningResult
++{
++    public int NbBlocked { get; set; }
++    public int NbUnblocked { get; set; }
++    public bool IsSkipped { get; set; }
++    public string SkipReason { get; set; }
++}
++
++/// <summary>
++/// Blocks the users imported by an identity provisioning instance when they are removed or disabled in the source,
++/// and unblocks them when they are enabled again. Only blocks set by this service are lifted:
++/// a block set by an administrator or by too many login attempts is never touched.
++/// </summary>
++public class UserDeprovisioningService : IUserDeprovisioningService
++{
++    /// <summary>
++    /// UnblockDateTime used to recognize a block set by deprovisioning.
++    /// </summary>
++    public static readonly DateTime DeprovisionedUntil = new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc);
++    /// <summary>
++    /// Suffix added to the login of a user removed from the source. Like Active Directory, which frees the sAMAccountName of
++    /// a deleted account, the login can then be used by a new account (rehire: new objectGUID, same login).
++    /// </summary>
++    public const string RemovedLoginSuffix = "~removed~";
++    private const int SearchPageSize = 500;
++    private readonly IEnumerable<IIdentityStateProvider> _stateProviders;
++    private readonly IUserRepository _userRepository;
++    private readonly IUserSessionResitory _userSessionRepository;
++    private readonly ILogger<UserDeprovisioningService> _logger;
++
++    public UserDeprovisioningService(IEnumerable<IIdentityStateProvider> stateProviders, IUserRepository userRepository, IUserSessionResitory userSessionRepository, ILogger<UserDeprovisioningService> logger)
++    {
++        _userSessionRepository = userSessionRepository;
++        _stateProviders = stateProviders;
++        _userRepository = userRepository;
++        _logger = logger;
++    }
++
++    public static bool IsDeprovisioned(User user) => user.Status == UserStatus.BLOCKED && user.UnblockDateTime == DeprovisionedUntil;
++
++    public async Task<DeprovisioningResult> Execute(IdentityProvisioning instance, string realm, CancellationToken cancellationToken)
++    {
++        var stateProvider = _stateProviders.SingleOrDefault(p => p.Name == instance.Definition.Name);
++        if (stateProvider == null) return Skip(instance, $"the provisioning source '{instance.Definition.Name}' cannot list its identities");
++        var states = await stateProvider.GetUserStates(instance.Definition, cancellationToken);
++        if (!states.ExistingUserIds.Any()) return Skip(instance, "the source returned no users");
++
++        var provisionedUsers = await GetProvisionedUsers(instance.Id, realm, cancellationToken);
++        var toBlock = provisionedUsers
++            .Where(u => !states.ExistingUserIds.Contains(u.Id) || states.DisabledUserIds.Contains(u.Id))
++            .Where(u => !IsDeprovisioned(u))
++            .ToList();
++        var toUnblock = provisionedUsers
++            .Where(u => states.ExistingUserIds.Contains(u.Id) && !states.DisabledUserIds.Contains(u.Id))
++            .Where(IsDeprovisioned)
++            .ToList();
++        // Blocked earlier (before the login was freed on removal): free their login too.
++        var toRename = provisionedUsers
++            .Where(u => !states.ExistingUserIds.Contains(u.Id) && IsDeprovisioned(u) && !u.Name.Contains(RemovedLoginSuffix))
++            .ToList();
++        if (provisionedUsers.Any() && toBlock.Count * 100 > provisionedUsers.Count * states.MaxBlockPercentage)
++            return Skip(instance, $"{toBlock.Count} of {provisionedUsers.Count} users would be blocked, more than the limit of {states.MaxBlockPercentage}%");
++
++        var ids = toBlock.Concat(toUnblock).Concat(toRename).Select(u => u.Id).ToList();
++        if (!ids.Any()) return new DeprovisioningResult();
++        var trackedUsers = (await _userRepository.GetUsersById(ids, cancellationToken)).ToDictionary(u => u.Id);
++        foreach (var user in toBlock)
++        {
++            var trackedUser = trackedUsers[user.Id];
++            trackedUser.Status = UserStatus.BLOCKED;
++            trackedUser.UnblockDateTime = DeprovisionedUntil;
++            trackedUser.UpdateDateTime = DateTime.UtcNow;
++            _userRepository.Update(trackedUser);
++            // Close the open SSO sessions as well: UserSessionJob (every 10 seconds) notifies the clients (back-channel logout).
++            var sessions = await _userSessionRepository.GetActive(user.Id, realm, cancellationToken);
++            foreach (var session in sessions)
++            {
++                session.State = UserSessionStates.Rejected;
++                _userSessionRepository.Update(session);
++            }
++
++            var reason = states.ExistingUserIds.Contains(user.Id) ? "disabled" : "removed";
++            if (reason == "removed" && !trackedUser.Name.Contains(RemovedLoginSuffix))
++                trackedUser.Name = $"{trackedUser.Name}{RemovedLoginSuffix}{DateTime.UtcNow:yyyyMMddHHmmss}";
++            _logger.LogWarning("Deprovisioning: user '{UserId}' ({Login}) is {Reason} in '{Source}', blocked, {NbSessions} session(s) revoked", user.Id, trackedUser.Name, reason, instance.Definition.Name, sessions.Count());
++        }
++
++        foreach (var user in toUnblock)
++        {
++            var trackedUser = trackedUsers[user.Id];
++            trackedUser.ResetLoginAttempt();
++            // Restored in the source (e.g. AD recycle bin): give the login back; the next import refreshes it from the source anyway.
++            var suffixIndex = trackedUser.Name.IndexOf(RemovedLoginSuffix, StringComparison.Ordinal);
++            if (suffixIndex > 0) trackedUser.Name = trackedUser.Name.Substring(0, suffixIndex);
++            trackedUser.UpdateDateTime = DateTime.UtcNow;
++            _userRepository.Update(trackedUser);
++            _logger.LogWarning("Deprovisioning: user '{UserId}' ({Login}) is enabled again in '{Source}', unblocked", user.Id, user.Name, instance.Definition.Name);
++        }
++
++        foreach (var user in toRename)
++        {
++            var trackedUser = trackedUsers[user.Id];
++            trackedUser.Name = $"{trackedUser.Name}{RemovedLoginSuffix}{DateTime.UtcNow:yyyyMMddHHmmss}";
++            trackedUser.UpdateDateTime = DateTime.UtcNow;
++            _userRepository.Update(trackedUser);
++            _logger.LogWarning("Deprovisioning: login of the removed user '{UserId}' freed, renamed to '{Login}'", user.Id, trackedUser.Name);
++        }
++
++        return new DeprovisioningResult { NbBlocked = toBlock.Count, NbUnblocked = toUnblock.Count };
++    }
++
++    private async Task<List<User>> GetProvisionedUsers(string instanceId, string realm, CancellationToken cancellationToken)
++    {
++        var result = new List<User>();
++        var skip = 0;
++        while (true)
++        {
++            var page = await _userRepository.Search(realm, new SearchRequest
++            {
++                Filter = $"IdentityProvisioningId == \"{instanceId}\"",
++                OrderBy = "Id",
++                Skip = skip,
++                Take = SearchPageSize
++            }, cancellationToken);
++            result.AddRange(page.Content);
++            skip += SearchPageSize;
++            if (skip >= page.Count) break;
++        }
++
++        return result;
++    }
++
++    private DeprovisioningResult Skip(IdentityProvisioning instance, string reason)
++    {
++        _logger.LogError("Deprovisioning of '{Instance}' skipped: {Reason}", instance.Definition.Name, reason);
++        return new DeprovisioningResult { IsSkipped = true, SkipReason = reason };
++    }
++}
+diff --git a/src/IdServer/SimpleIdServer.IdServer/ServiceCollectionExtensions.cs b/src/IdServer/SimpleIdServer.IdServer/ServiceCollectionExtensions.cs
+index 5827215..b781527 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/ServiceCollectionExtensions.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/ServiceCollectionExtensions.cs
+@@ -465,6 +465,8 @@ public static class ServiceCollectionExtensions
+         services.AddTransient<IDPOPProofValidator, DPOPProofValidator>();
+         services.AddTransient<ISessionHelper, SessionHelper>();
+         services.AddTransient<UserSessionJob>();
++        services.AddTransient<IdentityProvisioningSyncJob>();
++        services.AddTransient<SimpleIdServer.IdServer.Provisioning.IUserDeprovisioningService, SimpleIdServer.IdServer.Provisioning.UserDeprovisioningService>();
+         return services;
+     }
+ 
+diff --git a/src/IdServer/SimpleIdServer.IdServer/WebApplicationExtensions.cs b/src/IdServer/SimpleIdServer.IdServer/WebApplicationExtensions.cs
+index 4f94b38..5c1976a 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/WebApplicationExtensions.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/WebApplicationExtensions.cs
+@@ -114,6 +114,9 @@ public static class WebApplicationExtensions
+         var reccuringJobManager = webApplication.Services.GetRequiredService<IRecurringJobManager>();
+         // Occurs every 10 seconds.
+         reccuringJobManager.AddOrUpdate<UserSessionJob>(nameof(UserSessionJob), j => webApplication.Services.GetRequiredService<UserSessionJob>().Execute(), "*/10 * * * * *");
++        // Scheduled identity provisioning (extract + import + deprovisioning). Default: every 15 minutes.
++        var provisioningSyncCron = webApplication.Configuration["IdentityProvisioningSync:Cron"] ?? "*/15 * * * *";
++        reccuringJobManager.AddOrUpdate<IdentityProvisioningSyncJob>(nameof(IdentityProvisioningSyncJob), j => webApplication.Services.GetRequiredService<IdentityProvisioningSyncJob>().Execute(), provisioningSyncCron);
+ 
+         if (opts.MtlsEnabled)
+         {
+@@ -722,11 +725,17 @@ public static class WebApplicationExtensions
+                 throw new InvalidOperationException($"The default language {Language.Default} is not present in the repository. Please add it");
+             }
+ 
++            // "DefaultLanguage" (e.g. "uz"): the language shown until the user picks one. The browser's Accept-Language is then
++            // ignored, otherwise most browsers (sending "en-US") would never see the default language.
++            var defaultLanguage = webApplication.Configuration["DefaultLanguage"];
++            var defaultCulture = !string.IsNullOrWhiteSpace(defaultLanguage) && languageCodes.Contains(defaultLanguage) ? defaultLanguage : Language.Default;
+             webApplication.UseRequestLocalization(e =>
+             {
+-                e.SetDefaultCulture(Language.Default);
++                e.SetDefaultCulture(defaultCulture);
+                 e.AddSupportedCultures(languageCodes);
+                 e.AddSupportedUICultures(languageCodes);
++                if (defaultCulture != Language.Default)
++                    e.RequestCultureProviders = e.RequestCultureProviders.Where(p => p is not Microsoft.AspNetCore.Localization.AcceptLanguageHeaderRequestCultureProvider).ToList();
+             });
+         }
+     }

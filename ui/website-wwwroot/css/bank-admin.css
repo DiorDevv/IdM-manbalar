@@ -1,0 +1,274 @@
+/* Bank IdM boshqaruv paneli: login sahifasi bilan bir xil ko'k-oq mavzu (Radzen ustidan).
+   Tashqi shrift yoki CDN yo'q. Manba: ui/website-wwwroot/css/bank-admin.css (setup.sh nusxalaydi). */
+body.bank-admin {
+    --bk-950: #071633;
+    --bk-900: #0b1f4b;
+    --bk-800: #12306f;
+    --bk-700: #1a44a0;
+    --bk-600: #1f56d1;
+    --bk-500: #2f6bf0;
+    --bk-200: #c7d7fb;
+    --bk-100: #e6eefe;
+    --bk-50: #f3f7ff;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --canvas: #f6f8fc;
+    --font: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* Radzen palitrasi: to'q sariq o'rniga bank ko'ki */
+    --rz-primary: var(--bk-600);
+    --rz-primary-light: var(--bk-500);
+    --rz-primary-lighter: var(--bk-100);
+    --rz-primary-dark: var(--bk-700);
+    --rz-primary-darker: var(--bk-800);
+    --rz-on-primary-lighter: var(--bk-700);
+    --rz-info: #0e7490;
+    --rz-info-lighter: #e0f2fe;
+    --rz-on-info-lighter: #075985;
+    --rz-success: #067647;
+    --rz-success-lighter: #ecfdf3;
+    --rz-on-success-lighter: #067647;
+    --rz-danger: #b42318;
+    --rz-danger-lighter: #fef3f2;
+    --rz-on-danger-lighter: #b42318;
+    --rz-base-50: #f8fafc;
+    --rz-base-100: #f1f5f9;
+    --rz-base-200: #e2e8f0;
+    --rz-base-300: #cbd5e1;
+    --rz-base-400: #94a3b8;
+    --rz-base-500: #64748b;
+    --rz-base-600: #475569;
+    --rz-base-700: #334155;
+    --rz-base-800: #1e293b;
+    --rz-base-900: #0f172a;
+    --rz-text-font-family: var(--font);
+    --rz-header-background-color: var(--bk-900);
+    --rz-sidebar-toggle-background-color: transparent;
+    --rz-sidebar-toggle-hover-background-color: rgba(255, 255, 255, .1);
+    --rz-link-color: var(--bk-600);
+    --rz-link-hover-color: var(--bk-800);
+    --rz-panel-menu-item-active-indicator: var(--bk-600);
+    --rz-checkbox-checked-background-color: var(--bk-600);
+    --rz-checkbox-checked-hover-background-color: var(--bk-700);
+    --rz-checkbox-checked-border: var(--bk-600);
+    --rz-checkbox-checked-hover-border: var(--bk-700);
+    --rz-steps-number-selected-background: var(--bk-600);
+    --rz-steps-title-selected-color: var(--bk-600);
+    --rz-body-background-color: var(--canvas);
+    --rz-border-radius: 10px;
+    --bs-body-font-family: var(--font);
+
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--canvas);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Shapka ---------- */
+.bank-admin .rz-header {
+    height: 64px; min-height: 64px;
+    background: linear-gradient(100deg, var(--bk-950) 0%, var(--bk-900) 45%, var(--bk-800) 100%) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, .04), 0 4px 16px rgba(7, 22, 51, .18);
+    color: #fff;
+}
+.bank-admin .rz-header > .d-flex { height: 100%; padding: 0 12px; gap: 4px; }
+.bank-admin .rz-sidebar-toggle { color: rgba(255, 255, 255, .85) !important; border-radius: 10px; width: 40px; height: 40px; }
+.bank-admin .rz-sidebar-toggle:hover { color: #fff !important; }
+
+.bank-admin .bk-brand { display: flex; align-items: center; gap: 12px; }
+.bank-admin .bk-mark {
+    width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+    background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22);
+}
+.bank-admin .bk-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.bank-admin .bk-brand-name { font-weight: 700; font-size: 16.5px; letter-spacing: .2px; color: #fff; }
+.bank-admin .bk-brand-sub { font-size: 12px; color: rgba(255, 255, 255, .65); }
+
+.bank-admin .bk-user { display: flex; align-items: center; gap: 10px; }
+.bank-admin .bk-avatar {
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--bk-500), var(--bk-700)); color: #fff;
+    font-weight: 700; font-size: 13.5px; border: 2px solid rgba(255, 255, 255, .35);
+}
+.bank-admin .bk-user-name { font-size: 13.5px; color: rgba(255, 255, 255, .88); white-space: nowrap; }
+
+.bank-admin .bk-lang .rz-dropdown {
+    min-width: 128px; height: 34px; border-radius: 9px !important;
+    background: rgba(255, 255, 255, .1) !important; border: 1px solid rgba(255, 255, 255, .2) !important; box-shadow: none !important;
+}
+.bank-admin .bk-lang .rz-dropdown-label { color: #fff !important; font-size: 13px; padding-top: 7px; }
+.bank-admin .bk-lang .rz-dropdown-trigger-icon { color: rgba(255, 255, 255, .8) !important; }
+.bank-admin .bk-lang .rz-dropdown-panel .rz-dropdown-item { color: var(--ink); }
+
+.bank-admin .bk-signout .rz-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: rgba(255, 255, 255, .85) !important; font-size: 13.5px; font-weight: 500;
+    padding: 7px 12px; border-radius: 9px; text-decoration: none;
+}
+.bank-admin .bk-signout .rz-link:hover { background: rgba(255, 255, 255, .1); color: #fff !important; }
+.bank-admin .bk-signout .rzi { font-size: 18px; }
+
+/* ---------- Yon menyu ---------- */
+.bank-admin .rz-sidebar {
+    background: #fff !important; border-right: 1px solid var(--line) !important; box-shadow: none !important;
+    padding: 10px 10px 24px;
+}
+.bank-admin .rz-panel-menu { background: transparent !important; border: 0 !important; }
+.bank-admin .rz-panel-menu .rz-navigation-item { border: 0 !important; }
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper {
+    border-radius: 9px; margin: 1px 0; transition: background .12s;
+}
+.bank-admin .rz-panel-menu .rz-navigation-item-link {
+    padding: 9px 12px !important; color: var(--ink-2) !important; font-size: 14px; font-weight: 500; gap: 10px;
+}
+.bank-admin .rz-panel-menu .rz-navigation-item-icon { color: var(--muted) !important; font-size: 20px; }
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper:hover { background: var(--rz-base-100); }
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper:hover .rz-navigation-item-link,
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper:hover .rz-navigation-item-icon { color: var(--ink) !important; }
+/* faol bo'lim */
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper-active,
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper-active:hover { background: var(--bk-50) !important; box-shadow: inset 3px 0 0 var(--bk-600); }
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper-active .rz-navigation-item-link,
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper-active .rz-navigation-item-icon { color: var(--bk-700) !important; font-weight: 600; }
+.bank-admin .rz-panel-menu .rz-navigation-item-wrapper-active::before { display: none !important; }
+/* ichki menyu */
+.bank-admin .rz-panel-menu .rz-navigation-menu { background: transparent !important; padding-left: 10px; }
+.bank-admin .rz-panel-menu .rz-navigation-item-icon-children { color: var(--rz-base-400) !important; }
+/* guruh sarlavhalari: "Boshqaruv", "Sozlash" */
+.bank-admin .rz-panel-menu .bk-nav-section .rz-navigation-item-wrapper { background: transparent !important; box-shadow: none !important; margin-top: 14px; pointer-events: none; }
+.bank-admin .rz-panel-menu .bk-nav-section .rz-navigation-item-link {
+    padding: 6px 12px 4px !important; font-size: 11.5px !important; font-weight: 700 !important;
+    letter-spacing: .7px; text-transform: uppercase; color: var(--rz-base-400) !important;
+}
+/* joriy realm: kartochka ko'rinishida */
+.bank-admin .rz-panel-menu .bk-nav-realm .rz-navigation-item-wrapper { background: var(--canvas); border: 1px solid var(--line); margin-bottom: 4px; }
+.bank-admin .rz-panel-menu .bk-nav-realm .rz-navigation-item-link { font-size: 13px; color: var(--ink) !important; font-weight: 600; }
+.bank-admin .rz-panel-menu .bk-nav-realm .rz-navigation-item-icon { color: var(--bk-600) !important; }
+
+/* ---------- Ish maydoni ---------- */
+.bank-admin .rz-body { background: var(--canvas) !important; padding: 28px 32px 40px !important; }
+.bank-admin .rz-body > .p-2 { max-width: 1440px; }
+.bank-admin .rz-text-display-h3, .bank-admin .rz-body h3:not([class*="rz-text-"]) {
+    font: 700 26px/1.25 var(--font) !important; letter-spacing: -.3px; color: var(--ink) !important; margin-bottom: 6px !important;
+}
+.bank-admin .rz-text-display-h6 { font-family: var(--font) !important; font-weight: 650 !important; color: var(--ink); }
+.bank-admin .rz-body .rz-text-body1, .bank-admin .rz-body .rz-text-body2 { color: var(--muted); font-size: 14px; }
+.bank-admin .rz-breadcrumb { font-size: 13px; }
+.bank-admin .rz-breadcrumb a { color: var(--muted) !important; }
+
+/* kartochkalar va panellar */
+.bank-admin .rz-card, .bank-admin .rz-tabview, .bank-admin .rz-accordion, .bank-admin .rz-fieldset {
+    background: #fff !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
+}
+.bank-admin .rz-tabview-nav { border-bottom: 1px solid var(--line) !important; background: transparent !important; }
+.bank-admin .rz-tabview-nav li.rz-tabview-selected a { color: var(--bk-700) !important; box-shadow: inset 0 -2px 0 var(--bk-600) !important; }
+
+/* ---------- Jadvallar ---------- */
+.bank-admin .rz-data-grid {
+    background: #fff !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .04) !important;
+    font-family: var(--font);
+}
+.bank-admin .rz-grid-table thead th {
+    background: var(--rz-base-50) !important; border-bottom: 1px solid var(--line) !important;
+}
+.bank-admin .rz-grid-table thead th .rz-column-title-content {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted) !important;
+}
+.bank-admin .rz-grid-table .rz-cell-filter { background: #fff !important; }
+.bank-admin .rz-grid-table td { border-bottom: 1px solid #eef2f7 !important; font-size: 14px; color: var(--ink-2); }
+.bank-admin .rz-grid-table .rz-data-row:hover > td { background: var(--bk-50) !important; }
+.bank-admin .rz-grid-table .rz-data-row:last-child > td { border-bottom: 0 !important; }
+.bank-admin .rz-grid-table td a, .bank-admin .rz-grid-table td .rz-link { color: var(--bk-600) !important; font-weight: 500; }
+.bank-admin .rz-pager { background: #fff !important; border-top: 1px solid var(--line) !important; }
+
+/* ---------- Kiritish maydonlari ---------- */
+.bank-admin .rz-textbox, .bank-admin .rz-textarea, .bank-admin .rz-dropdown, .bank-admin .rz-numeric, .bank-admin .rz-datepicker > .rz-inputtext {
+    border-radius: 9px !important; border-color: var(--line-strong) !important; box-shadow: none !important; font-family: var(--font);
+}
+.bank-admin .rz-textbox:focus, .bank-admin .rz-textarea:focus, .bank-admin .rz-dropdown.rz-state-focused {
+    border-color: var(--bk-500) !important; box-shadow: 0 0 0 3px rgba(47, 107, 240, .16) !important;
+}
+.bank-admin .rz-header .rz-dropdown.rz-state-focused { box-shadow: 0 0 0 3px rgba(255, 255, 255, .18) !important; }
+
+/* ---------- Tugmalar ---------- */
+.bank-admin .rz-button {
+    border-radius: 9px !important; font-family: var(--font) !important; font-weight: 600 !important;
+    text-transform: none !important; letter-spacing: .1px; box-shadow: none !important;
+}
+.bank-admin .rz-button.rz-primary.rz-variant-filled { background: var(--bk-600) !important; color: #fff !important; }
+.bank-admin .rz-button.rz-primary.rz-variant-filled:hover:not(:disabled) { background: var(--bk-700) !important; }
+.bank-admin .rz-button.rz-success.rz-variant-filled { background: var(--bk-600) !important; color: #fff !important; }
+.bank-admin .rz-button.rz-success.rz-variant-filled:hover:not(:disabled) { background: var(--bk-700) !important; }
+.bank-admin .rz-button.rz-danger.rz-variant-filled { background: #fff !important; color: var(--rz-danger) !important; border: 1px solid #fecdca !important; }
+.bank-admin .rz-button.rz-danger.rz-variant-filled:hover:not(:disabled) { background: var(--rz-danger-lighter) !important; }
+/* jadval qatoridagi "⋮" tugmasi: ko'zga tashlanmaydigan, bosilganda ko'k */
+.bank-admin .rz-grid-table .rz-button.rz-button-icon-only {
+    background: transparent !important; color: var(--muted) !important; border: 1px solid transparent !important; width: 34px; height: 34px;
+}
+.bank-admin .rz-grid-table .rz-button.rz-button-icon-only:hover { background: var(--bk-100) !important; color: var(--bk-700) !important; border-color: var(--bk-200) !important; }
+
+/* ---------- Belgilar (badge) ---------- */
+.bank-admin .rz-badge { font-family: var(--font); font-weight: 600 !important; letter-spacing: .3px; font-size: 11.5px !important; padding: 3px 9px !important; }
+.bank-admin .rz-badge-info { background: var(--bk-100) !important; color: var(--bk-700) !important; }
+.bank-admin .rz-badge-success { background: var(--rz-success-lighter) !important; color: var(--rz-success) !important; }
+.bank-admin .rz-badge-danger { background: var(--rz-danger-lighter) !important; color: var(--rz-danger) !important; }
+.bank-admin .rz-badge-warning { background: #fff8e6 !important; color: #9a6700 !important; }
+
+/* ---------- Dialog va bildirishnomalar ---------- */
+.bank-admin .rz-dialog { border-radius: 16px !important; box-shadow: 0 24px 64px rgba(15, 23, 42, .24) !important; overflow: hidden; }
+.bank-admin .rz-dialog-titlebar { background: #fff !important; border-bottom: 1px solid var(--line) !important; }
+.bank-admin .rz-dialog-title { font: 700 17px var(--font) !important; color: var(--ink) !important; }
+.bank-admin .rz-notification-item-wrapper { border-radius: 12px !important; box-shadow: 0 12px 32px rgba(15, 23, 42, .18) !important; }
+
+/* ---------- Moslashuvchanlik ---------- */
+@media (max-width: 900px) {
+    .bank-admin .bk-user-name, .bank-admin .bk-brand-sub { display: none; }
+    .bank-admin .rz-body { padding: 18px 14px 28px !important; }
+}
+
+/* ---------- Sayqal ---------- */
+/* ichki menyu ikonkalari (Radzen ularni ichki darajada siqib qo'yadi) */
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-icon {
+    display: inline-flex !important; width: 20px; min-width: 20px; font-size: 19px !important; overflow: visible; opacity: 1 !important;
+}
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-wrapper::before,
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item::before { display: none !important; content: none !important; }
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-link { padding-left: 14px !important; }
+/* shapkadagi til tanlash: matn markazda */
+.bank-admin .bk-lang .rz-dropdown { display: flex !important; align-items: center; }
+.bank-admin .bk-lang .rz-dropdown-label { padding: 0 34px 0 12px !important; line-height: 32px; }
+/* belgilash katakchalari */
+.bank-admin .rz-chkbox-box { border-radius: 5px !important; border: 1.5px solid var(--line-strong) !important; background: #fff !important; box-shadow: none !important; }
+.bank-admin .rz-chkbox-box.rz-state-active { background: var(--bk-600) !important; border-color: var(--bk-600) !important; }
+.bank-admin .rz-chkbox-box:hover { border-color: var(--bk-500) !important; }
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-wrapper { overflow: visible !important; }
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-link {
+    display: flex !important; align-items: center; gap: 10px; padding-left: 22px !important; padding-inline-start: 22px !important;
+}
+.bank-admin .rz-panel-menu .rz-navigation-menu .rz-navigation-item-icon {
+    margin: 0 !important; position: static !important; transform: none !important; inset: auto !important;
+}
+.bank-admin .bk-lang .rz-dropdown-label { text-align: left; }
+.bank-admin .bk-lang .rz-dropdown { justify-content: flex-start !important; }
+.bank-admin .bk-lang .rz-dropdown-label { flex: 1; }
+
+/* forma yorliqlari (<h3 class="rz-text-subtitle2">) */
+.bank-admin .rz-body .rz-text-subtitle2 {
+    font: 600 13.5px/1.4 var(--font) !important; color: var(--ink-2) !important; letter-spacing: 0;
+    margin: 16px 0 6px !important; text-transform: none !important;
+}
+.bank-admin .rz-body .rz-textbox:disabled, .bank-admin .rz-body .rz-state-disabled, .bank-admin .rz-body input:disabled {
+    background: var(--rz-base-50) !important; color: var(--muted) !important; opacity: 1 !important;
+}
+.bank-admin .rz-body .rz-textbox, .bank-admin .rz-body .rz-numeric, .bank-admin .rz-body .rz-datepicker > .rz-inputtext { min-height: 38px; }
+.bank-admin .rz-badge-primary, .bank-admin .rz-badge.rz-badge-primary {
+    background: var(--bk-100) !important; color: var(--bk-700) !important;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;
+}
+.bank-admin .bk-lang .rz-dropdown-label { text-align: left !important; justify-content: flex-start !important; }

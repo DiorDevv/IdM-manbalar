@@ -1,0 +1,83 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer.MySQLMigrations/SimpleIdServer.IdServer.MySQLMigrations.csproj b/src/IdServer/SimpleIdServer.IdServer.MySQLMigrations/SimpleIdServer.IdServer.MySQLMigrations.csproj
+index 85ca98d..33d4bf8 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.MySQLMigrations/SimpleIdServer.IdServer.MySQLMigrations.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.MySQLMigrations/SimpleIdServer.IdServer.MySQLMigrations.csproj
+@@ -4,6 +4,8 @@
+ 	</PropertyGroup>
+ 	<ItemGroup>
+ 		<PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
++		<!-- Pomelo 8 caps EF Relational at 8.x; the IdServer runtime already uses EF Core 9 (Duende storage, linq2db 9). -->
++		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.2" />
+ 	</ItemGroup>
+ 	<ItemGroup>
+ 	  <ProjectReference Include="..\SimpleIdServer.IdServer.Store.EF\SimpleIdServer.IdServer.Store.EF.csproj" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.PostgreMigrations/SimpleIdServer.IdServer.PostgreMigrations.csproj b/src/IdServer/SimpleIdServer.IdServer.PostgreMigrations/SimpleIdServer.IdServer.PostgreMigrations.csproj
+index b1501c6..c7cb1b1 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.PostgreMigrations/SimpleIdServer.IdServer.PostgreMigrations.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.PostgreMigrations/SimpleIdServer.IdServer.PostgreMigrations.csproj
+@@ -3,7 +3,7 @@
+ 		<TargetFramework>net10.0</TargetFramework>
+ 	</PropertyGroup>
+ 	<ItemGroup>
+-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
++		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+ 	</ItemGroup>
+ 	<ItemGroup>
+ 	  <ProjectReference Include="..\SimpleIdServer.IdServer.Store.EF\SimpleIdServer.IdServer.Store.EF.csproj" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.SqlServerMigrations/SimpleIdServer.IdServer.SqlServerMigrations.csproj b/src/IdServer/SimpleIdServer.IdServer.SqlServerMigrations/SimpleIdServer.IdServer.SqlServerMigrations.csproj
+index ad4389c..aa47590 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.SqlServerMigrations/SimpleIdServer.IdServer.SqlServerMigrations.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.SqlServerMigrations/SimpleIdServer.IdServer.SqlServerMigrations.csproj
+@@ -3,7 +3,7 @@
+ 		<TargetFramework>net10.0</TargetFramework>
+ 	</PropertyGroup>
+ 	<ItemGroup>
+-		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.10" />
++		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.2" />
+ 	</ItemGroup>
+ 	<ItemGroup>
+ 	  <ProjectReference Include="..\SimpleIdServer.IdServer.Store.EF\SimpleIdServer.IdServer.Store.EF.csproj" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.SqliteMigrations/SimpleIdServer.IdServer.SqliteMigrations.csproj b/src/IdServer/SimpleIdServer.IdServer.SqliteMigrations/SimpleIdServer.IdServer.SqliteMigrations.csproj
+index dad9387..8872bcd 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.SqliteMigrations/SimpleIdServer.IdServer.SqliteMigrations.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.SqliteMigrations/SimpleIdServer.IdServer.SqliteMigrations.csproj
+@@ -3,7 +3,7 @@
+ 		<TargetFramework>net10.0</TargetFramework>
+ 	</PropertyGroup>
+ 	<ItemGroup>
+-		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
++		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
+ 	</ItemGroup>
+ 	<ItemGroup>
+ 	  <ProjectReference Include="..\SimpleIdServer.IdServer.Store.EF\SimpleIdServer.IdServer.Store.EF.csproj" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/SimpleIdServer.IdServer.Startup.csproj b/src/IdServer/SimpleIdServer.IdServer.Startup/SimpleIdServer.IdServer.Startup.csproj
+index 8033944..836b2ed 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/SimpleIdServer.IdServer.Startup.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/SimpleIdServer.IdServer.Startup.csproj
+@@ -53,7 +53,7 @@
+ 	  <PackageReference Include="Pomelo.Extensions.Caching.MySql" Version="2.2.0" />
+ 	  <PackageReference Include="Microsoft.Web.LibraryManager.Build" Version="2.1.175" />
+ 	  <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.10" />
+-	  <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.10" />
++	  <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.2" />
+ 	  <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+ 	  <PackageReference Include="Microsoft.Extensions.Caching.SqlServer" Version="8.0.10" />
+ 	  <PackageReference Include="Community.Microsoft.Extensions.Caching.PostgreSql" Version="4.0.6" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Store.EF/SimpleIdServer.IdServer.Store.EF.csproj b/src/IdServer/SimpleIdServer.IdServer.Store.EF/SimpleIdServer.IdServer.Store.EF.csproj
+index a3b7874..b2af1cd 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Store.EF/SimpleIdServer.IdServer.Store.EF.csproj
++++ b/src/IdServer/SimpleIdServer.IdServer.Store.EF/SimpleIdServer.IdServer.Store.EF.csproj
+@@ -6,10 +6,10 @@
+ 		<Description>Use Entity Framework.</Description>
+ 	</PropertyGroup>
+ 	<ItemGroup>
+-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+-		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.10" />
++		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.2" />
++		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.2" />
+ 		<PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="8.0.10" />
+-		<PackageReference Include="linq2db.EntityFrameworkCore" Version="8.1.0" />
++		<PackageReference Include="linq2db.EntityFrameworkCore" Version="9.0.0" />
+ 	</ItemGroup>
+ 	<ItemGroup>
+ 	  <ProjectReference Include="..\..\..\formbuilder\FormBuilder.EF\SidFormBuilder.EF.csproj" />

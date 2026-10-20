@@ -1,0 +1,39 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticateController.cs b/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticateController.cs
+index 5c8457b..085fce3 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticateController.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticateController.cs
+@@ -217,7 +217,20 @@ public class BaseAuthenticateController : BaseController
+             Amr = currentAmr
+         }, token);
+         Counters.AuthSuccess(client?.Id, realm);
+-        return Redirect(returnUrl);
++        return RedirectToReturnUrl(realm, returnUrl);
++    }
++
++    /// <summary>
++    /// A ReturnUrl protected with a data-protection key that no longer exists (e.g. the server restarted and its keys
++    /// were kept in memory) cannot be unprotected, and redirecting to the raw value ends in a 404 such as /master/pwd/CfDJ8...
++    /// Only redirect to local or absolute URLs; otherwise fall back to the realm home page.
++    /// </summary>
++    protected IActionResult RedirectToReturnUrl(string realm, string returnUrl)
++    {
++        if (!string.IsNullOrWhiteSpace(returnUrl) && (Url.IsLocalUrl(returnUrl) || Uri.IsWellFormedUriString(returnUrl, UriKind.Absolute)))
++            return Redirect(returnUrl);
++
++        return Redirect(Url.Content(string.IsNullOrWhiteSpace(realm) ? "~/" : $"~/{realm}"));
+     }
+ 
+     protected async Task AddSession(string realm, ICollection<Claim> claims, User user, Client client, CancellationToken cancellationToken, bool rememberLogin = false)
+diff --git a/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticationMethodController.cs b/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticationMethodController.cs
+index b1c7676..a7ec05a 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticationMethodController.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/UI/BaseAuthenticationMethodController.cs
+@@ -331,7 +331,7 @@ namespace SimpleIdServer.IdServer.UI
+                 {
+                     if (!User.Identity.IsAuthenticated) return RedirectToAction("Index", "Errors", new { code = "invalid_request", message = Global.InvalidAntiForgeryToken });
+                     var returnUrl = viewModel.ReturnUrl;
+-                    if (!IsProtected(returnUrl)) return Redirect(returnUrl);
++                    if (!IsProtected(returnUrl)) return RedirectToReturnUrl(prefix, returnUrl);
+                     var unprotectedUrl = Unprotect(returnUrl);
+                     return Redirect(unprotectedUrl);
+                 }

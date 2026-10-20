@@ -1,0 +1,1243 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Components/App.razor b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Components/App.razor
+index ba74cd6..69c22a0 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Components/App.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Components/App.razor
+@@ -1,6 +1,6 @@
+ ﻿@using SimpleIdServer.IdServer.Website
+ <!DOCTYPE html>
+-<html lang="en">
++<html lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName">
+ 
+ <head>
+     <meta charset="utf-8" />
+@@ -15,12 +15,13 @@
+     <link rel="stylesheet" href="_content/SidFormBuilder/style.css" />
+     <link rel="stylesheet" href="app.css" />
+     <link rel="stylesheet" href="SimpleIdServer.IdServerAdmin.Empty.Startup.styles.css" />
++    <link rel="stylesheet" href="_content/SimpleIdServer.IdServer.Website/css/bank-admin.css" />
+     <script src="_content/SimpleIdServer.IdServer.Website/website.js"></script>
+     <link rel="icon" type="image/png" href="favicon.png" />
+     <HeadOutlet @rendermode="RenderMode.InteractiveServer" />
+ </head>
+ 
+-<body class="orange">
++<body class="orange bank-admin">
+     <IdServerRouter />
+     <script src="_framework/blazor.web.js"></script>
+     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
+index fc7e105..86c01c9 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
+@@ -13,6 +13,7 @@ var idserverAdminConfiguration = builder.Configuration.Get<IdentityServerAdminCo
+ var adminBuilder = builder.AddIdserverAdmin(idserverAdminConfiguration.IdserverBaseUrl, o =>
+ {
+     o.ScimUrl = idserverAdminConfiguration.ScimBaseUrl;
++    o.DefaultLanguage = builder.Configuration["DefaultLanguage"] ?? o.DefaultLanguage;
+ }).EnableOpenTelemetry(c =>
+ {
+     if(idserverAdminConfiguration.OpenTelemetryOptions == null)
+@@ -51,6 +52,9 @@ if (idserverAdminConfiguration.ForceHttps)
+ }
+ 
+ adminBuilder.UpdateOpenid(idserverAdminConfiguration.ClientId, idserverAdminConfiguration.ClientSecret, idserverAdminConfiguration.Scopes, idserverAdminConfiguration.IgnoreCertificateError);
++// Without required roles every authenticated user (any employee imported from LDAP) could use the administration UI.
++var adminRequiredRoles = builder.Configuration.GetSection("AdminRequiredRoles").Get<List<string>>() ?? new List<string> { "SIDS-manager/administrator" };
++adminBuilder.UpdateAuthzRequiredRoles(adminRequiredRoles);
+ var app = builder.Build();
+ if (!app.Environment.IsDevelopment())
+ {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/IdServerRouter.razor b/src/IdServer/SimpleIdServer.IdServer.Website/IdServerRouter.razor
+index 467ec3a..fa17610 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/IdServerRouter.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/IdServerRouter.razor
+@@ -7,8 +7,21 @@
+     <RealmRouter AppAssembly="@typeof(IdServerRouter).Assembly">
+         <Found Context="routeData">
+             <AuthorizeRouteView RouteData="@routeData">
+-                <NotAuthorized>
+-                    <RedirectLogin />
++                <NotAuthorized Context="authContext">
++                    @if (authContext.User.Identity?.IsAuthenticated == true)
++                    {
++                        @* Signed in but without an administrator role: redirecting to the login would loop forever. *@
++                        <LayoutView Layout="@typeof(EmptyLayout)">
++                            <PageTitle>Access denied</PageTitle>
++                            <p role="alert">Access denied: your account (@authContext.User.Identity.Name) has no administrator role.</p>
++                            <p>Your roles: @string.Join(", ", authContext.User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role").Select(c => c.Value).Distinct())</p>
++                            <a href="logout">Sign out</a>
++                        </LayoutView>
++                    }
++                    else
++                    {
++                        <RedirectLogin />
++                    }
+                 </NotAuthorized>
+             </AuthorizeRouteView>
+         </Found>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Infrastructures/RealmMiddleware.cs b/src/IdServer/SimpleIdServer.IdServer.Website/Infrastructures/RealmMiddleware.cs
+index 549ddb1..938e722 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Infrastructures/RealmMiddleware.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Infrastructures/RealmMiddleware.cs
+@@ -53,7 +53,7 @@ public class RealmMiddleware
+ 
+     public async Task InvokeAsync(HttpContext context, IRealmStore realmStore, IWebsiteHttpClientFactory websiteHttpClientFactory)
+     {
+-        SetCulture(context);
++        SetCulture(context, _options.DefaultLanguage);
+         var path = context.Request.Path.Value;
+         if (_excludedFileExtensions.Any(r => path.EndsWith(r)) 
+             || _excludedRoutes.Any(r => path.StartsWith(r))
+@@ -131,40 +131,41 @@ public class RealmMiddleware
+         }
+     }
+ 
+-    private static void SetCulture(HttpContext context)
++    // Without the culture cookie the configured default language is used (IdServerWebsiteOptions.DefaultLanguage), not always "en".
++    private static void SetCulture(HttpContext context, string defaultLanguage)
+     {
+-        var culture = GetCulture(context);
++        var culture = GetCulture(context, string.IsNullOrWhiteSpace(defaultLanguage) ? SimpleIdServer.IdServer.Constants.DefaultLanguage : defaultLanguage);
+         var cultureInfo = CultureInfo.GetCultureInfo(culture);
+         CultureInfo.CurrentCulture = cultureInfo;
+         CultureInfo.CurrentUICulture = cultureInfo;
+     }
+ 
+-    private static string GetCulture(HttpContext context)
++    private static string GetCulture(HttpContext context, string defaultLanguage)
+     {
+         var defaultCookieName = CookieRequestCultureProvider.DefaultCookieName;
+         var cookie = context.Request.Cookies[defaultCookieName];
+         if(string.IsNullOrWhiteSpace(cookie))
+         {
+-            return SimpleIdServer.IdServer.Constants.DefaultLanguage;
++            return defaultLanguage;
+         }
+ 
+         Span<Range> parts = stackalloc Range[3];
+         var valueSpan = cookie.AsSpan();
+         if (valueSpan.Split(parts, _cookieSeparator, StringSplitOptions.RemoveEmptyEntries) != 2)
+         {
+-            return SimpleIdServer.IdServer.Constants.DefaultLanguage;
++            return defaultLanguage;
+         }
+ 
+         var potentialUICultureName = valueSpan[parts[1]];
+         if (!potentialUICultureName.StartsWith(_uiCulturePrefix, StringComparison.Ordinal))
+         {
+-            return SimpleIdServer.IdServer.Constants.DefaultLanguage;
++            return defaultLanguage;
+         }
+ 
+         var uiCultureName = potentialUICultureName.Slice(_uiCulturePrefix.Length);
+         if (uiCultureName.IsEmpty)
+         {
+-            return SimpleIdServer.IdServer.Constants.DefaultLanguage;
++            return defaultLanguage;
+         }
+ 
+         return uiCultureName.ToString();
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Claims.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Claims.razor
+index 86d41bd..e0cae08 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Claims.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Claims.razor
+@@ -1,8 +1,9 @@
+ ﻿@page "/claims"
+ 
+ @using System.Security.Claims
++@using SimpleIdServer.IdServer.Website.Resources
+ 
+-<h3>Claims</h3>
++<h3>@Global.Claims</h3>
+ 
+ @if(claims != null)
+ {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientAdvanced.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientAdvanced.razor
+index 31bdf18..f86a771 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientAdvanced.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientAdvanced.razor
+@@ -17,7 +17,7 @@
+ <RadzenTemplateForm Submit=@SubmitUpdateClient TItem="UpdateAdvancedClient" Data=@updateAdvancedClient>
+     <RadzenAccordion Multiple=true>    
+         <Items>
+-            <RadzenAccordionItem Text="OpenID configuration" Selected=true>
++            <RadzenAccordionItem Text="@(Global.ResourceManager.GetString("OpenIdConfiguration"))" Selected=true>
+                 <!-- TokenSignedResponseAlg -->
+                 <div class="row">
+                     <div class="col-md-2">
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientScopes.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientScopes.razor
+index d64da9f..3230d25 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientScopes.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientScopes.razor
+@@ -57,11 +57,11 @@
+             <Template Context="data">
+                 @if (data.Value.Type == ScopeTypes.IDENTITY)
+                 {
+-                    <RadzenBadge Text="Identity Resource" IsPill="true" />
++                    <RadzenBadge Text="@Global.IdentityResource" IsPill="true" />
+                 }
+                 else
+                 {
+-                    <RadzenBadge Text="API Resource" IsPill="true" />
++                    <RadzenBadge Text="@Global.ApiResource" IsPill="true" />
+                 }
+             </Template>
+         </RadzenDataGridColumn>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientSettings.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientSettings.razor
+index 6ceea3f..aa9b6e8 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientSettings.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/ClientSettings.razor
+@@ -349,7 +349,7 @@
+                Client.ClientType == ClientTypes.EXTERNAL ||
+                Client.ClientType == ClientTypes.CREDENTIALISSUER)
+             {
+-                <RadzenAccordionItem Text="Logout settings" Selected=true>
++                <RadzenAccordionItem Text="@(Global.ResourceManager.GetString("LogoutSettings"))" Selected=true>
+                     <!-- Front-channel logout session required -->
+                     <div class="row">
+                         <div class="col-md-2">
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/Clients.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/Clients.razor
+index e0e3db9..c63bbe9 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/Clients.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Client/Clients.razor
+@@ -67,7 +67,7 @@
+                     </Template>
+                 </RadzenDataGridColumn>
+                 <RadzenDataGridColumn TItem="SelectableClient" Property="Value.ClientName" Filterable="false" Sortable="false" Title="@Global.Name" Width="80px" />
+-                <RadzenDataGridColumn TItem="SelectableClient" Filterable="true" Property="Value.ClientType" Sortable="false" Title="Type" Width="80px">
++                <RadzenDataGridColumn TItem="SelectableClient" Filterable="true" Property="Value.ClientType" Sortable="false" Title="@Global.Type" Width="80px">
+                     <Template Context="data">
+                         <RadzenBadge Text="@(data.Value.ClientType == null ? string.Empty : Enum.GetName(typeof(ClientTypes), data.Value.ClientType.Value))" IsPill="true" />
+                     </Template>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Group/Groups.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Group/Groups.razor
+index 5d6d36d..03dbb56 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Group/Groups.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Group/Groups.razor
+@@ -18,7 +18,7 @@
+     <Authorized>
+         <div class="row">
+             <div class="col">
+-                <RadzenText class="mt-3 mb-3 no-margin" Text="Groups" TextStyle="TextStyle.DisplayH3" />
++                <RadzenText class="mt-3 mb-3 no-margin" Text="@Global.Groups" TextStyle="TextStyle.DisplayH3" />
+                 <p>
+                     @Global.RolesDescription
+                 </p>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/EditIdentityProvisioningMappingRule.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/EditIdentityProvisioningMappingRule.razor
+index f8e3958..7ba304e 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/EditIdentityProvisioningMappingRule.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/EditIdentityProvisioningMappingRule.razor
+@@ -23,7 +23,7 @@
+ <RadzenBreadCrumb>
+     <RadzenBreadCrumbItem Path="@urlHelper.GetUrl("/identityprovisioning")" Text="@Global.IdentityProvisioning" />
+     <RadzenBreadCrumbItem Path=@(urlHelper.GetUrl("/identityprovisioning/" + id + "/mappingrules")) Text="@Global.IdentityProvisioningDetails" />
+-    <RadzenBreadCrumbItem Text="Mapper details" />
++    <RadzenBreadCrumbItem Text="@Global.MapperDetails" />
+ </RadzenBreadCrumb>
+ 
+ <RadzenText class="mt-3 mb-3 no-margin" Text="@GetTitle()" TextStyle="TextStyle.DisplayH3" />
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/IdentityProvisioningLst.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/IdentityProvisioningLst.razor
+index 0fb3265..6b0edfd 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/IdentityProvisioningLst.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/IdProvisioning/IdentityProvisioningLst.razor
+@@ -12,7 +12,7 @@
+ @using SimpleIdServer.IdServer.Website.Stores.IdentityProvisioningStore;
+ @using SimpleIdServer.IdServer.Website.Stores.RealmStore;
+ 
+-<RadzenText class="mb-3 no-margin" Text="Extract" TextStyle="TextStyle.DisplayH3" />
++<RadzenText class="mb-3 no-margin" Text="@Global.AutomaticIdentityProvisioning" TextStyle="TextStyle.DisplayH3" />
+ <p>
+     @Global.IdentityProvisioningLstDescription
+ </p>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Realm/RealmDetails.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Realm/RealmDetails.razor
+index 4b018fb..bcbd951 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Realm/RealmDetails.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/Realm/RealmDetails.razor
+@@ -27,7 +27,7 @@
+     <!-- Servers -->
+     <RadzenColumn Size="6">
+         <RadzenCardLoader Variant="Variant.Filled" IsLoading=false>
+-            <RadzenText TextStyle="TextStyle.DisplayH6">Servers</RadzenText>
++            <RadzenText TextStyle="TextStyle.DisplayH6">@Global.Servers</RadzenText>
+             <!-- OpenID Connect -->
+             <div class="row">
+                 <div class="col-2">
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor
+index a1dbb45..bf7d0dc 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor
+@@ -47,7 +47,7 @@
+     <div>
+         <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">@Global.Email</RadzenText>
+         <RadzenTextBox Name="Email" @bind-Value="@updateUserSettings.Email" Class="w-100"></RadzenTextBox>
+-        <RadzenEmailValidator Component="Email" Text="Provide a valid email address"></RadzenEmailValidator>
++        <RadzenEmailValidator Component="Email" Text="@Global.EmailIsInvalid"></RadzenEmailValidator>
+     </div>
+     <!-- First name -->
+     <div>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
+index 42be56a..b456e8b 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
+@@ -1690,7 +1690,7 @@ The &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; will be set to &lt;b&gt
+     <value>Please select a &lt;b&gt;Proof of Possession mechanism&lt;/b&gt;. Access tokens are securely linked to a specific cryptographic key, ensuring that only the sender possesses this key.</value>
+   </data>
+   <data name="SidAdminUi" xml:space="preserve">
+-    <value>SimpleIdServer Administration UI</value>
++    <value>Administration console</value>
+   </data>
+   <data name="SignatureKey" xml:space="preserve">
+     <value>Signature Key</value>
+@@ -2226,4 +2226,7 @@ The &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; will be set to &lt;b&gt
+   <data name="Middlename" xml:space="preserve">
+     <value>Middlename</value>
+   </data>
++  <data name="LogoutSettings" xml:space="preserve"><value>Logout settings</value></data>
++  <data name="OpenIdConfiguration" xml:space="preserve"><value>OpenID configuration</value></data>
++  <data name="CredentialType" xml:space="preserve"><value>Credential type</value></data>
+ </root>
+\ No newline at end of file
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx
+new file mode 100644
+index 0000000..73c55d8
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx
+@@ -0,0 +1,711 @@
++<?xml version="1.0" encoding="utf-8"?>
++<root>
++  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
++  <resheader name="version"><value>2.0</value></resheader>
++  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <data name="ApiResourceAlreadyExists" xml:space="preserve"><value>'{0}' nomli API resurs allaqachon mavjud</value></data>
++  <data name="CannotReadCertificateStore" xml:space="preserve"><value>Sertifikatlar omborini o'qishga ruxsatingiz yo'q</value></data>
++  <data name="CertificateAuthoritySaved" xml:space="preserve"><value>Sertifikat markazi saqlandi</value></data>
++  <data name="CertificateDoesntExist" xml:space="preserve"><value>Sertifikat mavjud emas</value></data>
++  <data name="CertificateDoesntHavePrivateKey" xml:space="preserve"><value>Sertifikatda maxfiy kalit yo'q</value></data>
++  <data name="ClientAdded" xml:space="preserve"><value>'{0}' ilovasi muvaffaqiyatli qo'shildi</value></data>
++  <data name="ClientAlreadyExists" xml:space="preserve"><value>Ilovani qo'shib bo'lmaydi: shu nomli boshqa ilova mavjud</value></data>
++  <data name="ClientCertificateAdded" xml:space="preserve"><value>Ilova sertifikati qo'shildi</value></data>
++  <data name="ClientCredentialsUpdated" xml:space="preserve"><value>Ilova hisob ma'lumotlari yangilandi</value></data>
++  <data name="ClientRoleAdded" xml:space="preserve"><value>Ilova roli qo'shildi</value></data>
++  <data name="ClientScopesAdded" xml:space="preserve"><value>Ilova ruxsat doiralari qo'shildi</value></data>
++  <data name="ClientSettingsUpdated" xml:space="preserve"><value>Ilova sozlamalari yangilandi</value></data>
++  <data name="EncKeyAdded" xml:space="preserve"><value>Shifrlash kaliti qo'shildi</value></data>
++  <data name="ExternalAuthProviderUnlinked" xml:space="preserve"><value>Tashqi autentifikatsiya provayderi uzildi</value></data>
++  <data name="GroupAdded" xml:space="preserve"><value>Guruh qo'shildi</value></data>
++  <data name="GroupAlreadyExists" xml:space="preserve"><value>{0} nomli guruh allaqachon mavjud</value></data>
++  <data name="GroupMemberAdded" xml:space="preserve"><value>A'zo qo'shildi</value></data>
++  <data name="GroupMembersRemoved" xml:space="preserve"><value>Tanlangan a'zolar olib tashlandi</value></data>
++  <data name="GroupRolesAdded" xml:space="preserve"><value>Rollar qo'shildi</value></data>
++  <data name="GroupRolesRemoved" xml:space="preserve"><value>Tanlangan guruh rollari olib tashlandi</value></data>
++  <data name="IdentityProvisioningLaunched" xml:space="preserve"><value>Identifikatsiya provisioningi ishga tushirildi</value></data>
++  <data name="IdProviderAdded" xml:space="preserve"><value>Identifikatsiya provayderi qo'shildi</value></data>
++  <data name="IdProviderDetailsUpdated" xml:space="preserve"><value>Identifikatsiya provayderi ma'lumotlari yangilandi</value></data>
++  <data name="IdProviderExists" xml:space="preserve"><value>'{0}' nomli identifikatsiya provayderi allaqachon mavjud</value></data>
++  <data name="IdProviderMapperAdded" xml:space="preserve"><value>Moslashtirish qoidasi qo'shildi</value></data>
++  <data name="IdProviderMapperUpdated" xml:space="preserve"><value>Moslashtirish qoidasi yangilandi</value></data>
++  <data name="IdProviderPropertiesUpdated" xml:space="preserve"><value>Identifikatsiya provayderi xususiyatlari yangilandi</value></data>
++  <data name="IdProvisioningDetailsUpdated" xml:space="preserve"><value>Ma'lumotlar yangilandi</value></data>
++  <data name="IdProvisioningMappingRuleAdded" xml:space="preserve"><value>Moslashtirish qoidasi qo'shildi</value></data>
++  <data name="IdProvisioningPropertiesUpdated" xml:space="preserve"><value>Xususiyatlar yangilandi</value></data>
++  <data name="ImportLaunched" xml:space="preserve"><value>Import ishga tushirildi</value></data>
++  <data name="InvalidRedirectUrl" xml:space="preserve"><value>'{0}' qayta yo'naltirish manzili noto'g'ri</value></data>
++  <data name="JWKSUrlUpdated" xml:space="preserve"><value>JWKS manzili yangilandi</value></data>
++  <data name="NameIsRequired" xml:space="preserve"><value>Nom kiritilishi shart</value></data>
++  <data name="RealmAdded" xml:space="preserve"><value>Realm qo'shildi</value></data>
++  <data name="RealmExists" xml:space="preserve"><value>{0} realm allaqachon mavjud</value></data>
++  <data name="RedirectUriContainsFragment" xml:space="preserve"><value>'{0}' qayta yo'naltirish manzilida fragment (#) bo'lmasligi kerak</value></data>
++  <data name="ScopeAdded" xml:space="preserve"><value>'{0}' ruxsat doirasi qo'shildi</value></data>
++  <data name="ScopeAlreadyExists" xml:space="preserve"><value>'{0}' nomli resurs allaqachon mavjud</value></data>
++  <data name="ScopeClaimMapperAdded" xml:space="preserve"><value>Atribut moslashtiruvchisi qo'shildi</value></data>
++  <data name="ScopeClaimMapperNameMustBeUnique" xml:space="preserve"><value>Nom takrorlanmas bo'lishi kerak</value></data>
++  <data name="ScopeClaimMapperSAMLAttributeNameMustBeUnique" xml:space="preserve"><value>SAML atribut nomi takrorlanmas bo'lishi kerak</value></data>
++  <data name="ScopeClaimMapperTokenClaimNameMustBeUnique" xml:space="preserve"><value>Token atributi nomi takrorlanmas bo'lishi kerak</value></data>
++  <data name="ScopeClaimMapperUpdated" xml:space="preserve"><value>Ruxsat doirasi atribut moslashtiruvchisi yangilandi</value></data>
++  <data name="ScopeDetailsUpdated" xml:space="preserve"><value>Ruxsat doirasi ma'lumotlari yangilandi</value></data>
++  <data name="ScopeResourceAdded" xml:space="preserve"><value>Ruxsat doirasi resursi qo'shildi</value></data>
++  <data name="ScopeResourcesUpdated" xml:space="preserve"><value>Ruxsat doirasi resurslari yangilandi</value></data>
++  <data name="SelectedCertificateAuthoritiesRemoved" xml:space="preserve"><value>Tanlangan sertifikat markazlari olib tashlandi</value></data>
++  <data name="SelectedClientCertificatesRemoved" xml:space="preserve"><value>Tanlangan ilova sertifikatlari olib tashlandi</value></data>
++  <data name="SelectedClientKeysRemoved" xml:space="preserve"><value>Tanlangan ilova kalitlari olib tashlandi</value></data>
++  <data name="SelectedClientRolesRemoved" xml:space="preserve"><value>Tanlangan ilova rollari olib tashlandi</value></data>
++  <data name="SelectedClientScopesRemoved" xml:space="preserve"><value>Tanlangan ilova ruxsat doiralari olib tashlandi</value></data>
++  <data name="SelectedClientsRemoved" xml:space="preserve"><value>Tanlangan ilovalar olib tashlandi</value></data>
++  <data name="SelectedGrantsRemoved" xml:space="preserve"><value>Tanlangan ruxsatnomalar bekor qilindi</value></data>
++  <data name="SelectedGroupsRemoved" xml:space="preserve"><value>Tanlangan guruhlar olib tashlandi</value></data>
++  <data name="SelectedIdentityProvisioningMappingRulesRemoved" xml:space="preserve"><value>Moslashtirish qoidalari olib tashlandi</value></data>
++  <data name="SelectedIdentityProvisioningRemoved" xml:space="preserve"><value>Tanlangan identifikatsiya provisioningi olib tashlandi</value></data>
++  <data name="SelectedIdProviderMappersRemoved" xml:space="preserve"><value>Tanlangan moslashtirish qoidalari olib tashlandi</value></data>
++  <data name="SelectedIdProvidersRemoved" xml:space="preserve"><value>Tanlangan identifikatsiya provayderlari olib tashlandi</value></data>
++  <data name="SelectedScopesMappersRemoved" xml:space="preserve"><value>Ruxsat doirasi moslashtiruvchilari olib tashlandi</value></data>
++  <data name="SelectedScopesRemoved" xml:space="preserve"><value>Tanlangan ruxsat doiralari olib tashlandi</value></data>
++  <data name="SigKeyAdded" xml:space="preserve"><value>Imzo kaliti qo'shildi</value></data>
++  <data name="SigKeyAlreadyExists" xml:space="preserve"><value>'{0}' imzo kaliti allaqachon mavjud</value></data>
++  <data name="UnknownClient" xml:space="preserve"><value>'{0}' ilovasi mavjud emas</value></data>
++  <data name="UnknownGroup" xml:space="preserve"><value>Guruh mavjud emas</value></data>
++  <data name="UnknownIdentityProvisioning" xml:space="preserve"><value>Identifikatsiya provisioningi mavjud emas</value></data>
++  <data name="UnknownIdProvider" xml:space="preserve"><value>'{0}' identifikatsiya provayderi mavjud emas</value></data>
++  <data name="UnknownResource" xml:space="preserve"><value>'{0}' resursi mavjud emas</value></data>
++  <data name="UnknownUser" xml:space="preserve"><value>'{0}' foydalanuvchisi mavjud emas</value></data>
++  <data name="UserClaimsUpdated" xml:space="preserve"><value>Foydalanuvchi atributlari yangilandi</value></data>
++  <data name="UserConsentRejected" xml:space="preserve"><value>Foydalanuvchi roziligi bekor qilindi</value></data>
++  <data name="UserCredentialAdded" xml:space="preserve"><value>Foydalanuvchi hisob ma'lumoti qo'shildi</value></data>
++  <data name="UserCredentialRemoved" xml:space="preserve"><value>Foydalanuvchi hisob ma'lumoti olib tashlandi</value></data>
++  <data name="UserCredentialUpdated" xml:space="preserve"><value>Foydalanuvchi hisob ma'lumoti yangilandi</value></data>
++  <data name="UserDetailsUpdated" xml:space="preserve"><value>Foydalanuvchi ma'lumotlari yangilandi</value></data>
++  <data name="UserGroupsAssigned" xml:space="preserve"><value>Foydalanuvchiga guruhlar biriktirildi</value></data>
++  <data name="UserRolesUnassigned" xml:space="preserve"><value>Foydalanuvchi rollari olib tashlandi</value></data>
++  <data name="UserSessionRejected" xml:space="preserve"><value>Foydalanuvchi sessiyasi bekor qilindi</value></data>
++  <data name="UserAdded" xml:space="preserve"><value>Yangi foydalanuvchi qo'shildi</value></data>
++  <data name="SelectedUsersRemoved" xml:space="preserve"><value>Tanlangan foydalanuvchilar olib tashlandi</value></data>
++  <data name="SelectedCredentialTemplatesRemoved" xml:space="preserve"><value>Tanlangan guvohnoma shablonlari olib tashlandi</value></data>
++  <data name="CredentialTemplateExists" xml:space="preserve"><value>'{0}' turidagi guvohnoma shabloni allaqachon mavjud</value></data>
++  <data name="CredentialTemplateAdded" xml:space="preserve"><value>Guvohnoma shabloni qo'shildi</value></data>
++  <data name="SelectedCredentialTemplateDisplaysRemoved" xml:space="preserve"><value>Tanlangan ko'rinishlar olib tashlandi</value></data>
++  <data name="CredentialTemplateDisplayAdded" xml:space="preserve"><value>Ko'rinish qo'shildi</value></data>
++  <data name="SelectedCredentialSubjectsRemoved" xml:space="preserve"><value>Tanlangan guvohnoma subyektlari olib tashlandi</value></data>
++  <data name="CredentialTypesAreUpdated" xml:space="preserve"><value>Guvohnoma turlari yangilandi</value></data>
++  <data name="CredentialSubjectAdded" xml:space="preserve"><value>Guvohnoma subyekti qo'shildi</value></data>
++  <data name="CredentialOfferAdded" xml:space="preserve"><value>Guvohnoma taklifi qo'shildi</value></data>
++  <data name="SelectedCredentialOffersRemoved" xml:space="preserve"><value>Tanlangan guvohnoma takliflari olib tashlandi</value></data>
++  <data name="EthrNetworkExists" xml:space="preserve"><value>{0} Ethereum tarmog'i allaqachon mavjud</value></data>
++  <data name="EthrContractDeployed" xml:space="preserve"><value>Ethereum shartnomasi joylashtirildi</value></data>
++  <data name="EthrNetworkAdded" xml:space="preserve"><value>Ethereum tarmog'i qo'shildi</value></data>
++  <data name="SelectedEthrNetworksRemoved" xml:space="preserve"><value>Tanlangan Ethereum tarmoqlari olib tashlandi</value></data>
++  <data name="DIDKeyCreated" xml:space="preserve"><value>DID yaratildi</value></data>
++  <data name="AcrAdded" xml:space="preserve"><value>Autentifikatsiya darajasi (ACR) qo'shildi</value></data>
++  <data name="SelectedAcrsRemoved" xml:space="preserve"><value>Tanlangan ACR'lar olib tashlandi</value></data>
++  <data name="ClientAdvancedSettingsUpdated" xml:space="preserve"><value>Kengaytirilgan sozlamalar yangilandi</value></data>
++  <data name="AuthMethodUpdated" xml:space="preserve"><value>Autentifikatsiya usuli yangilandi</value></data>
++  <data name="SelectedRegistrationWorkflowRemoved" xml:space="preserve"><value>Tanlangan ro'yxatdan o'tish jarayonlari olib tashlandi</value></data>
++  <data name="RegistrationWorkflowAdded" xml:space="preserve"><value>'{0}' ro'yxatdan o'tish jarayoni qo'shildi</value></data>
++  <data name="RegistrationWorkflowUpdated" xml:space="preserve"><value>'{0}' ro'yxatdan o'tish jarayoni yangilandi</value></data>
++  <data name="CannotAddRealmBecauseOptionIsDisabled" xml:space="preserve"><value>Realm qo'shib bo'lmaydi: bu imkoniyat o'chirilgan</value></data>
++  <data name="ScopeResourcesRemoved" xml:space="preserve"><value>Ruxsat doirasi resurslari olib tashlandi</value></data>
++  <data name="Manage" xml:space="preserve"><value>Boshqaruv</value></data>
++  <data name="IdProvisioningMapperUpdated" xml:space="preserve"><value>Identifikatsiya provisioningi moslashtirish qoidasi yangilandi</value></data>
++  <data name="NoProperties" xml:space="preserve"><value>Xususiyatlar yo'q</value></data>
++  <data name="ProcessImportStarted" xml:space="preserve"><value>Import jarayoni boshlandi</value></data>
++  <data name="Adding" xml:space="preserve"><value>Qo'shilmoqda...</value></data>
++  <data name="AtLeastOneRedirectionUrl" xml:space="preserve"><value>Kamida bitta qayta yo'naltirish manzili ko'rsatilishi kerak</value></data>
++  <data name="Identifier" xml:space="preserve"><value>Identifikator</value></data>
++  <data name="IdentifierIsRequired" xml:space="preserve"><value>Identifikator kiritilishi shart</value></data>
++  <data name="Name" xml:space="preserve"><value>Nom</value></data>
++  <data name="RedirectionUrls" xml:space="preserve"><value>Qayta yo'naltirish manzillari</value></data>
++  <data name="RedirectionUrlsDescription" xml:space="preserve"><value>Qayta yo'naltirish manzillari &lt;b&gt;;&lt;/b&gt; bilan ajratilgan ro'yxat sifatida kiritiladi. &lt;br /&gt; Manzillar to'g'ri bo'lishi va fragment saqlamasligi kerak, masalan (http://localhost#fragment)</value></data>
++  <data name="Save" xml:space="preserve"><value>Saqlash</value></data>
++  <data name="Secret" xml:space="preserve"><value>Maxfiy kalit</value></data>
++  <data name="SecretIsRequired" xml:space="preserve"><value>Maxfiy kalit kiritilishi shart</value></data>
++  <data name="AuthorizationCode" xml:space="preserve"><value>Avtorizatsiya kodi</value></data>
++  <data name="TokenExchangePreAuthorizedCode" xml:space="preserve"><value>Oldindan avtorizatsiya qilingan kod bilan token almashish</value></data>
++  <data name="AcrsDescription" xml:space="preserve"><value>ACR (Authentication Context Class Reference) — autentifikatsiya darajasi. Maxfiy ma'lumotlarga kirishdan oldin foydalanuvchi ishonchliligini oshirish uchun ishlatiladi.</value></data>
++  <data name="AcrsTitle" xml:space="preserve"><value>Autentifikatsiya darajalari (ACR)</value></data>
++  <data name="Add" xml:space="preserve"><value>Qo'shish</value></data>
++  <data name="AddAcr" xml:space="preserve"><value>Autentifikatsiya darajasini qo'shish</value></data>
++  <data name="AddCertificateAuthority" xml:space="preserve"><value>Sertifikat markazini qo'shish</value></data>
++  <data name="AddClientCertificate" xml:space="preserve"><value>Ilova sertifikatini qo'shish</value></data>
++  <data name="Auditing" xml:space="preserve"><value>Audit</value></data>
++  <data name="Authentication" xml:space="preserve"><value>Autentifikatsiya</value></data>
++  <data name="AuthenticationMethods" xml:space="preserve"><value>Autentifikatsiya usullari</value></data>
++  <data name="Authentications" xml:space="preserve"><value>Autentifikatsiyalar</value></data>
++  <data name="CertificateAuthoritiesDescription" xml:space="preserve"><value>&lt;i&gt;tls_client_auth&lt;/i&gt; autentifikatsiya usulini sozlashda ishlatiladigan sertifikat markazlarini boshqarish</value></data>
++  <data name="CertificateAuthoritiesTitle" xml:space="preserve"><value>Sertifikat markazlari</value></data>
++  <data name="CertificateAuthorityDetailsTitle" xml:space="preserve"><value>Sertifikat markazi ma'lumotlari</value></data>
++  <data name="ClientCertificate" xml:space="preserve"><value>Ilova sertifikati</value></data>
++  <data name="ClientCertificates" xml:space="preserve"><value>Ilova sertifikatlari</value></data>
++  <data name="ClientIdentifier" xml:space="preserve"><value>Ilova identifikatori</value></data>
++  <data name="CreateDateTime" xml:space="preserve"><value>Yaratilgan vaqt</value></data>
++  <data name="Delete" xml:space="preserve"><value>O'chirish</value></data>
++  <data name="Description" xml:space="preserve"><value>Tavsif</value></data>
++  <data name="Details" xml:space="preserve"><value>Tafsilotlar</value></data>
++  <data name="DisplayName" xml:space="preserve"><value>Ko'rinadigan nom</value></data>
++  <data name="DisplayOnlyErrors" xml:space="preserve"><value>Faqat xatolarni ko'rsatish</value></data>
++  <data name="Download" xml:space="preserve"><value>Yuklab olish</value></data>
++  <data name="EndDatetime" xml:space="preserve"><value>Tugash vaqti</value></data>
++  <data name="ErrorMessage" xml:space="preserve"><value>Xato xabari</value></data>
++  <data name="ExternalIdentityProviders" xml:space="preserve"><value>Tashqi identifikatsiya provayderlari</value></data>
++  <data name="FindType" xml:space="preserve"><value>Qidiruv turi</value></data>
++  <data name="FindValue" xml:space="preserve"><value>Qidiruv qiymati</value></data>
++  <data name="Options" xml:space="preserve"><value>Parametrlar</value></data>
++  <data name="PrivateKey" xml:space="preserve"><value>Maxfiy kalit</value></data>
++  <data name="PublicKey" xml:space="preserve"><value>Ochiq kalit</value></data>
++  <data name="PushNotification" xml:space="preserve"><value>Push-bildirishnoma</value></data>
++  <data name="Request" xml:space="preserve"><value>So'rov</value></data>
++  <data name="Source" xml:space="preserve"><value>Manba</value></data>
++  <data name="StartDatetime" xml:space="preserve"><value>Boshlanish vaqti</value></data>
++  <data name="StoreLocation" xml:space="preserve"><value>Ombor joylashuvi</value></data>
++  <data name="StoreName" xml:space="preserve"><value>Ombor nomi</value></data>
++  <data name="UpdateDateTime" xml:space="preserve"><value>Yangilangan vaqt</value></data>
++  <data name="UserName" xml:space="preserve"><value>Foydalanuvchi nomi</value></data>
++  <data name="ValidFrom" xml:space="preserve"><value>Amal qilish boshlanishi</value></data>
++  <data name="ValidTo" xml:space="preserve"><value>Amal qilish tugashi</value></data>
++  <data name="View" xml:space="preserve"><value>Ko'rish</value></data>
++  <data name="AccessRequest" xml:space="preserve"><value>Kirish so'rovi</value></data>
++  <data name="AccessSettings" xml:space="preserve"><value>Kirish sozlamalari</value></data>
++  <data name="AccessTokenType" xml:space="preserve"><value>Access token turi</value></data>
++  <data name="Active" xml:space="preserve"><value>Faol</value></data>
++  <data name="AddApiResource" xml:space="preserve"><value>API resurs qo'shish</value></data>
++  <data name="AddClaim" xml:space="preserve"><value>Atribut qo'shish</value></data>
++  <data name="AddClient" xml:space="preserve"><value>Ilova qo'shish</value></data>
++  <data name="AddClientScope" xml:space="preserve"><value>Ilova ruxsat doirasini qo'shish</value></data>
++  <data name="AddCredential" xml:space="preserve"><value>Hisob ma'lumoti qo'shish</value></data>
++  <data name="AddGroup" xml:space="preserve"><value>Guruh qo'shish</value></data>
++  <data name="AddIdentityProvider" xml:space="preserve"><value>Identifikatsiya provayderini qo'shish</value></data>
++  <data name="AddMapper" xml:space="preserve"><value>Moslashtiruvchi qo'shish</value></data>
++  <data name="AddMappingRule" xml:space="preserve"><value>Moslashtirish qoidasini qo'shish</value></data>
++  <data name="AddMember" xml:space="preserve"><value>A'zo qo'shish</value></data>
++  <data name="AddRealm" xml:space="preserve"><value>Realm qo'shish</value></data>
++  <data name="AddRegistrationWorkflow" xml:space="preserve"><value>Ro'yxatdan o'tish jarayonini qo'shish</value></data>
++  <data name="AddRole" xml:space="preserve"><value>Ilova rolini qo'shish</value></data>
++  <data name="AddScope" xml:space="preserve"><value>Ruxsat doirasini qo'shish</value></data>
++  <data name="AddUser" xml:space="preserve"><value>Foydalanuvchi qo'shish</value></data>
++  <data name="Advanced" xml:space="preserve"><value>Kengaytirilgan</value></data>
++  <data name="Algorithm" xml:space="preserve"><value>Algoritm</value></data>
++  <data name="ApiResource" xml:space="preserve"><value>API resurs</value></data>
++  <data name="ApiResources" xml:space="preserve"><value>API resurslar</value></data>
++  <data name="ApiScope" xml:space="preserve"><value>API ruxsat doirasi</value></data>
++  <data name="AreYouSure" xml:space="preserve"><value>Ishonchingiz komilmi?</value></data>
++  <data name="AssignGroups" xml:space="preserve"><value>Guruhlarni biriktirish</value></data>
++  <data name="AttemptAuthentication" xml:space="preserve"><value>Bugungi kirish urinishlari</value></data>
++  <data name="Attribute" xml:space="preserve"><value>Atribut</value></data>
++  <data name="Audience" xml:space="preserve"><value>Auditoriya (audience)</value></data>
++  <data name="AuthenticationMethod" xml:space="preserve"><value>Autentifikatsiya usuli</value></data>
++  <data name="AuthenticationMethodRequired" xml:space="preserve"><value>Autentifikatsiya usuli tanlanishi shart</value></data>
++  <data name="AuthenticationTime" xml:space="preserve"><value>Autentifikatsiya vaqti</value></data>
++  <data name="AuthorizationDataTypes" xml:space="preserve"><value>Avtorizatsiya ma'lumotlari turlari</value></data>
++  <data name="AuthorizationDataTypesDescription" xml:space="preserve"><value>Avtorizatsiya ma'lumotlari turlari &lt;b&gt;;&lt;/b&gt; bilan ajratilgan ro'yxat sifatida kiritiladi</value></data>
++  <data name="AuthorizationDataTypesTooltip" xml:space="preserve"><value>Ilova qo'llab-quvvatlaydigan avtorizatsiya ma'lumotlari turlari</value></data>
++  <data name="AuthorizationDetails" xml:space="preserve"><value>Avtorizatsiya tafsilotlari</value></data>
++  <data name="AuthorizationResponseSignatureAlg" xml:space="preserve"><value>Avtorizatsiya javobi imzo algoritmi</value></data>
++  <data name="AuthorizationResponseSignatureAlgTooltip" xml:space="preserve"><value>Javob rejimi jwt bo'lganda avtorizatsiya javobi tokenlarini imzolash uchun JWA algoritmi.</value></data>
++  <data name="BackChannelLogoutSessionRequired" xml:space="preserve"><value>Backchannel chiqishda sessiya talab qilinadi</value></data>
++  <data name="BackChannelLogoutSessionRequiredTooltip" xml:space="preserve"><value>OP Logout tokenida RP sessiyasini aniqlash uchun SID atributini yubora oladimi. &lt;br /&gt; Qo'llab-quvvatlansa, sid atributi OP chiqargan ID tokenlarga ham qo'shiladi.</value></data>
++  <data name="BackChannelLogoutUri" xml:space="preserve"><value>Backchannel chiqish manzili</value></data>
++  <data name="BackChannelLogoutUriTooltip" xml:space="preserve"><value>OP Logout tokenini yuborganda RP o'zini tizimdan chiqaradigan RP manzili.</value></data>
++  <data name="CapabilityConfig" xml:space="preserve"><value>Imkoniyatlar sozlamasi</value></data>
++  <data name="CertificateAuthorityType" xml:space="preserve"><value>Sertifikat markazi turi</value></data>
++  <data name="CertificateStore" xml:space="preserve"><value>Sertifikatlar ombori</value></data>
++  <data name="Children" xml:space="preserve"><value>Ichki elementlar</value></data>
++  <data name="ChooseMappingRule" xml:space="preserve"><value>Moslashtirish qoidasi turini tanlang</value></data>
++  <data name="ChooseRealm" xml:space="preserve"><value>Realmni tanlang</value></data>
++  <data name="CIBA" xml:space="preserve"><value>CIBA</value></data>
++  <data name="Claims" xml:space="preserve"><value>Atributlar</value></data>
++  <data name="ClaimsDescription" xml:space="preserve"><value>Foydalanuvchi atributlari ro'yxati.</value></data>
++  <data name="Client" xml:space="preserve"><value>Ilova</value></data>
++  <data name="ClientCredentials" xml:space="preserve"><value>Ilova hisob ma'lumotlari</value></data>
++  <data name="ClientDetailsTitle" xml:space="preserve"><value>Ilova tafsilotlari</value></data>
++  <data name="Clients" xml:space="preserve"><value>Ilovalar</value></data>
++  <data name="ClientScopes" xml:space="preserve"><value>Ilova ruxsat doiralari</value></data>
++  <data name="ClientsDescription" xml:space="preserve"><value>Mobil, veb yoki IoT ilovalarni autentifikatsiya uchun IdServer'dan foydalanadigan qilib sozlang.</value></data>
++  <data name="ClientSecret" xml:space="preserve"><value>Ilova maxfiy kaliti</value></data>
++  <data name="ClientSecretBasicDescription" xml:space="preserve"><value>Ilova HTTP Basic autentifikatsiya sxemasidan foydalanadi.</value></data>
++  <data name="ClientSecretBasicName" xml:space="preserve"><value>Client secret basic</value></data>
++  <data name="ClientSecretPostDescription" xml:space="preserve"><value>Ilova maxfiy kalitini HTTP so'rov tanasida forma parametri sifatida yuboradi.</value></data>
++  <data name="ClientSecretPostName" xml:space="preserve"><value>Client secret post</value></data>
++  <data name="ClientSecretRequired" xml:space="preserve"><value>Ilova maxfiy kaliti kiritilishi shart</value></data>
++  <data name="ClientsTitle" xml:space="preserve"><value>Ilovalar</value></data>
++  <data name="Confirmed" xml:space="preserve"><value>Tasdiqlangan</value></data>
++  <data name="ConsentRequired" xml:space="preserve"><value>Rozilik talab qilinadi</value></data>
++  <data name="Consents" xml:space="preserve"><value>Roziliklar</value></data>
++  <data name="CreatedAt" xml:space="preserve"><value>Yaratilgan</value></data>
++  <data name="Credentials" xml:space="preserve"><value>Hisob ma'lumotlari</value></data>
++  <data name="Data" xml:space="preserve"><value>Ma'lumotlar</value></data>
++  <data name="Delegation" xml:space="preserve"><value>Vakolat berish (delegation)</value></data>
++  <data name="DescriptionRequired" xml:space="preserve"><value>Tavsif kiritilishi shart</value></data>
++  <data name="Device" xml:space="preserve"><value>Qurilma</value></data>
++  <data name="Disable" xml:space="preserve"><value>O'chirish</value></data>
++  <data name="DisplayNameRequired" xml:space="preserve"><value>Ko'rinadigan nom kiritilishi shart</value></data>
++  <data name="Dns" xml:space="preserve"><value>DNS</value></data>
++  <data name="DpopNonceLifetime" xml:space="preserve"><value>DPoP nonce amal qilish muddati</value></data>
++  <data name="DpopNonceLifetimeTooltip" xml:space="preserve"><value>DPoP nonce'ning amal qilish muddati (soniyada).</value></data>
++  <data name="Email" xml:space="preserve"><value>Email</value></data>
++  <data name="EndExport" xml:space="preserve"><value>Eksport tugashi</value></data>
++  <data name="EndImport" xml:space="preserve"><value>Import tugashi</value></data>
++  <data name="ExecutionHistory" xml:space="preserve"><value>Bajarilish tarixi.</value></data>
++  <data name="ExpirationTime" xml:space="preserve"><value>Muddati tugash vaqti</value></data>
++  <data name="Expired" xml:space="preserve"><value>Muddati o'tgan</value></data>
++  <data name="ExternalIdProviders" xml:space="preserve"><value>Tashqi identifikatsiya provayderlari</value></data>
++  <data name="Extracted" xml:space="preserve"><value>Ajratib olingan</value></data>
++  <data name="ExtractionResult" xml:space="preserve"><value>Ajratib olish natijasi</value></data>
++  <data name="Firstname" xml:space="preserve"><value>Ism</value></data>
++  <data name="From" xml:space="preserve"><value>Manba atribut</value></data>
++  <data name="FrontChannelLogoutSessionRequired" xml:space="preserve"><value>Front-channel chiqishda sessiya talab qilinadi</value></data>
++  <data name="FrontChannelLogoutSessionRequiredTooltip" xml:space="preserve"><value>front_channel_logout_uri ishlatilganda RP sessiyasini aniqlash uchun iss (issuer) va sid (sessiya identifikatori) parametrlari qo'shilishini RP talab qiladimi.</value></data>
++  <data name="FrontChannelLogoutUri" xml:space="preserve"><value>Front-channel chiqish manzili</value></data>
++  <data name="FrontChannelLogoutUriTooltip" xml:space="preserve"><value>OP uni iframe ichida ochganda RP o'zini tizimdan chiqaradigan RP manzili.</value></data>
++  <data name="GeneralSettings" xml:space="preserve"><value>Umumiy sozlamalar</value></data>
++  <data name="Generate" xml:space="preserve"><value>Yaratish</value></data>
++  <data name="GenerateCADescription" xml:space="preserve"><value>Sertifikat markazini yaratish va bazada saqlash.</value></data>
++  <data name="GenerateCAName" xml:space="preserve"><value>Sertifikat markazini yaratish</value></data>
++  <data name="GenerateNewKey" xml:space="preserve"><value>Yangi kalit yaratish</value></data>
++  <data name="Group" xml:space="preserve"><value>Guruh</value></data>
++  <data name="GroupDetails" xml:space="preserve"><value>Guruh tafsilotlari</value></data>
++  <data name="GroupName" xml:space="preserve"><value>Guruh nomi</value></data>
++  <data name="Groups" xml:space="preserve"><value>Guruhlar</value></data>
++  <data name="Histories" xml:space="preserve"><value>Tarix</value></data>
++  <data name="IdentityProviderDetails" xml:space="preserve"><value>Identifikatsiya provayderi tafsilotlari</value></data>
++  <data name="IdentityProviderMappers" xml:space="preserve"><value>Identifikatsiya provayderi moslashtiruvchilari</value></data>
++  <data name="IdentityProviders" xml:space="preserve"><value>Identifikatsiya provayderlari</value></data>
++  <data name="IdentityProvidersDescription" xml:space="preserve"><value>Foydalanuvchilar tashqi provayderlar (masalan Facebook, Twitter, GitHub) orqali kira olishi uchun ularni sozlang.</value></data>
++  <data name="IdentityProviderType" xml:space="preserve"><value>Identifikatsiya provayderi turi</value></data>
++  <data name="IdentityProvisioning" xml:space="preserve"><value>Identifikatsiya provisioningi</value></data>
++  <data name="IdentityProvisioningDetails" xml:space="preserve"><value>Identifikatsiya provisioningi tafsilotlari</value></data>
++  <data name="IdentityProvisioningLstDescription" xml:space="preserve"><value>Foydalanuvchi va guruhlarni bir yoki bir nechta manbadan (AD, LDAP, SCIM) olish.</value></data>
++  <data name="IdentityResource" xml:space="preserve"><value>Identifikatsiya resursi</value></data>
++  <data name="IdentityScope" xml:space="preserve"><value>Identifikatsiya ruxsat doirasi</value></data>
++  <data name="IdServerSwagger" xml:space="preserve"><value>IdServer swagger</value></data>
++  <data name="IdTokenSignatureAlg" xml:space="preserve"><value>ID token imzo algoritmi</value></data>
++  <data name="IdTokenSignatureAlgTooltip" xml:space="preserve"><value>ID tokenlarni imzolash uchun JWA algoritmi</value></data>
++  <data name="Impersonation" xml:space="preserve"><value>Boshqa foydalanuvchi nomidan ishlash (impersonation)</value></data>
++  <data name="Import" xml:space="preserve"><value>Import</value></data>
++  <data name="Imported" xml:space="preserve"><value>Import qilingan</value></data>
++  <data name="ImportUsersAndGroupsTooltip" xml:space="preserve"><value>Foydalanuvchi va guruhlarni import qilish</value></data>
++  <data name="Information" xml:space="preserve"><value>Ma'lumot</value></data>
++  <data name="Ip" xml:space="preserve"><value>IP</value></data>
++  <data name="IsDefault" xml:space="preserve"><value>Standartmi?</value></data>
++  <data name="IsDpopNonceRequired" xml:space="preserve"><value>DPoP nonce talab qilinadimi?</value></data>
++  <data name="IsDpopNonceRequiredTooltip" xml:space="preserve"><value>Avtorizatsiya serveri DPoP isbotining amal qilish muddatini cheklash uchun ishlatishi mumkin.</value></data>
++  <data name="IsDpopRequired" xml:space="preserve"><value>DPoP talab qilinadimi?</value></data>
++  <data name="IsDpopRequiredTooltip" xml:space="preserve"><value>DPoP — OAuth access va refresh tokenlarini yuboruvchiga bog'lab qo'yuvchi ilova darajasidagi mexanizm.</value></data>
++  <data name="IsExposed" xml:space="preserve"><value>Ochiq e'lon qilinadimi?</value></data>
++  <data name="IsExposedDescription" xml:space="preserve"><value>Ruxsat doirasi &lt;i&gt;.well-known/openid-configuration&lt;/i&gt; sozlama manzilida e'lon qilinishi mumkin</value></data>
++  <data name="Jwt" xml:space="preserve"><value>Json Web Token (JWT)</value></data>
++  <data name="Key" xml:space="preserve"><value>Kalit</value></data>
++  <data name="KeyRequired" xml:space="preserve"><value>Kalit kiritilishi shart</value></data>
++  <data name="Keys" xml:space="preserve"><value>Kalitlar</value></data>
++  <data name="Label" xml:space="preserve"><value>Yorliq</value></data>
++  <data name="Lastname" xml:space="preserve"><value>Familiya</value></data>
++  <data name="Launch" xml:space="preserve"><value>Ishga tushirish</value></data>
++  <data name="Login" xml:space="preserve"><value>Login</value></data>
++  <data name="LoginSettings" xml:space="preserve"><value>Kirish sozlamalari</value></data>
++  <data name="ManualActionRequiredRevokeSession" xml:space="preserve"><value>Sessiyani bekor qilish uchun qo'lda tasdiqlash kerak</value></data>
++  <data name="ManualActionRequiredRevokeSessionTooltip" xml:space="preserve"><value>3 soniyadan so'ng sessiya bekor qilinadi va brauzer avtomatik ravishda ilovaga qaytariladi</value></data>
++  <data name="MapperDetails" xml:space="preserve"><value>Moslashtiruvchi tafsilotlari</value></data>
++  <data name="Mappers" xml:space="preserve"><value>Moslashtiruvchilar</value></data>
++  <data name="MapperType" xml:space="preserve"><value>Moslashtiruvchi turi</value></data>
++  <data name="MappingRules" xml:space="preserve"><value>Moslashtirish qoidalari</value></data>
++  <data name="MapToOneUserClaim" xml:space="preserve"><value>Bitta foydalanuvchi atributiga moslashtirish</value></data>
++  <data name="MetadataUrl" xml:space="preserve"><value>Metadata manzili</value></data>
++  <data name="No" xml:space="preserve"><value>Yo'q</value></data>
++  <data name="NotificationMode" xml:space="preserve"><value>Bildirishnoma rejimi</value></data>
++  <data name="NotificationModeTooltip" xml:space="preserve"><value>Backchannel autentifikatsiyada ishlatiladigan bildirishnoma rejimi</value></data>
++  <data name="NumberOfDays" xml:space="preserve"><value>Kunlar soni</value></data>
++  <data name="NumberOfDaysDescription" xml:space="preserve"><value>Sertifikat amal qiladigan kunlar soni</value></data>
++  <data name="NumberOfDaysRequired" xml:space="preserve"><value>Kunlar soni kiritilishi shart</value></data>
++  <data name="OAuth" xml:space="preserve"><value>OAUTH</value></data>
++  <data name="OpenId" xml:space="preserve"><value>OPENID</value></data>
++  <data name="OpenIdConnect" xml:space="preserve"><value>OpenID Connect</value></data>
++  <data name="Otp" xml:space="preserve"><value>Bir martalik parol (OTP)</value></data>
++  <data name="OtpCredDescription" xml:space="preserve"><value>Tasodifiy va takrorlanmas parol yaratiladi</value></data>
++  <data name="Password" xml:space="preserve"><value>Parol</value></data>
++  <data name="PasswordCredDescription" xml:space="preserve"><value>Doimiy parol yaratish</value></data>
++  <data name="Path" xml:space="preserve"><value>Yo'l</value></data>
++  <data name="Pending" xml:space="preserve"><value>Kutilmoqda</value></data>
++  <data name="PKCEDescription" xml:space="preserve"><value>Chaqiruvchi ilova yaratgan va avtorizatsiya serveri tekshira oladigan maxfiy qiymat qo'shiladi.</value></data>
++  <data name="PKCEName" xml:space="preserve"><value>PKCE</value></data>
++  <data name="PrivatePem" xml:space="preserve"><value>Maxfiy kalit (PEM)</value></data>
++  <data name="Properties" xml:space="preserve"><value>Xususiyatlar</value></data>
++  <data name="Property" xml:space="preserve"><value>Xususiyat</value></data>
++  <data name="Protocol" xml:space="preserve"><value>Protokol</value></data>
++  <data name="ProtocolIsRequired" xml:space="preserve"><value>Protokol tanlanishi shart</value></data>
++  <data name="PublicPem" xml:space="preserve"><value>Ochiq kalit (PEM)</value></data>
++  <data name="RedirectUrlCaseSensitive" xml:space="preserve"><value>Qayta yo'naltirish manzili katta-kichik harfga sezgir</value></data>
++  <data name="RedirectUrlCaseSensitiveTooltip" xml:space="preserve"><value>Qayta yo'naltirish manzili katta-kichik harfga sezgir</value></data>
++  <data name="Reference" xml:space="preserve"><value>Havola</value></data>
++  <data name="RefreshToken" xml:space="preserve"><value>Refresh token</value></data>
++  <data name="RegistrationMethods" xml:space="preserve"><value>Ro'yxatdan o'tish usullari</value></data>
++  <data name="RegistrationWorkflows" xml:space="preserve"><value>Ro'yxatdan o'tish jarayonlari</value></data>
++  <data name="Reject" xml:space="preserve"><value>Rad etish</value></data>
++  <data name="Rejected" xml:space="preserve"><value>Rad etilgan</value></data>
++  <data name="Remove" xml:space="preserve"><value>Olib tashlash</value></data>
++  <data name="RemoveSubjectClaimMapper" xml:space="preserve"><value>Subyekt atributi moslashtiruvchisini olib tashlash</value></data>
++  <data name="Reset" xml:space="preserve"><value>Tiklash</value></data>
++  <data name="ResolveRoles" xml:space="preserve"><value>Rollarni aniqlash</value></data>
++  <data name="Resource" xml:space="preserve"><value>Resurs</value></data>
++  <data name="ResourceType" xml:space="preserve"><value>Resurs turi</value></data>
++  <data name="ResponseTypes" xml:space="preserve"><value>Javob turlari</value></data>
++  <data name="ResponseTypesTooltip" xml:space="preserve"><value>Avtorizatsiya serveriga kerakli avtorizatsiya oqimini, jumladan manzillardan qaytariladigan parametrlarni bildiradi.</value></data>
++  <data name="Revoke" xml:space="preserve"><value>Bekor qilish</value></data>
++  <data name="RevokeSessions" xml:space="preserve"><value>Sessiyalarni bekor qilish</value></data>
++  <data name="Role" xml:space="preserve"><value>Rol</value></data>
++  <data name="Roles" xml:space="preserve"><value>Rollar</value></data>
++  <data name="RolesDescription" xml:space="preserve"><value>Ilovalaringiz uchun guruhlarni yarating va boshqaring. Guruhlar ruxsatlar to'plamini saqlaydi va foydalanuvchilarga biriktiriladi.</value></data>
++  <data name="Saml" xml:space="preserve"><value>SAML</value></data>
++  <data name="SamlAttributeName" xml:space="preserve"><value>SAML atribut nomi</value></data>
++  <data name="SamlAttributeNameDescription" xml:space="preserve"><value>SAML atribut nomi</value></data>
++  <data name="Saving" xml:space="preserve"><value>Saqlanmoqda...</value></data>
++  <data name="ScimEdp" xml:space="preserve"><value>SCIM manzili</value></data>
++  <data name="ScopeDetails" xml:space="preserve"><value>Ruxsat doirasi tafsilotlari</value></data>
++  <data name="ScopeResourcesDescription" xml:space="preserve"><value>Ruxsat doirasi uchun bir yoki bir nechta faol &lt;b&gt;API resurs&lt;/b&gt; tanlang. &lt;b&gt;aud&lt;/b&gt; atributi tegishli &lt;b&gt;API resurslar&lt;/b&gt; bilan to'ldiriladi. API bu atributdan avtorizatsiyada foydalanadi</value></data>
++  <data name="Scopes" xml:space="preserve"><value>Ruxsat doiralari</value></data>
++  <data name="ScopesDescription" xml:space="preserve"><value>Ilova foydalanuvchi nomidan qaysi amallar yoki resurslarga kira olishini aniq belgilang.</value></data>
++  <data name="SelectAmrsHelper" xml:space="preserve"><value>Bir yoki bir nechta autentifikatsiya usulini tanlang va tartibini belgilang. Tartib muhim: foydalanuvchini autentifikatsiya qilish qadamlari shu tartibda bajariladi.</value></data>
++  <data name="SelectRealm" xml:space="preserve"><value>Realmni tanlang</value></data>
++  <data name="SelectResponseTypes" xml:space="preserve"><value>Javob turlarini tanlang</value></data>
++  <data name="SelfSignedX509CertificateDescription" xml:space="preserve"><value>Ilova o'z-o'zidan imzolangan sertifikatdan foydalanadi. Sertifikatning ochiq kaliti (RSA yoki EC) IdServer'ga JWKS (JSON Web Key Set) qiymati sifatida yoki jwks_uri manzili orqali berilishi kerak.</value></data>
++  <data name="SelfSignedX509CertificateName" xml:space="preserve"><value>O'z-o'zidan imzolangan X509 sertifikat</value></data>
++  <data name="Sessions" xml:space="preserve"><value>Sessiyalar</value></data>
++  <data name="SetGroupName" xml:space="preserve"><value>Guruh nomini kiriting</value></data>
++  <data name="ShowData" xml:space="preserve"><value>Ma'lumotlarni ko'rsatish</value></data>
++  <data name="SignedJwtClientSecretDescription" xml:space="preserve"><value>Ilova imzo qismida autentifikatsiya kodi (MAC) bo'lgan JWT tasdiqnomasini tuzadi va uni so'rovga qo'shadi.</value></data>
++  <data name="SignedJwtClientSecretName" xml:space="preserve"><value>Maxfiy kalit bilan imzolangan JWT</value></data>
++  <data name="SignedJwtDescription" xml:space="preserve"><value>Ilova raqamli imzolangan JWT tasdiqnomasini yaratadi va uni so'rovga qo'shadi.</value></data>
++  <data name="SignedJwtName" xml:space="preserve"><value>Imzolangan JWT</value></data>
++  <data name="StartExport" xml:space="preserve"><value>Eksport boshlanishi</value></data>
++  <data name="StartImport" xml:space="preserve"><value>Import boshlanishi</value></data>
++  <data name="State" xml:space="preserve"><value>Holat</value></data>
++  <data name="Status" xml:space="preserve"><value>Holat</value></data>
++  <data name="Subject" xml:space="preserve"><value>Subyekt</value></data>
++  <data name="SubjectName" xml:space="preserve"><value>Subyekt nomi</value></data>
++  <data name="SubjectNameDescription" xml:space="preserve"><value>Sertifikat berilgan obyekt haqidagi identifikatsiya ma'lumotlari. &lt;br /&gt; &lt;b&gt;CN=&lt;/b&gt; bilan boshlanishi kerak</value></data>
++  <data name="SubjectNameRequired" xml:space="preserve"><value>Subyekt nomi kiritilishi shart</value></data>
++  <data name="SubjetDistinguishedName" xml:space="preserve"><value>Subyektning to'liq nomi (DN)</value></data>
++  <data name="SuccessAuthentication" xml:space="preserve"><value>Bugungi muvaffaqiyatli kirishlar</value></data>
++  <data name="To" xml:space="preserve"><value>Maqsad atribut</value></data>
++  <data name="TokenClaimName" xml:space="preserve"><value>Token atributi nomi</value></data>
++  <data name="TokenClaimNameDescription" xml:space="preserve"><value>Tokenga qo'shiladigan atribut nomi</value></data>
++  <data name="TokenExchange" xml:space="preserve"><value>Token almashish</value></data>
++  <data name="TokenExchangeType" xml:space="preserve"><value>Token almashish turi</value></data>
++  <data name="TokenExpirationTime" xml:space="preserve"><value>Token amal qilish muddati</value></data>
++  <data name="TokenExpirationTimeTooltip" xml:space="preserve"><value>Token muddati soniyada; standart qiymat 30 daqiqa.</value></data>
++  <data name="TokenSignatureAlg" xml:space="preserve"><value>Token imzo algoritmi</value></data>
++  <data name="TokenSignatureAlgTooltip" xml:space="preserve"><value>Access tokenlarni imzolash uchun JWA algoritmi</value></data>
++  <data name="TryExtractUsers" xml:space="preserve"><value>Foydalanuvchilarni sinov tariqasida olish</value></data>
++  <data name="Type" xml:space="preserve"><value>Tur</value></data>
++  <data name="UMA" xml:space="preserve"><value>UMA</value></data>
++  <data name="Unassign" xml:space="preserve"><value>Ajratish</value></data>
++  <data name="Unlink" xml:space="preserve"><value>Uzish</value></data>
++  <data name="Update" xml:space="preserve"><value>Yangilash</value></data>
++  <data name="UpdateCredential" xml:space="preserve"><value>Hisob ma'lumotini yangilash</value></data>
++  <data name="UpdatedAt" xml:space="preserve"><value>Yangilangan</value></data>
++  <data name="Updating" xml:space="preserve"><value>Yangilanmoqda...</value></data>
++  <data name="Url" xml:space="preserve"><value>Manzil</value></data>
++  <data name="UrlRequired" xml:space="preserve"><value>Manzil kiritilishi shart</value></data>
++  <data name="Usage" xml:space="preserve"><value>Foydalanish</value></data>
++  <data name="UseArtifact" xml:space="preserve"><value>Artifact'dan foydalanish</value></data>
++  <data name="UseCertificateStoreDescription" xml:space="preserve"><value>Mahalliy sertifikatlar omboridagi sertifikat markazidan foydalanish. Sertifikatda &lt;b&gt;maxfiy kalit&lt;/b&gt; bo'lishi kerak, u ilova sertifikatini yaratish uchun ishlatiladi.</value></data>
++  <data name="UseCertificateStoreName" xml:space="preserve"><value>Sertifikatlar omboridan foydalanish</value></data>
++  <data name="UseJwksUrl" xml:space="preserve"><value>JWKS manzilidan foydalanish</value></data>
++  <data name="UseJwksUrlHelper" xml:space="preserve"><value>"JWKS manzilidan foydalanish" yoqilsa, to'g'ri JWKS manzilini kiriting. Saqlagandan so'ng administrator kalitlarni shu manzildan yuklab olishi mumkin.</value></data>
++  <data name="UserAttribute" xml:space="preserve"><value>Foydalanuvchi atributi</value></data>
++  <data name="MapClaimToUserAttribute" xml:space="preserve"><value>Atributni foydalanuvchi atributiga moslashtirish</value></data>
++  <data name="UserClaims" xml:space="preserve"><value>Foydalanuvchi atributlari</value></data>
++  <data name="UserConsentsDescription" xml:space="preserve"><value>Foydalanuvchi muayyan ilovalar uchun bergan roziliklar ro'yxati.</value></data>
++  <data name="UserCredentialsDescription" xml:space="preserve"><value>Foydalanuvchi hisob ma'lumotlari ro'yxati. Har bir turdan faqat bittasi faol bo'lishi mumkin.</value></data>
++  <data name="UserDetails" xml:space="preserve"><value>Foydalanuvchi tafsilotlari</value></data>
++  <data name="UserGroupsDescription" xml:space="preserve"><value>Foydalanuvchiga biriktirilgan guruhlar ro'yxati.</value></data>
++  <data name="UserIdentifier" xml:space="preserve"><value>Foydalanuvchi identifikatori</value></data>
++  <data name="UserIdentifierDescription" xml:space="preserve"><value>Atributni foydalanuvchi identifikatoriga moslashtirish</value></data>
++  <data name="UserProfilesDescription" xml:space="preserve"><value>Foydalanuvchi profiliga bog'langan tashqi identifikatsiya provayderlari (masalan Facebook, Google) ro'yxati.</value></data>
++  <data name="UserProperty" xml:space="preserve"><value>Foydalanuvchi xususiyati</value></data>
++  <data name="UserPropertyDescription" xml:space="preserve"><value>Atributni foydalanuvchi xususiyatiga moslashtirish</value></data>
++  <data name="Users" xml:space="preserve"><value>Foydalanuvchilar</value></data>
++  <data name="UsersDescription" xml:space="preserve"><value>Foydalanuvchilarni, ularning hisob ma'lumotlari va guruhlarini boshqarish.</value></data>
++  <data name="UserSessionsDescription" xml:space="preserve"><value>Foydalanuvchining faol va nofaol sessiyalari ro'yxati.</value></data>
++  <data name="UserSubject" xml:space="preserve"><value>Foydalanuvchi subyekti</value></data>
++  <data name="UserSubjectDescription" xml:space="preserve"><value>Atributni foydalanuvchi subyektiga moslashtirish</value></data>
++  <data name="ValidationPostLogoutRedirectUris" xml:space="preserve"><value>Chiqishdan keyingi ruxsat etilgan manzillar</value></data>
++  <data name="ValidationPostLogoutRedirectUrisTooltip" xml:space="preserve"><value>Chiqishdan so'ng post_logout_redirect_uri parametri orqali foydalanuvchi brauzeri yo'naltirilishi mumkin bo'lgan RP manzillari. &lt;br /&gt; Manzillar ; bilan ajratilgan ro'yxat sifatida kiritiladi</value></data>
++  <data name="ValidationRedirectionUris" xml:space="preserve"><value>Ruxsat etilgan qayta yo'naltirish manzillari</value></data>
++  <data name="ValidationRedirectionUrisTooltip" xml:space="preserve"><value>Muvaffaqiyatli kirishdan so'ng brauzer yo'naltirilishi mumkin bo'lgan manzil namunalari. &lt;br /&gt; Manzillar ; bilan ajratilgan ro'yxat sifatida kiritiladi</value></data>
++  <data name="Value" xml:space="preserve"><value>Qiymat</value></data>
++  <data name="ValueRequired" xml:space="preserve"><value>Qiymat kiritilishi shart</value></data>
++  <data name="WebAuthn" xml:space="preserve"><value>WebAuthn</value></data>
++  <data name="Workflow" xml:space="preserve"><value>Jarayon (workflow)</value></data>
++  <data name="WsFederation" xml:space="preserve"><value>WS-Federation</value></data>
++  <data name="X509CertificateDescription" xml:space="preserve"><value>Ilova ishonchli sertifikat markazi (CA) bergan sertifikatdan foydalanadi.</value></data>
++  <data name="X509CertificateName" xml:space="preserve"><value>X509 sertifikat</value></data>
++  <data name="Yes" xml:space="preserve"><value>Ha</value></data>
++  <data name="AccessClaimsAuthenticatedUser" xml:space="preserve"><value>Autentifikatsiyadan o'tgan foydalanuvchi atributlariga kirish</value></data>
++  <data name="AccessOneOrMoreApiResources" xml:space="preserve"><value>Bir yoki bir nechta API resurslarga kirish</value></data>
++  <data name="APIValue" xml:space="preserve"><value>API qiymati</value></data>
++  <data name="ClientsAuthorizedToAccessApiResource" xml:space="preserve"><value>API resursga kirish huquqi bor ilovalarga bir yoki bir nechta ruxsat doirasi beriladi. Masalan, &lt;i&gt;Client API&lt;/i&gt; uchun &lt;i&gt;read,delete,update&lt;/i&gt; ruxsat doiralari bo'lishi mumkin. Batafsil: &lt;a href='https://www.rfc-editor.org/rfc/rfc8707.pdf' target='_blank'&gt;RFC8707&lt;/a&gt;</value></data>
++  <data name="ClientsAuthorizedToAccessSpecificClaims" xml:space="preserve"><value>Identifikatsiya qiymatiga ruxsati bor ilovalar muayyan atributlarga kira oladi. Standart identifikatsiya resurslari OPENID standartida belgilangan (profile, email va h.k.). Batafsil: &lt;a href='https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims' target='_blank'&gt;OPENID Connect Core 1.0 - Scope Claims&lt;/a&gt;</value></data>
++  <data name="IdentityValue" xml:space="preserve"><value>Identifikatsiya qiymati</value></data>
++  <data name="Create" xml:space="preserve"><value>Yaratish</value></data>
++  <data name="ActiveRealm" xml:space="preserve"><value>Faol realm: {0}</value></data>
++  <data name="AlgorithmRequired" xml:space="preserve"><value>Algoritm tanlanishi shart</value></data>
++  <data name="ApplicationType" xml:space="preserve"><value>Ilova turi</value></data>
++  <data name="AssignedGroups" xml:space="preserve"><value>Biriktirilgan guruhlar</value></data>
++  <data name="AuthenticationContext" xml:space="preserve"><value>Autentifikatsiya konteksti</value></data>
++  <data name="AutomaticIdentityProvisioning" xml:space="preserve"><value>Avtomatik provisioning (AD/LDAP)</value></data>
++  <data name="ChooseTemplate" xml:space="preserve"><value>Shablonni tanlang</value></data>
++  <data name="ClaimJsonType" xml:space="preserve"><value>Atributning JSON turi</value></data>
++  <data name="ClaimJsonTypeRequired" xml:space="preserve"><value>Atributning JSON turi tanlanishi shart</value></data>
++  <data name="ClaimToInsertInTheToken" xml:space="preserve"><value>Tokenga qo'shiladigan atribut nomi</value></data>
++  <data name="Configure" xml:space="preserve"><value>Sozlash</value></data>
++  <data name="Confirm" xml:space="preserve"><value>Tasdiqlash</value></data>
++  <data name="Content" xml:space="preserve"><value>Tarkib</value></data>
++  <data name="Counter" xml:space="preserve"><value>Hisoblagich</value></data>
++  <data name="CredentialIssuer" xml:space="preserve"><value>Guvohnoma beruvchi</value></data>
++  <data name="CredentialIssuerDescription" xml:space="preserve"><value>Ishonchli va tekshiriladigan guvohnomalarni (masalan diplomlarni) yaratadigan REST API.</value></data>
++  <data name="CredentialIssuerShortDescription" xml:space="preserve"><value>Guvohnoma beruvchi</value></data>
++  <data name="DeviceDescription" xml:space="preserve"><value>IoT ilova yoki brauzersiz, kiritish imkoniyati cheklangan qurilma.</value></data>
++  <data name="DeviceShortDescription" xml:space="preserve"><value>Qurilma orqali avtorizatsiya</value></data>
++  <data name="EmailIsInvalid" xml:space="preserve"><value>To'g'ri email manzilini kiriting</value></data>
++  <data name="Encryption" xml:space="preserve"><value>Shifrlash</value></data>
++  <data name="EncryptionKey" xml:space="preserve"><value>Shifrlash kaliti</value></data>
++  <data name="EncryptionRequired" xml:space="preserve"><value>Shifrlash tanlanishi shart</value></data>
++  <data name="ExternalDeviceAuth" xml:space="preserve"><value>Tashqi qurilma orqali autentifikatsiya</value></data>
++  <data name="ExternalDeviceAuthShortDescription" xml:space="preserve"><value>Ilova boshlagan backchannel autentifikatsiya (CIBA) oqimi</value></data>
++  <data name="ExternalDeviceDescription" xml:space="preserve"><value>Autentifikatsiyani foydalanuvchi alohida qurilmada bajaradi va kerak bo'lsa so'rovga o'sha yerda rozilik beradi.</value></data>
++  <data name="GenerateEncryptionKeyHelper" xml:space="preserve"><value>JSON Web Encryption (JWE) kalitini yaratish: &lt;a href='https://www.rfc-editor.org/rfc/rfc7516' target='_blank'&gt;https://www.rfc-editor.org/rfc/rfc7516&lt;/a&gt;</value></data>
++  <data name="GenerateSignatureKeyHelper" xml:space="preserve"><value>Imzo kalitini yaratish. JWT so'rov obyekti: &lt;a href='https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests' target='_blank'&gt;OpenID Connect Core 1.0 - JWT Requests&lt;/a&gt;. Bu kalit &lt;i&gt;private_key_jwt&lt;/i&gt; va &lt;i&gt;client_secret_jwt&lt;/i&gt; autentifikatsiya oqimlarida ishlatiladi: &lt;a href='https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication' target='_blank'&gt;OpenID Connect Core 1.0 - Client Authentication.&lt;/a&gt;</value></data>
++  <data name="GrantMgt" xml:space="preserve"><value>Ruxsatnomalarni boshqarish</value></data>
++  <data name="GrantMgtDescription" xml:space="preserve"><value>Veb-ilova serverda ishlaydi (ASP.NET CORE, SPRING va h.k.) va FAPI 2.0 ning barcha xavfsizlik talablarini bajaradi. Bundan tashqari ruxsatnomalarni boshqarishni qo'llab-quvvatlaydi</value></data>
++  <data name="GrantMgtShortDescription" xml:space="preserve"><value>FAPI 2.0 xavfsizlik talablari va ruxsatnomalarni boshqarish bilan veb-ilova.</value></data>
++  <data name="GroupIdentifier" xml:space="preserve"><value>Guruh identifikatori</value></data>
++  <data name="HighlySecuredWebApp" xml:space="preserve"><value>Yuqori himoyalangan veb-ilova</value></data>
++  <data name="HighlySecuredWebAppDescription" xml:space="preserve"><value>Veb-ilova serverda ishlaydi (ASP.NET CORE, SPRING va h.k.) va FAPI 2.0 ning barcha xavfsizlik talablarini bajaradi.</value></data>
++  <data name="HighlySecuredWebAppShortDescription" xml:space="preserve"><value>FAPI 2.0 xavfsizlik talablariga mos veb-ilova</value></data>
++  <data name="HotpDescription" xml:space="preserve"><value>HOTP (HMAC asosidagi bir martalik parol) — hodisaga asoslangan OTP: har bir kod hisoblagich qiymatiga bog'liq.</value></data>
++  <data name="IncludeInAccessToken" xml:space="preserve"><value>Access tokenga qo'shish</value></data>
++  <data name="Jwe" xml:space="preserve"><value>JWE</value></data>
++  <data name="Jwk" xml:space="preserve"><value>Json Web Key (JWK)</value></data>
++  <data name="JwkClientUsageDescription" xml:space="preserve"><value>JWT so'rov obyekti: &lt;a href='https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests' target='_blank'&gt;OpenID Connect Core 1.0 - JWT Requests&lt;/a&gt;. Bu kalit &lt;i&gt;private_key_jwt&lt;/i&gt; va &lt;i&gt;client_secret_jwt&lt;/i&gt; autentifikatsiya oqimlarida ishlatiladi: &lt;a href='https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication' target='_blank'&gt;OpenID Connect Core 1.0 - Client Authentication.&lt;/a&gt;</value></data>
++  <data name="KeyGenerated" xml:space="preserve"><value>Kalit yaratildi!</value></data>
++  <data name="KeyType" xml:space="preserve"><value>Kalit turi</value></data>
++  <data name="KeyTypeRequired" xml:space="preserve"><value>Kalit turi tanlanishi shart</value></data>
++  <data name="LdapOrJsonPathRequired" xml:space="preserve"><value>Provisioning turiga qarab LDAP xususiyatini yoki (SCIM uchun) JSON yo'lini ko'rsatishingiz kerak.</value></data>
++  <data name="Loading" xml:space="preserve"><value>Yuklanmoqda...</value></data>
++  <data name="Machine" xml:space="preserve"><value>Mashina</value></data>
++  <data name="MachineDescription" xml:space="preserve"><value>Mashinadan mashinaga (M2M) ilovalar — CLI, fon xizmatlari yoki serverdagi servislar: tizim foydalanuvchini emas, ilovaning o'zini autentifikatsiya qiladi.</value></data>
++  <data name="MachineShortDescription" xml:space="preserve"><value>Ilova hisob ma'lumotlari (client credentials)</value></data>
++  <data name="ManualIdentityProvisioning" xml:space="preserve"><value>Qo'lda provisioning (tashqi provayderlar)</value></data>
++  <data name="MapUserAttributeToClaim" xml:space="preserve"><value>Foydalanuvchi atributini token atributiga moslashtirish</value></data>
++  <data name="MapUserPropertyToClaim" xml:space="preserve"><value>Foydalanuvchi xususiyatini token atributiga moslashtirish</value></data>
++  <data name="MetadataUrlRequired" xml:space="preserve"><value>Metadata manzili kiritilishi shart</value></data>
++  <data name="Mobile" xml:space="preserve"><value>Mobil</value></data>
++  <data name="MobileDescription" xml:space="preserve"><value>Foydalanuvchi qurilmasida ishlaydigan desktop yoki mobil ilova</value></data>
++  <data name="MobileShortDescription" xml:space="preserve"><value>Avtorizatsiya kodi + PKCE</value></data>
++  <data name="Mtls" xml:space="preserve"><value>O'zaro TLS (mTLS) bilan ilova autentifikatsiyasi</value></data>
++  <data name="MtlsAuthenticationIsEnabled" xml:space="preserve"><value>Standart holatda ilova MTLS autentifikatsiyasidan foydalanadi. &lt;br/&gt; Ilova sertifikatining subyekt nomi ko'rsatilishi kerak.</value></data>
++  <data name="MtlsProofOfPossessionSubjectNameHelper" xml:space="preserve"><value>Standart holatda MTLS autentifikatsiya sozlangan. &lt;br /&gt; Subyekt nomi ilova sertifikatining haqiqiyligini tekshirish uchun ishlatiladi.</value></data>
++  <data name="Multivalued" xml:space="preserve"><value>Ko'p qiymatli</value></data>
++  <data name="PasswordConfirmation" xml:space="preserve"><value>Parolni tasdiqlash</value></data>
++  <data name="PasswordRequired" xml:space="preserve"><value>Parol kiritilishi shart</value></data>
++  <data name="ProofOfPossession" xml:space="preserve"><value>Egalikni isbotlash (PoP)</value></data>
++  <data name="PropertyName" xml:space="preserve"><value>Xususiyat nomi</value></data>
++  <data name="QrCode" xml:space="preserve"><value>QR kod</value></data>
++  <data name="Realm" xml:space="preserve"><value>Realm</value></data>
++  <data name="SamePassword" xml:space="preserve"><value>Parollar bir xil bo'lishi kerak</value></data>
++  <data name="SamlAttributeNameRequired" xml:space="preserve"><value>SAML atribut nomi kiritilishi shart</value></data>
++  <data name="SamlSp" xml:space="preserve"><value>SAML SP</value></data>
++  <data name="SamlSpDescription" xml:space="preserve"><value>Xizmat ko'rsatuvchi (SP) — xizmatni taqdim etuvchi tomon, odatda ilova</value></data>
++  <data name="SamlSpShortDescription" xml:space="preserve"><value>SAML xizmat ko'rsatuvchi</value></data>
++  <data name="SecretRequired" xml:space="preserve"><value>Maxfiy kalit kiritilishi shart</value></data>
++  <data name="Select" xml:space="preserve"><value>Tanlash</value></data>
++  <data name="SelectDpopProofOfPossessionHelper" xml:space="preserve"><value>Ilova &lt;b&gt;private_key_jwt&lt;/b&gt; autentifikatsiya usuliga sozlanadi. &lt;br /&gt; &lt;b&gt;ES256&lt;/b&gt; algoritmli imzo kaliti qo'shiladi. &lt;br /&gt; &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; qiymati &lt;b&gt;ES256&lt;/b&gt; bo'ladi. IdServer bu qiymatdan avtorizatsiya javobini (JARM) yaratishda foydalanadi.</value></data>
++  <data name="SelectMtlsProofOfPossessionHelper" xml:space="preserve"><value>Ilova &lt;b&gt;tls_client_auth&lt;/b&gt; autentifikatsiya usuliga sozlanadi. &lt;br /&gt; &lt;b&gt;ES256&lt;/b&gt; algoritmli imzo kaliti qo'shiladi. &lt;br /&gt; &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; qiymati &lt;b&gt;ES256&lt;/b&gt; bo'ladi. IdServer bu qiymatdan avtorizatsiya javobini (JARM) yaratishda foydalanadi.</value></data>
++  <data name="SelectOneOrMoreAuthMethods" xml:space="preserve"><value>Autentifikatsiya usullarini tanlang</value></data>
++  <data name="SelectOneOrMoreAuthMethodsHelper" xml:space="preserve"><value>Bir yoki bir nechta ro'yxatdan o'tish usulini tanlang va tartibini belgilang. Tartib muhim: ro'yxatdan o'tish qadamlari shu tartibda bajariladi.</value></data>
++  <data name="SelectProofOfPossessionHelper" xml:space="preserve"><value>&lt;b&gt;Egalikni isbotlash mexanizmini&lt;/b&gt; tanlang. Access tokenlar muayyan kriptografik kalitga bog'lanadi, shu sababli tokendan faqat kalit egasi foydalana oladi.</value></data>
++  <data name="SidAdminUi" xml:space="preserve"><value>Boshqaruv paneli</value></data>
++  <data name="SignatureKey" xml:space="preserve"><value>Imzo kaliti</value></data>
++  <data name="SignatureKeyParameters" xml:space="preserve"><value>request object, private_key_jwt va client_secret_jwt</value></data>
++  <data name="SignOut" xml:space="preserve"><value>Chiqish</value></data>
++  <data name="SourceClaimName" xml:space="preserve"><value>Manba atribut nomi</value></data>
++  <data name="SourceClaimNameRequired" xml:space="preserve"><value>Manba atribut nomi kiritilishi shart</value></data>
++  <data name="SourceContainsMoreThanOneValue" xml:space="preserve"><value>Manbada bir nechta qiymat bormi?</value></data>
++  <data name="Standard" xml:space="preserve"><value>Standart</value></data>
++  <data name="Summary" xml:space="preserve"><value>Qisqacha</value></data>
++  <data name="TokenClaimNameRequired" xml:space="preserve"><value>Token atributi nomi kiritilishi shart</value></data>
++  <data name="TotpDescription" xml:space="preserve"><value>TOTP (vaqtga asoslangan bir martalik parol): boshlang'ich kalit HOTP'dagi kabi doimiy, lekin kod hisoblagichga emas, vaqtga bog'liq.</value></data>
++  <data name="UserAttributeRequired" xml:space="preserve"><value>Foydalanuvchi atributi kiritilishi shart</value></data>
++  <data name="UserBasedApp" xml:space="preserve"><value>Brauzerda ishlaydigan ilova</value></data>
++  <data name="UserBasedAppDescription" xml:space="preserve"><value>Brauzerda ishlaydigan klient ilova (Angular, EmberJS, VueJS va h.k.). &lt;br/&gt; Bunday ilovalar maxfiy kalit yoki refresh tokenni saqlay olmaydi, chunki bu xavfsizlik xavfi.</value></data>
++  <data name="UserBasedAppShortDescription" xml:space="preserve"><value>Avtorizatsiya kodi + PKCE</value></data>
++  <data name="UserMgt" xml:space="preserve"><value>Foydalanuvchilarni boshqarish</value></data>
++  <data name="UserPropertyRequired" xml:space="preserve"><value>Foydalanuvchi xususiyati kiritilishi shart</value></data>
++  <data name="WebApp" xml:space="preserve"><value>Veb-ilova</value></data>
++  <data name="WebAppDescription" xml:space="preserve"><value>Serverda ishlaydigan veb-ilova (ASP.NET CORE, SPRING va h.k.)</value></data>
++  <data name="WebAppShortDescription" xml:space="preserve"><value>Avtorizatsiya kodi</value></data>
++  <data name="WsRelyingParty" xml:space="preserve"><value>WS-Fed ishonuvchi tomon</value></data>
++  <data name="WsRelyingPartyDescription" xml:space="preserve"><value>Odatda eski Microsoft ilovalari ishlatadigan WS-Federation ishonuvchi tomoni</value></data>
++  <data name="WsRelyingPartyShortDescription" xml:space="preserve"><value>WS-Federation ilovasi</value></data>
++  <data name="AssignResources" xml:space="preserve"><value>Biriktirish</value></data>
++  <data name="UnassignResources" xml:space="preserve"><value>Ajratish</value></data>
++  <data name="AssignedResources" xml:space="preserve"><value>Biriktirilgan resurslar</value></data>
++  <data name="AvailableResources" xml:space="preserve"><value>Mavjud resurslar</value></data>
++  <data name="AudienceIsRequired" xml:space="preserve"><value>Auditoriya kiritilishi shart</value></data>
++  <data name="Required" xml:space="preserve"><value>Qiymat kiritilishi shart</value></data>
++  <data name="ValueMustBePositive" xml:space="preserve"><value>Qiymat 1 dan katta bo'lishi kerak</value></data>
++  <data name="Wallet" xml:space="preserve"><value>Hamyon</value></data>
++  <data name="WalletDescription" xml:space="preserve"><value>Mobil ilovadan elektron hamyon sifatida foydalanish</value></data>
++  <data name="WalletShortDescription" xml:space="preserve"><value>Mobil ilova</value></data>
++  <data name="AssignWorkflow" xml:space="preserve"><value>Biriktirish</value></data>
++  <data name="RegistrationWorkflow" xml:space="preserve"><value>Ro'yxatdan o'tish</value></data>
++  <data name="DefaultClientAcr" xml:space="preserve"><value>Standart autentifikatsiya darajalari</value></data>
++  <data name="DefaultClientAcrTooltip" xml:space="preserve"><value>Ilova foydalanuvchini autentifikatsiya qilishda ishlatadigan standart usul</value></data>
++  <data name="ClientDefaultAcrValuesHelper" xml:space="preserve"><value>ACR'lar ustuvorlik bo'yicha tartiblanishi kerak</value></data>
++  <data name="Registration" xml:space="preserve"><value>Ro'yxatdan o'tish</value></data>
++  <data name="AuthMethodCapabilities" xml:space="preserve"><value>Imkoniyatlar</value></data>
++  <data name="FilterAuthMethodByCapabilities" xml:space="preserve"><value>Autentifikatsiya usullarini imkoniyatlari bo'yicha saralash</value></data>
++  <data name="Legend" xml:space="preserve"><value>Izoh</value></data>
++  <data name="SupportPushNotification" xml:space="preserve"><value>IdServer'dan bildirishnoma qabul qila oladi</value></data>
++  <data name="SupportUserAuthentication" xml:space="preserve"><value>Foydalanuvchi autentifikatsiyasini qo'llab-quvvatlaydi</value></data>
++  <data name="SupportUserRegistration" xml:space="preserve"><value>Foydalanuvchi ro'yxatdan o'tishini qo'llab-quvvatlaydi</value></data>
++  <data name="Errors" xml:space="preserve"><value>Xatolar</value></data>
++  <data name="RelaunchErrors" xml:space="preserve"><value>{0} ta xato</value></data>
++  <data name="Exception" xml:space="preserve"><value>Istisno (exception)</value></data>
++  <data name="LockAccount" xml:space="preserve"><value>Hisobni bloklash</value></data>
++  <data name="UserLockingOptionsUpdated" xml:space="preserve"><value>Sozlamalar yangilandi</value></data>
++  <data name="Blocked" xml:space="preserve"><value>Bloklangan</value></data>
++  <data name="UnblockDateTime" xml:space="preserve"><value>Blokdan chiqish vaqti</value></data>
++  <data name="NbLoginAttempt" xml:space="preserve"><value>Kirish urinishlari soni</value></data>
++  <data name="ClientRegistrationTypes" xml:space="preserve"><value>Ilovani ro'yxatdan o'tkazish turlari</value></data>
++  <data name="ClientExpirationTime" xml:space="preserve"><value>Amal qilish muddati</value></data>
++  <data name="AddTrustAnchor" xml:space="preserve"><value>Ishonch langarini qo'shish</value></data>
++  <data name="TrustAnchorsDescription" xml:space="preserve"><value>Ishonch langarlarini boshqarish</value></data>
++  <data name="TrustAnchorsTitle" xml:space="preserve"><value>Ishonch langarlari</value></data>
++  <data name="AddFederationEntity" xml:space="preserve"><value>Federatsiya obyektini qo'shish</value></data>
++  <data name="FederationEntitiesDescription" xml:space="preserve"><value>IdServer ishlatadigan ishonch langarlarini boshqarish.</value></data>
++  <data name="FederationEntitiesTitle" xml:space="preserve"><value>Federatsiya obyektlari</value></data>
++  <data name="TrustAnchor" xml:space="preserve"><value>Ishonch langari</value></data>
++  <data name="TrustEntity" xml:space="preserve"><value>Ishonchli obyekt</value></data>
++  <data name="TrustAnchorShortDescription" xml:space="preserve"><value>Ishonchli uchinchi tomonni ifodalovchi obyekt</value></data>
++  <data name="TrustAnchorDescription" xml:space="preserve"><value>Ishonch langari — asosiy vazifasi boshqa obyektlar haqida tasdiqlar berish bo'lgan obyekt</value></data>
++  <data name="UrlIsRequired" xml:space="preserve"><value>Manzil kiritilishi shart</value></data>
++  <data name="TrustAnchorAdded" xml:space="preserve"><value>Ishonch langari qo'shildi</value></data>
++  <data name="FederationEntityType" xml:space="preserve"><value>Obyekt turi</value></data>
++  <data name="SelectedFederationEntitiesRemoved" xml:space="preserve"><value>Tanlangan federatsiya obyektlari olib tashlandi</value></data>
++  <data name="Resources" xml:space="preserve"><value>Resurslar</value></data>
++  <data name="Realms" xml:space="preserve"><value>Realmlar</value></data>
++  <data name="AssignedRealms" xml:space="preserve"><value>Biriktirilgan realmlar</value></data>
++  <data name="AssignRealms" xml:space="preserve"><value>Realmlarni biriktirish</value></data>
++  <data name="AvailableRealms" xml:space="preserve"><value>Mavjud realmlar</value></data>
++  <data name="UnassignRealms" xml:space="preserve"><value>Realmlarni ajratish</value></data>
++  <data name="ClientRealmsDescription" xml:space="preserve"><value>Bir yoki bir nechta realmni tanlang</value></data>
++  <data name="ClientsRealmsUpdated" xml:space="preserve"><value>Ilova realmlari yangilandi</value></data>
++  <data name="NotAuthorized" xml:space="preserve"><value>Sizga ruxsat berilmagan</value></data>
++  <data name="SelectedRealmRolesRemoved" xml:space="preserve"><value>Tanlangan realm rollari olib tashlandi</value></data>
++  <data name="Permissions" xml:space="preserve"><value>Ruxsatlar</value></data>
++  <data name="Component" xml:space="preserve"><value>Komponent</value></data>
++  <data name="AddPermission" xml:space="preserve"><value>Ruxsat qo'shish</value></data>
++  <data name="RealmRoleScopesUpdated" xml:space="preserve"><value>Rollar yangilandi</value></data>
++  <data name="RealmPermissions" xml:space="preserve"><value>Realm ruxsatlari</value></data>
++  <data name="RealmPermissionsDescription" xml:space="preserve"><value>Realmga biriktiriladigan bir yoki bir nechta ruxsatni tanlang. O'zgarishlar kuchga kirishi uchun boshqaruv paneliga qayta kirishingiz kerak.</value></data>
++  <data name="Welcome" xml:space="preserve"><value>Xush kelibsiz, {0}</value></data>
++  <data name="RemoveRealm" xml:space="preserve"><value>Joriy realmni o'chirish</value></data>
++  <data name="DoYouWantToDeleteRealm" xml:space="preserve"><value>Joriy realmni o'chirmoqchimisiz?</value></data>
++  <data name="RealmRemoved" xml:space="preserve"><value>Realm o'chirildi</value></data>
++  <data name="RefreshPage" xml:space="preserve"><value>Sahifani yangilamoqchimisiz?</value></data>
++  <data name="CookieExpirationTime" xml:space="preserve"><value>Cookie amal qilish muddati</value></data>
++  <data name="CookieExpirationTimeTooltip" xml:space="preserve"><value>Foydalanuvchi cookie'sining amal qilish muddati (millisekundda)</value></data>
++  <data name="PublicClient" xml:space="preserve"><value>Ochiq ilova</value></data>
++  <data name="IsPublic" xml:space="preserve"><value>Ochiq ilovami?</value></data>
++  <data name="IsPublicTooltip" xml:space="preserve"><value>Avtorizatsiya kodini PKCE (Proof Key for Code Exchange) bilan ishlatish</value></data>
++  <data name="Forms" xml:space="preserve"><value>Formalar</value></data>
++  <data name="Demo" xml:space="preserve"><value>Demo</value></data>
++  <data name="Version" xml:space="preserve"><value>Versiya</value></data>
++  <data name="AcrFormsTitle" xml:space="preserve"><value>Autentifikatsiya formalari</value></data>
++  <data name="AcrWorkflowsTitle" xml:space="preserve"><value>Autentifikatsiya jarayonlari</value></data>
++  <data name="RegistrationFormsTitle" xml:space="preserve"><value>Formalar</value></data>
++  <data name="SelectValue" xml:space="preserve"><value>Qiymatni tanlang</value></data>
++  <data name="RecurringJobs" xml:space="preserve"><value>Jadval bo'yicha vazifalar</value></data>
++  <data name="LastExecution" xml:space="preserve"><value>Oxirgi bajarilish</value></data>
++  <data name="LastJobState" xml:space="preserve"><value>Oxirgi holat</value></data>
++  <data name="Error" xml:space="preserve"><value>Xato</value></data>
++  <data name="RetryAttempt" xml:space="preserve"><value>Qayta urinish</value></data>
++  <data name="NextExecution" xml:space="preserve"><value>Keyingi bajarilish</value></data>
++  <data name="Cron" xml:space="preserve"><value>Cron</value></data>
++  <data name="EditCronExpression" xml:space="preserve"><value>Cron ifodasini tahrirlash</value></data>
++  <data name="RecurringJobIsUpdated" xml:space="preserve"><value>Vazifa jadvali yangilandi</value></data>
++  <data name="CronExpression" xml:space="preserve"><value>Cron ifodasi</value></data>
++  <data name="Minutes" xml:space="preserve"><value>Daqiqalar</value></data>
++  <data name="Hourly" xml:space="preserve"><value>Har soatda</value></data>
++  <data name="Hours" xml:space="preserve"><value>soat</value></data>
++  <data name="Every" xml:space="preserve"><value>Har</value></data>
++  <data name="StartsAt" xml:space="preserve"><value>Boshlanish vaqti</value></data>
++  <data name="Seconds" xml:space="preserve"><value>Soniyalar</value></data>
++  <data name="Reason" xml:space="preserve"><value>Sabab</value></data>
++  <data name="RecurringJobIsLaunched" xml:space="preserve"><value>Vazifa ishga tushirildi</value></data>
++  <data name="RecurringJobExecutionHistory" xml:space="preserve"><value>{0} vazifasining bajarilish tarixi</value></data>
++  <data name="Jobs" xml:space="preserve"><value>Vazifalar</value></data>
++  <data name="Servers" xml:space="preserve"><value>Serverlar</value></data>
++  <data name="WorkersCount" xml:space="preserve"><value>Ishchi oqimlar</value></data>
++  <data name="Inactive" xml:space="preserve"><value>Nofaol</value></data>
++  <data name="RecurringJobIsDisabled" xml:space="preserve"><value>{0} vazifasi o'chirildi</value></data>
++  <data name="RecurringJobIsEnabled" xml:space="preserve"><value>{0} vazifasi yoqildi</value></data>
++  <data name="FailedJobs" xml:space="preserve"><value>Muvaffaqiyatsiz vazifalar</value></data>
++  <data name="FailedAt" xml:space="preserve"><value>Xato vaqti</value></data>
++  <data name="JobName" xml:space="preserve"><value>Vazifa</value></data>
++  <data name="UserIsBlocked" xml:space="preserve"><value>Foydalanuvchi bloklangan</value></data>
++  <data name="UserIsBlocked1" xml:space="preserve"><value>Foydalanuvchi bloklangan</value></data>
++  <data name="UserBlocked" xml:space="preserve"><value>Foydalanuvchi {0} gacha bloklandi</value></data>
++  <data name="UserUnblocked" xml:space="preserve"><value>Foydalanuvchi blokdan chiqarildi</value></data>
++  <data name="RealmOptionIsDisabled" xml:space="preserve"><value>Realm imkoniyati o'chirilgan</value></data>
++  <data name="TemplateUpdated" xml:space="preserve"><value>Shablon yangilandi</value></data>
++  <data name="CreateWorkflow" xml:space="preserve"><value>Jarayon yaratish</value></data>
++  <data name="Migrations" xml:space="preserve"><value>Ko'chirish (migratsiya)</value></data>
++  <data name="NbMigratedRecords" xml:space="preserve"><value>Ko'chirilgan yozuvlar</value></data>
++  <data name="MigratedRecordsSummary" xml:space="preserve"><value>Ruxsat doiralari: {0}, foydalanuvchilar: {1}, guruhlar: {2}, ilovalar: {3}, API resurslar: {4}</value></data>
++  <data name="ExtractedScopes" xml:space="preserve"><value>Ruxsat doiralari: {0}</value></data>
++  <data name="ExtractedApiResources" xml:space="preserve"><value>API resurslar: {0}</value></data>
++  <data name="ExtractedClients" xml:space="preserve"><value>Ilovalar: {0}</value></data>
++  <data name="ExtractedGroups" xml:space="preserve"><value>Guruhlar: {0}</value></data>
++  <data name="ExtractedUsers" xml:space="preserve"><value>Foydalanuvchilar: {0}</value></data>
++  <data name="DatePeriod" xml:space="preserve"><value>Davr</value></data>
++  <data name="MigrationLaunched" xml:space="preserve"><value>Ko'chirish boshlandi</value></data>
++  <data name="WorkflowIsCreated" xml:space="preserve"><value>Jarayon yaratildi</value></data>
++  <data name="AuthCodeExpirationTimeTooltip" xml:space="preserve"><value>Avtorizatsiya kodining amal qilish muddati soniyada; standart qiymat 10 daqiqa</value></data>
++  <data name="AuthCodeExpirationTime" xml:space="preserve"><value>Avtorizatsiya kodi amal qilish muddati</value></data>
++  <data name="DeviceCodeExpirationTime" xml:space="preserve"><value>Qurilma kodi amal qilish muddati</value></data>
++  <data name="DeviceCodeExpirationTimeTooltip" xml:space="preserve"><value>Qurilma kodining amal qilish muddati soniyada; standart qiymat 30 daqiqa</value></data>
++  <data name="DeviceCodePollingInterval" xml:space="preserve"><value>Qurilma kodini so'rash oralig'i</value></data>
++  <data name="DeviceCodePollingIntervalTooltip" xml:space="preserve"><value>Ilova qurilma kodini so'rashi mumkin bo'lgan eng katta oraliq</value></data>
++  <data name="ParExpirationTime" xml:space="preserve"><value>PAR amal qilish muddati</value></data>
++  <data name="ParExpirationTimeTooltip" xml:space="preserve"><value>PAR muddati soniyada; standart qiymat 30 daqiqa</value></data>
++  <data name="MaxRequestParameterLifetimeSeconds" xml:space="preserve"><value>So'rov parametrlarining amal qilish muddati</value></data>
++  <data name="MaxRequestParameterLifetimeSecondsTooltip" xml:space="preserve"><value>request parametrining amal qilish muddati (soniyada)</value></data>
++  <data name="MaxBindingMessageSize" xml:space="preserve"><value>binding_message parametrining eng katta hajmi</value></data>
++  <data name="MaxBindingMessageSizeTooltip" xml:space="preserve"><value>Qabul qilinadigan binding_message parametri uchun ruxsat etilgan eng ko'p belgilar soni</value></data>
++  <data name="DpopLifetime" xml:space="preserve"><value>DPoP amal qilish muddati</value></data>
++  <data name="DpopLifetimeTooltip" xml:space="preserve"><value>DPoP so'rovining amal qilish muddati (soniyada)</value></data>
++  <data name="HashAlgorithm" xml:space="preserve"><value>Xesh algoritmi</value></data>
++  <data name="ClientSecretAdded" xml:space="preserve"><value>Maxfiy kalit qo'shildi</value></data>
++  <data name="AddClientSecret" xml:space="preserve"><value>Maxfiy kalit qo'shish</value></data>
++  <data name="ClientSecretsRemoved" xml:space="preserve"><value>Maxfiy kalitlar olib tashlandi</value></data>
++  <data name="ManageClientSecrets" xml:space="preserve"><value>Ilova maxfiy kalitlari</value></data>
++  <data name="IsTemporary" xml:space="preserve"><value>Vaqtinchami</value></data>
++  <data name="IsTemporaryPwd" xml:space="preserve"><value>Parol vaqtinchalik</value></data>
++  <data name="IsNotTemporaryPwd" xml:space="preserve"><value>Parol doimiy</value></data>
++  <data name="PasswordIsNotTemporary" xml:space="preserve"><value>Parol doimiy</value></data>
++  <data name="PasswordIsTemporary" xml:space="preserve"><value>Parol vaqtinchalik</value></data>
++  <data name="RefreshTokenExpirationTime" xml:space="preserve"><value>Refresh token amal qilish muddati</value></data>
++  <data name="RefreshTokenExpirationTimeTooltip" xml:space="preserve"><value>Refresh token muddati soniyada; standart qiymat 30 daqiqa</value></data>
++  <data name="RefreshTokenUsageOneTime" xml:space="preserve"><value>Bir martalik</value></data>
++  <data name="RefreshTokenUsageReusable" xml:space="preserve"><value>Qayta ishlatiladigan</value></data>
++  <data name="RefreshTokenUsageType" xml:space="preserve"><value>Refresh token turi</value></data>
++  <data name="RefreshTokenUsageTypeTooltip" xml:space="preserve"><value>Refresh tokendan foydalanish turi. Maxfiy kalitni saqlay oladigan ilovalar (server xizmatlari, konsol ilovalar) uchun qayta ishlatiladigan refresh tokendan foydalanish mumkin</value></data>
++  <data name="Middlename" xml:space="preserve"><value>Otasining ismi</value></data>
++  <data name="LogoutSettings" xml:space="preserve"><value>Chiqish sozlamalari</value></data>
++  <data name="OpenIdConfiguration" xml:space="preserve"><value>OpenID sozlamalari</value></data>
++  <data name="CredentialType" xml:space="preserve"><value>Hisob ma'lumoti turi</value></data>
++</root>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs b/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs
+index 8b76d9c..51e1602 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs
+@@ -194,12 +194,11 @@ internal class AdminAuthz
+     {
+         Callback = (o) =>
+         {
+-            if(RequiredRoles != null)
++            // Any of the required roles grants access. The roles from the userinfo endpoint are mapped to ClaimTypes.Role
++            // while the identity's RoleClaimType is "role", so RequireRole (IsInRole) does not see them: check both claim types.
++            if (RequiredRoles != null && RequiredRoles.Any())
+             {
+-                foreach(var requiredRole in RequiredRoles)
+-                {
+-                    o.RequireRole(requiredRole);
+-                }
++                o.RequireAssertion(ctx => ctx.User.Claims.Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") && RequiredRoles.Contains(c.Value)));
+             }
+         };
+     }
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/CronEditor.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/CronEditor.razor
+index 683e4e4..9d5d887 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/CronEditor.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/CronEditor.razor
+@@ -88,7 +88,7 @@
+             <RadzenLabel Text="@Description"></RadzenLabel>
+         </div>
+     </div>
+-    <RadzenButton Click="HandleSave" Text="Save" class="fullWidth"></RadzenButton>
++    <RadzenButton Click="HandleSave" Text="@Global.Save" class="fullWidth"></RadzenButton>
+ </RadzenStack>
+ 
+ @code {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/UserScopeMapper.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/UserScopeMapper.razor
+index a010b58..abf48a8 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/UserScopeMapper.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Common/UserScopeMapper.razor
+@@ -34,7 +34,7 @@
+                     TValue="TokenClaimJsonTypes"
+                     @bind-Value=@UserScopeMapperForm.ClaimJsonType
+                     TextProperty="Name" ValueProperty="Type" />
+-            <RadzenRequiredValidator Component="ClaimJsonType" Text="Claim JSON Type is required"></RadzenRequiredValidator>
++            <RadzenRequiredValidator Component="ClaimJsonType" Text="@Global.ClaimJsonTypeRequired"></RadzenRequiredValidator>
+         </div>
+     }
+     else
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddApiResourceDialog.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddApiResourceDialog.razor
+index f6ab262..31183ad 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddApiResourceDialog.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddApiResourceDialog.razor
+@@ -32,7 +32,7 @@
+         <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">@Global.Description</RadzenText>
+         <RadzenTextArea Name="Description" @bind-Value="@addApiResource.Description" Class="w-100"></RadzenTextArea>
+     </div>
+-    <RadzenButton class="mt-1" Variant="Variant.Flat" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Success" Text="Add"  />
++    <RadzenButton class="mt-1" Variant="Variant.Flat" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Success" Text="@Global.Add"  />
+ </RadzenTemplateForm>
+ 
+ @code {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddCredentialDialog.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddCredentialDialog.razor
+index b35ffba..53169b1 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddCredentialDialog.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/Dialogs/AddCredentialDialog.razor
+@@ -11,7 +11,7 @@
+ 
+ <RadzenSteps>
+     <Steps>
+-        <RadzenStepsItem Text="Credential type">
++        <RadzenStepsItem Text="@(Global.ResourceManager.GetString("CredentialType"))">
+             <div class="row gy-4">
+                 @foreach (var credType in CredentialTypes)
+                 {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/EmptyLayout.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/EmptyLayout.razor
+index a619026..1db7d3b 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/EmptyLayout.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/EmptyLayout.razor
+@@ -35,7 +35,7 @@
+                 <RadzenImage Path="_content/SimpleIdServer.IdServer.Website/images/SIDLogo.svg" Style="width: 40px" />
+             </div>
+             <div class="p-2">
+-                <RadzenText Style="margin: 0; color: white;" Text="SimpleIdServer" TextStyle="TextStyle.DisplayH6" />
++                <RadzenText Style="margin: 0; color: white;" Text="Bank IdM" TextStyle="TextStyle.DisplayH6" />
+             </div>
+             <div class="ml-auto"></div>
+             <div class="p-2">
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
+index d75632c..1199c30 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
+@@ -33,17 +33,21 @@
+             <div class="p-2">
+                 <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" />
+             </div>
+-            <div class="p-2">
+-                <RadzenImage Path="_content/SimpleIdServer.IdServer.Website/images/SIDLogo.svg" Style="width: 40px" />
+-            </div>
+-            <div class="p-2">
+-                <RadzenText Style="margin: 0; color: white;" Text="SimpleIdServer" TextStyle="TextStyle.DisplayH6" />
++            <div class="p-2 bk-brand">
++                <span class="bk-mark" aria-hidden="true">
++                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.6v5.9c0 4.6 3.1 8.6 7.5 9.7 4.4-1.1 7.5-5.1 7.5-9.7V5.6L12 2.8Z" /><circle cx="12" cy="10.2" r="2.3" /><path d="M12 12.5v4.1M12 14.6h1.7" /></svg>
++                </span>
++                <span class="bk-brand-text">
++                    <span class="bk-brand-name">Bank IdM</span>
++                    <span class="bk-brand-sub">@Global.SidAdminUi</span>
++                </span>
+             </div>
+             <div class="ml-auto"></div>
+-            <div class="p-2">
+-                <RadzenText Style="margin: 0; color: white;" Text="@string.Format(Global.Welcome, userName)" />
++            <div class="p-2 bk-user">
++                <span class="bk-avatar" aria-hidden="true">@(string.IsNullOrWhiteSpace(userName) ? "?" : userName.Substring(0, 1).ToUpperInvariant())</span>
++                <span class="bk-user-name">@string.Format(Global.Welcome, userName)</span>
+             </div>
+-            <div class="p-2">
++            <div class="p-2 bk-lang">
+                 @if(!languagesState.Value.IsLoading)
+                 {
+                     <RadzenDropDown Name="UserPropertyName" Class="w-100"
+@@ -53,30 +57,30 @@
+                                     TextProperty="Description" ValueProperty="Code" />
+                 }
+             </div>
+-            <div class="p-2">
++            <div class="p-2 bk-signout">
+                 <RadzenLink Text="@Global.SignOut" Icon="logout" Path="/logout" />
+             </div>
+         </div>
+     </RadzenHeader>
+         <RadzenSidebar @bind-Expanded="@sidebarExpanded">
+             <RadzenPanelMenu>
+-                <RadzenPanelMenuItem Text=@(string.Format(Global.ActiveRealm, activeRealm)) Path="@(urlHelper.GetUrl("/realm/overview"))" />
+-                <RadzenPanelMenuItem Text="@Global.Manage" />
++                <RadzenPanelMenuItem class="bk-nav-realm" Icon="domain" Text=@(string.Format(Global.ActiveRealm, activeRealm)) Path="@(urlHelper.GetUrl("/realm/overview"))" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@Global.Manage" />
+                 <RadzenPanelMenuItem Text="@Global.Clients" Icon="apps" Path="@(urlHelper.GetUrl("/clients"))" />
+                 <RadzenPanelMenuItem Text="@Global.Scopes" Icon="visibility" Path="@(urlHelper.GetUrl("/scopes"))" />
+-                <RadzenPanelMenuItem Text="@Global.UserMgt">
++                <RadzenPanelMenuItem Text="@Global.UserMgt" Icon="manage_accounts">
+                     <RadzenPanelMenuItem Text="@Global.Users" Icon="person" Path="@(urlHelper.GetUrl("/users"))" />
+                     <RadzenPanelMenuItem Text="@Global.Groups" Icon="group" Path="@(urlHelper.GetUrl("/groups"))" />
+                 </RadzenPanelMenuItem>
+-                <RadzenPanelMenuItem Text="@Global.Authentication">
++                <RadzenPanelMenuItem Text="@Global.Authentication" Icon="lock">
+                     <RadzenPanelMenuItem Text="@Global.AuthenticationContext" Icon="security" Path="@(urlHelper.GetUrl("/acrs/workflows"))" />
+                     <RadzenPanelMenuItem Text="@Global.Authentication" Icon="person" Path="@(urlHelper.GetUrl("/authentications/authmethods"))" />
+                 </RadzenPanelMenuItem>
+-                <RadzenPanelMenuItem Text="@Global.IdentityProvisioning">
++                <RadzenPanelMenuItem Text="@Global.IdentityProvisioning" Icon="sync_alt">
+                     <RadzenPanelMenuItem Text="@Global.ManualIdentityProvisioning" Icon="back_hand" Path="@(urlHelper.GetUrl("/registrations/workflows"))"></RadzenPanelMenuItem>
+                     <RadzenPanelMenuItem Text="@Global.AutomaticIdentityProvisioning" Icon="refresh" Path="@(urlHelper.GetUrl("/identityprovisioning"))" />
+                 </RadzenPanelMenuItem>
+-                <RadzenPanelMenuItem Text="@Global.Configure" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@Global.Configure" />
+                 <RadzenPanelMenuItem Text="@Global.CertificateAuthoritiesTitle" Icon="shield" Path="@(urlHelper.GetUrl("/certificateauthorities"))" />
+                 @if(options.Value.Features.IsFederationEntitiesEnabled)
+                 {
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs b/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs
+index 5fb0aaf..796ef99 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs
+@@ -38,7 +38,7 @@ namespace SimpleIdServer.IdServer.Website
+                     return true;
+                 }
+             };
+-            _httpClient = new HttpClient(handler);
++            _httpClient = new HttpClient(new RefreshTokenOnUnauthorizedHandler(RefreshAccessToken) { InnerHandler = handler });
+             _logger = logger;
+             _jsonWebTokenHandler = new JsonWebTokenHandler();
+         }
+@@ -64,6 +64,23 @@ namespace SimpleIdServer.IdServer.Website
+             _accessTokenStore.AccessTokens.TryRemove(realm, out GetAccessTokenResult r);
+         }
+ 
++        /// <summary>
++        /// The cached access token becomes invalid when the identity server restarts (its signing keys can change).
++        /// Drop it, fetch a new one for the same realm and return it, so the failed request can be retried once.
++        /// </summary>
++        private async Task<string> RefreshAccessToken(string rejectedAccessToken)
++        {
++            var realm = _accessTokenStore.AccessTokens.FirstOrDefault(kvp => kvp.Value.AccessToken == rejectedAccessToken).Key;
++            if (realm == null) return null;
++            _accessTokenStore.AccessTokens.TryRemove(realm, out GetAccessTokenResult _);
++            _logger.LogWarning("Access token for realm '{Realm}' was rejected, requesting a new one", realm);
++            var languages = _httpClient.DefaultRequestHeaders.TryGetValues("Language", out var values) ? values.ToList() : new List<string>();
++            var token = await GetAccessToken(realm);
++            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
++            if (languages.Any()) _httpClient.DefaultRequestHeaders.Add("Language", languages);
++            return token.AccessToken;
++        }
++
+         private async Task<GetAccessTokenResult> GetAccessToken(string currentRealm = null)
+         {
+             var realm = currentRealm;
+@@ -121,4 +138,32 @@ namespace SimpleIdServer.IdServer.Website
+             return accessToken;
+         }
+     }
++
++    internal class RefreshTokenOnUnauthorizedHandler : DelegatingHandler
++    {
++        private readonly Func<string, Task<string>> _refreshAccessToken;
++
++        public RefreshTokenOnUnauthorizedHandler(Func<string, Task<string>> refreshAccessToken)
++        {
++            _refreshAccessToken = refreshAccessToken;
++        }
++
++        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
++        {
++            var response = await base.SendAsync(request, cancellationToken);
++            var authorization = request.Headers.Authorization;
++            if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized || authorization?.Scheme != "Bearer") return response;
++            var newAccessToken = await _refreshAccessToken(authorization.Parameter);
++            if (string.IsNullOrWhiteSpace(newAccessToken)) return response;
++            var retry = new HttpRequestMessage(request.Method, request.RequestUri)
++            {
++                Content = request.Content,
++                Version = request.Version
++            };
++            foreach (var header in request.Headers) retry.Headers.TryAddWithoutValidation(header.Key, header.Value);
++            retry.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", newAccessToken);
++            response.Dispose();
++            return await base.SendAsync(retry, cancellationToken);
++        }
++    }
+ }

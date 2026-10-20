@@ -1,0 +1,374 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.resx b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.resx
+index f0cb593..28f343d 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.resx
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.resx
+@@ -138,4 +138,5 @@
+   <data name="scopes" xml:space="preserve">
+     <value>Scopes</value>
+   </data>
++  <data name="consent_lead" xml:space="preserve"><value>Only allow applications you trust.</value></data>
+ </root>
+\ No newline at end of file
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.uz.resx b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.uz.resx
+new file mode 100644
+index 0000000..209304b
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ConsentsResource.uz.resx
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<root>
++  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
++  <resheader name="version"><value>2.0</value></resheader>
++  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <data name="claims" xml:space="preserve"><value>Ma'lumotlar</value></data>
++  <data name="confirm" xml:space="preserve"><value>Ruxsat berish</value></data>
++  <data name="consent_client_access" xml:space="preserve"><value>«{0}» ilovasi hisobingizdan foydalanishga ruxsat so'ramoqda</value></data>
++  <data name="invalid_request" xml:space="preserve"><value>So'rov noto'g'ri</value></data>
++  <data name="manage_consents" xml:space="preserve"><value>Ruxsatlarni boshqarish</value></data>
++  <data name="reject" xml:space="preserve"><value>Rad etish</value></data>
++  <data name="scopes" xml:space="preserve"><value>Ruxsatlar</value></data>
++  <data name="consent_lead" xml:space="preserve"><value>Faqat ishonchli ilovalarga ruxsat bering.</value></data>
++</root>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ErrorsResource.uz.resx b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ErrorsResource.uz.resx
+new file mode 100644
+index 0000000..8984478
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/ErrorsResource.uz.resx
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<root>
++  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
++  <resheader name="version"><value>2.0</value></resheader>
++  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <data name="invalid_request" xml:space="preserve"><value>So'rov noto'g'ri</value></data>
++</root>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.resx b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.resx
+index 7426e46..c459c7c 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.resx
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.resx
+@@ -168,4 +168,21 @@
+   <data name="YouAreDisconnected" xml:space="preserve">
+     <value>You are disconnected</value>
+   </data>
++  <data name="brand_name" xml:space="preserve"><value>Bank IdM</value></data>
++  <data name="brand_sub" xml:space="preserve"><value>Identity &amp; Access Management</value></data>
++  <data name="brand_title" xml:space="preserve"><value>One account for every bank system</value></data>
++  <data name="brand_text" xml:space="preserve"><value>Sign in once with your corporate account and use the bank's internal applications securely.</value></data>
++  <data name="feat1_title" xml:space="preserve"><value>Corporate account</value></data>
++  <data name="feat1_text" xml:space="preserve"><value>Use your Active Directory login and password</value></data>
++  <data name="feat2_title" xml:space="preserve"><value>Protected connection</value></data>
++  <data name="feat2_text" xml:space="preserve"><value>Encrypted traffic and session control</value></data>
++  <data name="feat3_title" xml:space="preserve"><value>Centralized access</value></data>
++  <data name="feat3_text" xml:space="preserve"><value>Access rights follow your role and department</value></data>
++  <data name="signin_title" xml:space="preserve"><value>Sign in</value></data>
++  <data name="signin_lead" xml:space="preserve"><value>Enter your domain login and password</value></data>
++  <data name="help_text" xml:space="preserve"><value>Forgot your password or is your account locked? Contact the IT service desk.</value></data>
++  <data name="env_test" xml:space="preserve"><value>Test environment</value></data>
++  <data name="footer_legal" xml:space="preserve"><value>Authorized use only. Activity is logged.</value></data>
++  <data name="uz" xml:space="preserve"><value>O'zbekcha</value></data>
++  <data name="ru" xml:space="preserve"><value>Русский</value></data>
+ </root>
+\ No newline at end of file
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.uz.resx b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.uz.resx
+new file mode 100644
+index 0000000..5762e93
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Resources/LayoutResource.uz.resx
+@@ -0,0 +1,41 @@
++<?xml version="1.0" encoding="utf-8"?>
++<root>
++  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
++  <resheader name="version"><value>2.0</value></resheader>
++  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
++  <data name="brand_name" xml:space="preserve"><value>Bank IdM</value></data>
++  <data name="brand_sub" xml:space="preserve"><value>Identifikatsiya va kirishni boshqarish</value></data>
++  <data name="brand_title" xml:space="preserve"><value>Bankning barcha tizimlari uchun bitta hisob</value></data>
++  <data name="brand_text" xml:space="preserve"><value>Korporativ hisobingiz bilan bir marta kiring va bankning ichki ilovalaridan xavfsiz foydalaning.</value></data>
++  <data name="feat1_title" xml:space="preserve"><value>Korporativ hisob</value></data>
++  <data name="feat1_text" xml:space="preserve"><value>Active Directory login va parolingizdan foydalaning</value></data>
++  <data name="feat2_title" xml:space="preserve"><value>Himoyalangan ulanish</value></data>
++  <data name="feat2_text" xml:space="preserve"><value>Shifrlangan aloqa va sessiyalar nazorati</value></data>
++  <data name="feat3_title" xml:space="preserve"><value>Markazlashgan ruxsatlar</value></data>
++  <data name="feat3_text" xml:space="preserve"><value>Ruxsatlar lavozim va bo'limingizga qarab beriladi</value></data>
++  <data name="signin_title" xml:space="preserve"><value>Tizimga kirish</value></data>
++  <data name="signin_lead" xml:space="preserve"><value>Domen login va parolingizni kiriting</value></data>
++  <data name="help_text" xml:space="preserve"><value>Parolni unutdingizmi yoki hisobingiz bloklandimi? IT yordam xizmatiga murojaat qiling.</value></data>
++  <data name="env_test" xml:space="preserve"><value>Sinov muhiti</value></data>
++  <data name="footer_legal" xml:space="preserve"><value>Faqat vakolatli foydalanish uchun. Harakatlar qayd etiladi.</value></data>
++  <data name="uz" xml:space="preserve"><value>O'zbekcha</value></data>
++  <data name="ru" xml:space="preserve"><value>Русский</value></data>
++  <data name="authenticate" xml:space="preserve"><value>Kirish</value></data>
++  <data name="back" xml:space="preserve"><value>Orqaga</value></data>
++  <data name="choose_session" xml:space="preserve"><value>Faol sessiyani tanlang</value></data>
++  <data name="consents" xml:space="preserve"><value>Ruxsat berish</value></data>
++  <data name="credential_is_updated" xml:space="preserve"><value>Hisob ma'lumotlari yangilandi</value></data>
++  <data name="deviceauth" xml:space="preserve"><value>Qurilma orqali kirish</value></data>
++  <data name="disconnect" xml:space="preserve"><value>Chiqish</value></data>
++  <data name="Disconnected" xml:space="preserve"><value>Tizimdan chiqildi</value></data>
++  <data name="en" xml:space="preserve"><value>English</value></data>
++  <data name="fr" xml:space="preserve"><value>Français</value></data>
++  <data name="languages" xml:space="preserve"><value>Til</value></data>
++  <data name="not_allowed_to_execute_registration" xml:space="preserve"><value>Sizga ro'yxatdan o'tishga ruxsat berilmagan</value></data>
++  <data name="selected_language" xml:space="preserve"><value>Til: {0}</value></data>
++  <data name="Sessions" xml:space="preserve"><value>Sessiyalar</value></data>
++  <data name="UnexpectedError" xml:space="preserve"><value>Kutilmagan xatolik</value></data>
++  <data name="user_is_created" xml:space="preserve"><value>Foydalanuvchi yaratildi</value></data>
++  <data name="YouAreDisconnected" xml:space="preserve"><value>Siz tizimdan chiqdingiz</value></data>
++</root>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_BankBrandMark.cshtml b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_BankBrandMark.cshtml
+new file mode 100644
+index 0000000..41a49a2
+--- /dev/null
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_BankBrandMark.cshtml
+@@ -0,0 +1,15 @@
++@using SimpleIdServer.IdServer.Startup.Resources
++@* Bank IdM belgisi: logotip bo'lmagani uchun neytral qalqon va kalit belgisi. *@
++<div class="brand-mark">
++    <span class="mark" aria-hidden="true">
++        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
++            <path d="M12 2.8 4.5 5.6v5.9c0 4.6 3.1 8.6 7.5 9.7 4.4-1.1 7.5-5.1 7.5-9.7V5.6L12 2.8Z" />
++            <circle cx="12" cy="10.2" r="2.3" />
++            <path d="M12 12.5v4.1M12 14.6h1.7" />
++        </svg>
++    </span>
++    <span>
++        <span class="name d-block">@LayoutResource.ResourceManager.GetString("brand_name")</span>
++        <span class="sub d-block">@LayoutResource.ResourceManager.GetString("brand_sub")</span>
++    </span>
++</div>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_CommonLayout.cshtml b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_CommonLayout.cshtml
+index a871685..0335068 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_CommonLayout.cshtml
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_CommonLayout.cshtml
+@@ -7,16 +7,20 @@
+ <head>
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>SimpleIdServer - @ViewBag.Title</title>
++    <title>@ViewBag.Title · @LayoutResource.ResourceManager.GetString("brand_name")</title>
+     <link rel="stylesheet" href="@Url.Content("~/lib/bootstrap/css/bootstrap.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/lib/fontawesome/css/all.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/styles/theme.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/styles/authenticate.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/styles/consent.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/styles/profile.css")" />
++    <link rel="stylesheet" href="@Url.Content("~/styles/bank-theme.css")" asp-append-version="true" />
+     <link rel="icon" href="@Url.Content("~/images/favicon.ico")" />
+ </head>
+-<body class="orange">
++<body class="orange bank">
++    <header class="bank-nav">
++        <partial name="_BankBrandMark" />
++    </header>
+     @RenderBody()
+     <script type="text/javascript" src="@Url.Content("~/lib/jquery/jquery.js")"></script>
+     <script type="text/javascript" src="@Url.Content("~/lib/popper.js/umd/popper.js")"></script>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_FormBuilderLayout.cshtml b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_FormBuilderLayout.cshtml
+index fe6c9d1..2347ad4 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_FormBuilderLayout.cshtml
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/Views/Shared/_FormBuilderLayout.cshtml
+@@ -1,69 +1,113 @@
+-﻿@using Microsoft.AspNetCore.Components.Web
++@using Microsoft.AspNetCore.Components.Web
++@using Microsoft.AspNetCore.Hosting
++@using Microsoft.Extensions.Hosting
+ @using FormBuilder.Components
+ @using SimpleIdServer.IdServer.Startup.Resources
+ @using System.Globalization
+ @model SimpleIdServer.IdServer.UI.ViewModels.ILayoutViewModel
+ @namespace FormBuilder.Pages
++@inject IWebHostEnvironment Env
+ @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+ 
+ @{
+     var returnUrl = string.IsNullOrEmpty(Context.Request.Path) ? "~/" : $"~{Context.Request.Path.Value}{Context.Request.QueryString}";
+-    var currentCultureInfo = CultureInfo.DefaultThreadCurrentUICulture;
+-    string languagesLabel = LayoutResource.ResourceManager.GetString("languages");
+-    if (currentCultureInfo != null && !string.IsNullOrWhiteSpace(currentCultureInfo.Name))
+-    {
+-        var str = LayoutResource.ResourceManager.GetString(currentCultureInfo.Name);
+-        if (!string.IsNullOrWhiteSpace(str))
+-        {
+-            languagesLabel = string.Format(LayoutResource.ResourceManager.GetString("selected_language"), str);
+-        }
+-    }
++    var culture = CultureInfo.CurrentUICulture;
++    string T(string key) => LayoutResource.ResourceManager.GetString(key, culture) ?? key;
++    // Tilning o'z nomi bilan (O'zbekcha, English, Русский): foydalanuvchi o'z tilini tanimasligi mumkin emas.
++    string NativeName(string code) => LayoutResource.ResourceManager.GetString(code, new CultureInfo(code)) ?? code;
++    // O'zbekcha birinchi, keyin ruscha va inglizcha
++    var order = new[] { "uz", "ru", "en" };
++    var languages = (Model.Languages ?? new List<SimpleIdServer.IdServer.Domains.Language>())
++        .OrderBy(l => Array.IndexOf(order, l.Code) is var i && i >= 0 ? i : order.Length).ToList();
+ }
+ 
+ <!DOCTYPE html>
+-<html lang="en">
++<html lang="@culture.TwoLetterISOLanguageName">
+ <head>
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <meta name="color-scheme" content="light" />
++    <title>@T("signin_title") · @T("brand_name")</title>
+     <base href="~/" />
++    <link rel="icon" href="@Url.Content("~/images/favicon.ico")" />
+     <link rel="stylesheet" href="@Url.Content("~/lib/bootstrap/css/bootstrap.css")" />
+     <link rel="stylesheet" href="@Url.Content("~/styles/theme.css")" />
+     <link rel="stylesheet" href="_content/Radzen.Blazor/css/default.css">
+     <link rel="stylesheet" href="_content/SidFormBuilder/style.css" />
+     @RenderSection("Header", required: false)
++    @* Shablon CSS'idan keyin: bank mavzusi uning ustidan yozadi *@
++    <link rel="stylesheet" href="@Url.Content("~/styles/bank-theme.css")" asp-append-version="true" />
+ </head>
+-<body class="orange">
+-    <nav class="navbar navbar-expand-lg bg-primary">
+-        <div class="container-fluid">
+-            <a class="navbar-brand" href="#">
+-                <img src="~/images/SIDLogo.svg" width="40px" />
+-            </a>
+-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+-                <span class="navbar-toggler-icon"></span>
+-            </button>
+-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+-                <div class="me-auto"></div>
+-                <ul class="navbar-nav">
+-                    <li class="nav-item dropdown">
+-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" data-bs-toggle="dropdown">
+-                            @languagesLabel
+-                        </a>
+-                        <div class="dropdown-menu">
+-                            @foreach (var language in Model.Languages)
+-                            {
+-                                <form asp-controller="Home" asp-action="SwitchLanguage" asp-area="" method="post">
+-                                    <input type="hidden" name="culture" value="@language.Code" />
+-                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+-                                    <button type="submit" class="dropdown-item" href="#">@language.Description</button>
+-                                </form>
+-                            }
+-                        </div>
++<body class="bank">
++    <div class="auth-shell">
++        <aside class="auth-brand">
++            <partial name="_BankBrandMark" />
++            <div class="brand-copy">
++                <h1>@T("brand_title")</h1>
++                <p>@T("brand_text")</p>
++                <ul class="brand-features">
++                    <li>
++                        <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg></span>
++                        <div><strong>@T("feat1_title")</strong><span>@T("feat1_text")</span></div>
++                    </li>
++                    <li>
++                        <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg></span>
++                        <div><strong>@T("feat2_title")</strong><span>@T("feat2_text")</span></div>
++                    </li>
++                    <li>
++                        <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h12" /></svg></span>
++                        <div><strong>@T("feat3_title")</strong><span>@T("feat3_text")</span></div>
+                     </li>
+                 </ul>
+             </div>
+-        </div>
+-    </nav>
+-    @RenderBody()
++            <div class="brand-foot">
++                <span>© @DateTime.UtcNow.Year @T("brand_name")</span>
++                <span>@T("footer_legal")</span>
++            </div>
++        </aside>
++
++        <main class="auth-main">
++            <div class="auth-topbar">
++                <div class="compact-brand"><partial name="_BankBrandMark" /></div>
++                @if (!Env.IsProduction())
++                {
++                    <span class="env-badge">@T("env_test")</span>
++                }
++                else
++                {
++                    <span></span>
++                }
++                @if (languages.Count > 1)
++                {
++                    <div class="lang-switch" role="group" aria-label="@T("languages")">
++                        @foreach (var language in languages)
++                        {
++                            <form asp-controller="Home" asp-action="SwitchLanguage" asp-area="" method="post">
++                                <input type="hidden" name="culture" value="@language.Code" />
++                                <input type="hidden" name="returnUrl" value="@returnUrl" />
++                                <button type="submit" class="@(language.Code == culture.TwoLetterISOLanguageName ? "active" : "")" lang="@language.Code">@NativeName(language.Code)</button>
++                            </form>
++                        }
++                    </div>
++                }
++            </div>
++
++            <div class="auth-center">
++                <div class="auth-card">
++                    <h2>@T("signin_title")</h2>
++                    <p class="auth-lead">@T("signin_lead")</p>
++                    @RenderBody()
++                    <div class="auth-help" role="note">
++                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5v.01" /></svg>
++                        <span>@T("help_text")</span>
++                    </div>
++                </div>
++            </div>
++
++            <div class="auth-legal">@T("footer_legal")</div>
++        </main>
++    </div>
++
+     <script src="_framework/blazor.server.js"></script>
+     <script type="text/javascript" src="@Url.Content("~/lib/jquery/jquery.js")"></script>
+     <script type="text/javascript" src="@Url.Content("~/lib/popper.js/umd/popper.js")"></script>
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Startup/wwwroot/styles/theme.css b/src/IdServer/SimpleIdServer.IdServer.Startup/wwwroot/styles/theme.css
+index d47eea7..ddd48f7 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Startup/wwwroot/styles/theme.css
++++ b/src/IdServer/SimpleIdServer.IdServer.Startup/wwwroot/styles/theme.css
+@@ -1,11 +1,11 @@
+ ﻿.orange {
+-    --bs-primary-rgb: 255, 132, 52;
+-    --bs-primary: #ff8434ff;
++    --bs-primary-rgb: 31, 86, 209;
++    --bs-primary: #1f56d1;
+     --sid-separator-bg: #eee;
+ }
+ 
+ body.orange {
+-    background-color: #f3f3f3;
++    background-color: #f6f8fc;
+ }
+ 
+ .orange .navbar-nav {
+@@ -14,18 +14,18 @@ body.orange {
+ }
+ 
+ .orange .btn-primary {
+-    --bs-btn-bg: #ff8434ff;
+-    --bs-btn-active-bg: #ff8434ff;
+-    --bs-btn-disabled-bg: #ff8434ff;
+-    --bs-btn-hover-border-color: #ff8434ff;
+-    --bs-btn-disabled-border-color: #ff8434ff;
+-    --bs-btn-active-border-color: #ff8434ff;
+-    --bs-btn-border-color: #ff8434ff;
+-    --bs-btn-hover-bg: #ee5f00ff;
++    --bs-btn-bg: #1f56d1;
++    --bs-btn-active-bg: #1f56d1;
++    --bs-btn-disabled-bg: #1f56d1;
++    --bs-btn-hover-border-color: #1f56d1;
++    --bs-btn-disabled-border-color: #1f56d1;
++    --bs-btn-active-border-color: #1f56d1;
++    --bs-btn-border-color: #1f56d1;
++    --bs-btn-hover-bg: #1a44a0;
+ }
+ 
+ .orange .dropdown-menu {
+-    --bs-dropdown-link-active-bg: #ff8434ff;
++    --bs-dropdown-link-active-bg: #1f56d1;
+ }
+ 
+ #container {

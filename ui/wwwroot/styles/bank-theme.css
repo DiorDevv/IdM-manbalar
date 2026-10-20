@@ -1,0 +1,261 @@
+/* Bank IdM: neytral ko'k-oq mavzu (login, consent, xato sahifalari).
+   Tashqi shrift yoki CDN yo'q: bank ichki tarmog'ida ham bir xil ko'rinadi. */
+:root {
+    --bk-950: #071633;
+    --bk-900: #0b1f4b;
+    --bk-800: #12306f;
+    --bk-700: #1a44a0;
+    --bk-600: #1f56d1;
+    --bk-500: #2f6bf0;
+    --bk-100: #e6eefe;
+    --bk-50: #f3f7ff;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --surface: #ffffff;
+    --canvas: #f6f8fc;
+    --danger: #b42318;
+    --danger-bg: #fef3f2;
+    --success: #067647;
+    --success-bg: #ecfdf3;
+    --radius: 12px;
+    --radius-sm: 10px;
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px rgba(15, 23, 42, .08);
+    --focus: 0 0 0 4px rgba(47, 107, 240, .18);
+    --font: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Radzen (FormBuilder) va Bootstrap ranglari */
+    --rz-primary: var(--bk-600);
+    --rz-primary-light: var(--bk-500);
+    --rz-primary-lighter: var(--bk-100);
+    --rz-primary-dark: var(--bk-700);
+    --rz-primary-darker: var(--bk-800);
+    --rz-text-font-family: var(--font);
+    --bs-primary: var(--bk-600);
+    --bs-primary-rgb: 31, 86, 209;
+    --bs-body-font-family: var(--font);
+    --bs-link-color: var(--bk-600);
+    --bs-link-hover-color: var(--bk-800);
+}
+
+html, body { height: 100%; }
+body.bank {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--canvas);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Login: ikki ustunli qobiq ---------- */
+.auth-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(380px, 46%) 1fr;
+}
+
+.auth-brand {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    padding: 48px 56px;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(1200px 600px at -10% -20%, rgba(80, 140, 255, .35), transparent 60%),
+        radial-gradient(800px 500px at 120% 110%, rgba(47, 107, 240, .45), transparent 60%),
+        linear-gradient(160deg, var(--bk-900) 0%, var(--bk-800) 55%, var(--bk-700) 100%);
+}
+/* nozik to'r naqshi */
+.auth-brand::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, .9), transparent 85%);
+    pointer-events: none;
+}
+.auth-brand > * { position: relative; }
+
+.brand-mark { display: flex; align-items: center; gap: 12px; }
+.brand-mark .mark {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(255, 255, 255, .12);
+    border: 1px solid rgba(255, 255, 255, .22);
+    backdrop-filter: blur(4px);
+}
+.brand-mark .name { font-size: 18px; font-weight: 700; letter-spacing: .2px; line-height: 1.1; }
+.brand-mark .sub { font-size: 12.5px; color: rgba(255, 255, 255, .7); }
+
+.brand-copy { margin-top: auto; margin-bottom: auto; max-width: 460px; padding: 48px 0; }
+.brand-copy h1 { color: #fff; font-size: clamp(28px, 3vw, 38px); line-height: 1.15; font-weight: 700; letter-spacing: -.5px; margin: 0 0 14px; }
+.brand-copy p { font-size: 16px; line-height: 1.6; color: rgba(255, 255, 255, .78); margin: 0 0 32px; }
+
+.brand-features { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.brand-features li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; color: rgba(255, 255, 255, .9); }
+.brand-features .ico {
+    flex: none; width: 32px; height: 32px; border-radius: 9px;
+    display: grid; place-items: center;
+    background: rgba(255, 255, 255, .1);
+    border: 1px solid rgba(255, 255, 255, .16);
+}
+.brand-features strong { display: block; font-weight: 600; color: #fff; }
+.brand-features span { color: rgba(255, 255, 255, .68); font-size: 13px; }
+
+.brand-foot { font-size: 12.5px; color: rgba(255, 255, 255, .6); display: flex; gap: 16px; flex-wrap: wrap; }
+
+.auth-main {
+    display: flex;
+    flex-direction: column;
+    padding: 28px 40px;
+    background: var(--surface);
+}
+.auth-topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.auth-topbar .compact-brand { display: none; }
+
+.env-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
+    color: #9a6700; background: #fff8e6; border: 1px solid #f5d98a;
+    padding: 4px 10px; border-radius: 999px;
+}
+.env-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #e0a800; }
+
+.lang-switch { display: inline-flex; padding: 3px; background: var(--canvas); border: 1px solid var(--line); border-radius: 10px; }
+.lang-switch form { margin: 0; }
+.lang-switch button {
+    border: 0; background: transparent; cursor: pointer;
+    font: 500 13px var(--font); color: var(--muted);
+    padding: 6px 12px; border-radius: 8px;
+}
+.lang-switch button:hover { color: var(--ink); }
+.lang-switch button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(15, 23, 42, .1); }
+
+.auth-center { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 0; }
+.auth-card { width: 100%; max-width: 400px; }
+.auth-card h2 { font-size: 26px; font-weight: 700; letter-spacing: -.3px; margin: 0 0 6px; color: var(--ink); }
+.auth-card .auth-lead { font-size: 14.5px; color: var(--muted); margin: 0 0 28px; }
+
+.auth-help {
+    margin-top: 24px; padding: 14px 16px;
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--bk-50); border: 1px solid var(--bk-100); border-radius: var(--radius-sm);
+    font-size: 13.5px; color: var(--ink-2); line-height: 1.5;
+}
+.auth-help svg { flex: none; margin-top: 1px; color: var(--bk-600); }
+
+.auth-legal { display: none; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ---------- FormBuilder (Radzen) formasini qayta bezash ---------- */
+.auth-card .form { padding: 0 !important; background: transparent !important; height: auto !important; align-items: stretch !important; }
+.auth-card .form-content { width: 100% !important; box-shadow: none !important; background: transparent !important; border-radius: 0 !important; }
+.auth-card .form-content.view { padding: 0 !important; }
+.auth-card .rz-steps { display: none !important; }          /* bitta qadamli forma: "1 pwd" belgisi kerak emas */
+.auth-card .rz-stack { gap: 0 !important; }
+.auth-card form > .rz-stack { gap: 18px !important; }
+
+.auth-card .rz-form-field { display: flex; flex-direction: column; gap: 7px; margin: 0; position: static; }
+.auth-card .rz-form-field .rz-label,
+.auth-card .rz-floating-label .rz-label {
+    position: static !important; transform: none !important; background: none !important;
+    font: 600 13.5px var(--font) !important; color: var(--ink-2) !important; padding: 0 !important; margin: 0 !important;
+    pointer-events: auto; opacity: 1 !important;
+}
+.auth-card .rz-textbox, .auth-card input[type=password], .auth-card input[type=text], .auth-card input[type=email] {
+    width: 100%; height: 48px; box-sizing: border-box;
+    padding: 0 14px !important;
+    font: 400 15px var(--font) !important; color: var(--ink) !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--line-strong) !important; border-radius: var(--radius-sm) !important;
+    box-shadow: none !important; outline: none !important;
+    transition: border-color .15s, box-shadow .15s;
+}
+.auth-card .rz-textbox:hover { border-color: #94a3b8 !important; }
+.auth-card .rz-textbox:focus, .auth-card input:focus { border-color: var(--bk-500) !important; box-shadow: var(--focus) !important; }
+
+.auth-card input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--bk-600); vertical-align: -3px; margin-right: 8px; cursor: pointer; }
+.auth-card input[type=checkbox] + .rz-label { font: 400 14px var(--font) !important; color: var(--ink-2) !important; cursor: pointer; }
+
+.auth-card form .rz-button {
+    height: 48px; margin-top: 6px;
+    border-radius: var(--radius-sm) !important;
+    background: var(--bk-600) !important; color: #fff !important;
+    font: 600 15px var(--font) !important; letter-spacing: .1px; text-transform: none !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .12), inset 0 1px 0 rgba(255, 255, 255, .12) !important;
+    transition: background .15s, transform .05s;
+}
+.auth-card form .rz-button:hover { background: var(--bk-700) !important; }
+.auth-card form .rz-button:active { transform: translateY(1px); }
+.auth-card form .rz-button:focus-visible { box-shadow: var(--focus) !important; outline: none; }
+
+.auth-card .divider { margin: 18px 0; color: var(--muted); font-size: 12px; }
+.auth-card .divider::before, .auth-card .divider::after { background: var(--line) !important; }
+.auth-card .divider span { padding: 0 12px; }
+.auth-card a { color: var(--bk-600); font-weight: 500; text-decoration: none; font-size: 14px; }
+.auth-card a:hover { text-decoration: underline; }
+
+/* xato va muvaffaqiyat xabarlari (Radzen alert) */
+.auth-card .rz-alert {
+    border-radius: var(--radius-sm) !important; margin: 0 0 18px !important; padding: 12px 14px !important;
+    font: 500 14px var(--font) !important; box-shadow: none !important;
+}
+.auth-card .rz-alert.rz-danger, .auth-card .rz-alert-danger { background: var(--danger-bg) !important; color: var(--danger) !important; border: 1px solid #fecdca !important; }
+.auth-card .rz-alert.rz-success { background: var(--success-bg) !important; color: var(--success) !important; border: 1px solid #abefc6 !important; }
+.auth-card .rz-alert { display: flex !important; align-items: center; gap: 10px; }
+.auth-card .rz-alert .rz-alert-item { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.auth-card .rz-alert .rz-alert-icon { color: inherit !important; font-size: 20px !important; flex: none; }
+.auth-card .rz-alert ul { list-style: none; margin: 0; padding: 0; }
+.auth-card .rz-alert li + li { margin-top: 4px; }
+.auth-card .rz-alert .rz-button {
+    flex: none; width: 30px !important; height: 30px !important; padding: 0 !important; margin: 0 !important;
+    background: transparent !important; color: inherit !important; box-shadow: none !important; border-radius: 8px !important; opacity: .7;
+}
+.auth-card .rz-alert .rz-button:hover { background: rgba(180, 35, 24, .08) !important; opacity: 1; }
+
+/* ---------- Umumiy sahifalar (consent, xato, profil) ---------- */
+.bank-nav {
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.bank-nav .brand-mark .mark { background: var(--bk-600); border-color: var(--bk-600); width: 36px; height: 36px; border-radius: 10px; }
+.bank-nav .brand-mark .name { color: var(--ink); font-size: 16px; }
+.bank-nav .brand-mark .sub { color: var(--muted); }
+
+body.bank .card {
+    border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-card);
+}
+body.bank .card-body { padding: 28px; }
+body.bank h5 { font-weight: 700; font-size: 18px; line-height: 1.4; margin: 6px 0 16px; }
+body.bank .list-group { --bs-list-group-border-color: var(--line); --bs-list-group-border-radius: var(--radius-sm); }
+body.bank .list-group-item { font-size: 14px; color: var(--ink-2); padding: 12px 14px; }
+body.bank .btn { border-radius: var(--radius-sm); font-weight: 600; padding: 11px 16px; }
+body.bank .btn-primary { --bs-btn-bg: var(--bk-600); --bs-btn-border-color: var(--bk-600); --bs-btn-hover-bg: var(--bk-700); --bs-btn-hover-border-color: var(--bk-700); --bs-btn-active-bg: var(--bk-800); }
+body.bank .btn-danger, body.bank .btn-secondary { --bs-btn-bg: #fff; --bs-btn-color: var(--ink-2); --bs-btn-border-color: var(--line-strong); --bs-btn-hover-bg: var(--canvas); --bs-btn-hover-color: var(--ink); --bs-btn-hover-border-color: #94a3b8; }
+body.bank .consentContainer { padding-top: 64px; }
+body.bank .consent { width: 440px; }
+
+/* ---------- Moslashuvchanlik ---------- */
+@media (max-width: 1024px) {
+    .auth-shell { grid-template-columns: 1fr; }
+    .auth-brand { display: none; }
+    .auth-main { padding: 20px 20px 24px; background: var(--canvas); }
+    .auth-topbar .compact-brand { display: flex; }
+    .auth-legal { display: block; }
+    .auth-topbar .compact-brand .mark { background: var(--bk-600); border-color: var(--bk-600); width: 36px; height: 36px; border-radius: 10px; }
+    .auth-topbar .compact-brand .name { color: var(--ink); font-size: 16px; }
+    .auth-topbar .compact-brand .sub { color: var(--muted); }
+    .auth-card { background: var(--surface); padding: 28px 24px; border-radius: 16px; border: 1px solid var(--line); box-shadow: var(--shadow-card); }
+}
+@media (max-width: 480px) {
+    .auth-topbar { flex-wrap: wrap; }
+    .auth-card h2 { font-size: 22px; }
+    body.bank .consent { width: auto; }
+}
+
+/* consent: "Ruxsat berish" brend rangida, "Rad etish" ikkinchi darajali */
+body.bank .btn-success { --bs-btn-bg: var(--bk-600); --bs-btn-border-color: var(--bk-600); --bs-btn-hover-bg: var(--bk-700); --bs-btn-hover-border-color: var(--bk-700); --bs-btn-active-bg: var(--bk-800); --bs-btn-active-border-color: var(--bk-800); }

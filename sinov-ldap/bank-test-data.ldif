@@ -1,0 +1,171 @@
+dn: ou=people,dc=bank,dc=local
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=bank,dc=local
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=a.karimov,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: a.karimov
+cn: Aziz Karimov
+givenName: Aziz
+sn: Karimov
+displayName: Aziz Karimov
+mail: a.karimov@bank.local
+employeeNumber: TAB-10045
+departmentNumber: Kredit bo'limi
+title: Kredit mutaxassisi
+uidNumber: 10001
+gidNumber: 10000
+homeDirectory: /home/a.karimov
+userPassword: Parol123!
+
+dn: uid=d.rahimova,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: d.rahimova
+cn: Dilnoza Rahimova
+givenName: Dilnoza
+sn: Rahimova
+displayName: Dilnoza Rahimova
+mail: d.rahimova@bank.local
+employeeNumber: TAB-10046
+departmentNumber: Kredit bo'limi
+title: Bo'lim boshlig'i
+uidNumber: 10002
+gidNumber: 10000
+homeDirectory: /home/d.rahimova
+userPassword: Parol123!
+
+dn: uid=s.toshmatov,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: s.toshmatov
+cn: Sardor Toshmatov
+givenName: Sardor
+sn: Toshmatov
+displayName: Sardor Toshmatov
+mail: s.toshmatov@bank.local
+employeeNumber: TAB-10047
+departmentNumber: Buxgalteriya
+title: Bosh buxgalter
+uidNumber: 10003
+gidNumber: 10000
+homeDirectory: /home/s.toshmatov
+userPassword: Parol123!
+
+dn: uid=n.yusupova,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: n.yusupova
+cn: Nodira Yusupova
+givenName: Nodira
+sn: Yusupova
+displayName: Nodira Yusupova
+mail: n.yusupova@bank.local
+employeeNumber: TAB-10048
+departmentNumber: Buxgalteriya
+title: Buxgalter
+uidNumber: 10004
+gidNumber: 10000
+homeDirectory: /home/n.yusupova
+userPassword: Parol123!
+
+dn: uid=j.aliyev,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: j.aliyev
+cn: Jasur Aliyev
+givenName: Jasur
+sn: Aliyev
+displayName: Jasur Aliyev
+mail: j.aliyev@bank.local
+employeeNumber: TAB-10049
+departmentNumber: IT departamenti
+title: Tizim administratori
+uidNumber: 10005
+gidNumber: 10000
+homeDirectory: /home/j.aliyev
+userPassword: Parol123!
+
+dn: uid=m.qodirov,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: m.qodirov
+cn: Murod Qodirov
+givenName: Murod
+sn: Qodirov
+displayName: Murod Qodirov
+mail: m.qodirov@bank.local
+employeeNumber: TAB-10050
+departmentNumber: IT departamenti
+title: Dasturchi
+uidNumber: 10006
+gidNumber: 10000
+homeDirectory: /home/m.qodirov
+userPassword: Parol123!
+
+dn: uid=z.ergasheva,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: z.ergasheva
+cn: Zarina Ergasheva
+givenName: Zarina
+sn: Ergasheva
+displayName: Zarina Ergasheva
+mail: z.ergasheva@bank.local
+employeeNumber: TAB-10051
+departmentNumber: Operatsion bo'lim
+title: Operator
+uidNumber: 10007
+gidNumber: 10000
+homeDirectory: /home/z.ergasheva
+userPassword: Parol123!
+
+dn: uid=b.xolmatov,ou=people,dc=bank,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: b.xolmatov
+cn: Bekzod Xolmatov
+givenName: Bekzod
+sn: Xolmatov
+displayName: Bekzod Xolmatov
+mail: b.xolmatov@bank.local
+employeeNumber: TAB-10052
+departmentNumber: Axborot xavfsizligi
+title: AX mutaxassisi
+uidNumber: 10008
+gidNumber: 10000
+homeDirectory: /home/b.xolmatov
+userPassword: Parol123!
+
+dn: cn=kredit-bolimi,ou=groups,dc=bank,dc=local
+objectClass: posixGroup
+cn: kredit-bolimi
+gidNumber: 20001
+memberUid: a.karimov
+memberUid: d.rahimova
+
+dn: cn=buxgalteriya,ou=groups,dc=bank,dc=local
+objectClass: posixGroup
+cn: buxgalteriya
+gidNumber: 20002
+memberUid: s.toshmatov
+memberUid: n.yusupova
+
+dn: cn=it-adminlar,ou=groups,dc=bank,dc=local
+objectClass: posixGroup
+cn: it-adminlar
+gidNumber: 20003
+memberUid: j.aliyev
+
+dn: cn=abs-operatorlar,ou=groups,dc=bank,dc=local
+objectClass: posixGroup
+cn: abs-operatorlar
+gidNumber: 20004
+memberUid: z.ergasheva
+memberUid: a.karimov
+memberUid: n.yusupova
