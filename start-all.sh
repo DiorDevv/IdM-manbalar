@@ -92,6 +92,13 @@ wait_url idserver https://localhost:5001/master/.well-known/openid-configuration
 # Login sahifasi: o'zbek tili, bank uchun keraksiz elementlar (faqat PostgreSQL: INMEMORY'da baza har safar yangi)
 if [ -n "${StorageConfiguration__Type:-}" ]; then
   "$HERE/ui/apply-ui.sh" | sed 's/^/   /'; rc=${PIPESTATUS[0]}
+  # Standart parol va demo ma'lumotlar (bootstrap/secure-defaults.sh): admin panel ilovasi siri .secrets/idserver.env da
+  "$HERE/bootstrap/secure-defaults.sh" | sed 's/^/   /'; sec_rc=${PIPESTATUS[0]}
+  # yangi sir faqat muvaffaqiyatli almashtirilgandan keyin ishlatiladi (aks holda admin panel va sync eski sir bilan qoladi)
+  if [ "$sec_rc" = 0 ] || [ "$sec_rc" = 10 ]; then . "$HERE/.secrets/idserver.env"; export IDS_MANAGER_SECRET; fi
+  if [ "$sec_rc" = 10 ] && [ -f "$RUN/website.pid" ] && kill -0 "$(cat "$RUN/website.pid")" 2>/dev/null; then
+    kill -- "-$(cat "$RUN/website.pid")" 2>/dev/null; rm -f "$RUN/website.pid"; sleep 1   # yangi sir bilan qayta ishga tushadi
+  fi
   if [ "$rc" = 10 ]; then   # tillar IdServer ishga tushganda o'qiladi
     kill -- "-$(cat "$RUN/idserver.pid")" 2>/dev/null; rm -f "$RUN/idserver.pid"; sleep 2
     start idserver "$SID/IdServer/SimpleIdServer.IdServer.Startup" ""
@@ -104,7 +111,7 @@ if [ "${StorageConfiguration__Type:-INMEMORY}" != POSTGRE ] && [ $idserver_was_r
   kill -- "-$(cat "$RUN/website.pid")" 2>/dev/null; rm -f "$RUN/website.pid"; sleep 1
   echo "   to'xtatildi: website (IdServer yangilangani uchun qayta ishga tushadi)"
 fi
-start website         "$SID/IdServer/SimpleIdServer.IdServer.Website.Startup" "--launch-profile SimpleIdServer.IdServer.Website.Startup"
+ClientSecret="${IDS_MANAGER_SECRET:-password}" start website "$SID/IdServer/SimpleIdServer.IdServer.Website.Startup" "--launch-profile SimpleIdServer.IdServer.Website.Startup"
 start scim-sid        "$SID/Scim/SimpleIdServer.Scim.Startup"                 ""
 start scim-reference  "$SRC/01-provisioning-va-scim/SCIMReferenceCode/Microsoft.SCIM.WebHostSample" "--no-launch-profile --urls http://localhost:6001"
 start authpermissions "$P5/AuthPermissions.AspNetCore/Example1.RazorPages.IndividualAccounts" "--no-launch-profile --project Example1.RazorPages.IndividualAccounts.csproj --urls http://localhost:6002"
@@ -147,7 +154,7 @@ fi
 cat <<'EOF'
 
 == Brauzerda oching (sertifikat ogohlantirishini qabul qiling)
-   Admin panel:       https://localhost:5002/master/users     administrator / password
+   Admin panel:       https://localhost:5002/master/users     administrator / .secrets/idserver.env (IDS_ADMIN_PASSWORD)
    IdServer login:    https://localhost:5001/master
    AuthPermissions:   http://localhost:6002                   Super@g1.com / Super@g1.com
    SelfService:       https://localhost:6014

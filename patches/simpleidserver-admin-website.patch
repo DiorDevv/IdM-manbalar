@@ -26,18 +26,21 @@ index ba74cd6..69c22a0 100644
      <script src="_framework/blazor.web.js"></script>
      <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
-index fc7e105..86c01c9 100644
+index fc7e105..72d82ef 100644
 --- a/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
 +++ b/src/IdServer/SimpleIdServer.IdServer.Website.Startup/Program.cs
-@@ -13,6 +13,7 @@ var idserverAdminConfiguration = builder.Configuration.Get<IdentityServerAdminCo
+@@ -13,6 +13,10 @@ var idserverAdminConfiguration = builder.Configuration.Get<IdentityServerAdminCo
  var adminBuilder = builder.AddIdserverAdmin(idserverAdminConfiguration.IdserverBaseUrl, o =>
  {
      o.ScimUrl = idserverAdminConfiguration.ScimBaseUrl;
 +    o.DefaultLanguage = builder.Configuration["DefaultLanguage"] ?? o.DefaultLanguage;
++    // OpenID federatsiyasi va boshqa IdP'lardan ko'chirish bank uchun kerak emas: yoqish uchun AdminFeatures__FederationEntities=true
++    o.Features.IsFederationEntitiesEnabled = bool.TryParse(builder.Configuration["AdminFeatures:FederationEntities"], out var federation) && federation;
++    o.Features.IsMigrationsEnabled = bool.TryParse(builder.Configuration["AdminFeatures:Migrations"], out var migrations) && migrations;
  }).EnableOpenTelemetry(c =>
  {
      if(idserverAdminConfiguration.OpenTelemetryOptions == null)
-@@ -51,6 +52,9 @@ if (idserverAdminConfiguration.ForceHttps)
+@@ -51,6 +55,9 @@ if (idserverAdminConfiguration.ForceHttps)
  }
  
  adminBuilder.UpdateOpenid(idserverAdminConfiguration.ClientId, idserverAdminConfiguration.ClientSecret, idserverAdminConfiguration.Scopes, idserverAdminConfiguration.IgnoreCertificateError);
@@ -261,6 +264,23 @@ index 4b018fb..bcbd951 100644
              <!-- OpenID Connect -->
              <div class="row">
                  <div class="col-2">
+diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/User.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/User.razor
+index 9b1ebd3..557557a 100644
+--- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/User.razor
++++ b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/User.razor
+@@ -28,8 +28,10 @@
+             @if (userState.Value.User != null)
+             {
+                 <RadzenStack Orientation="Orientation.Horizontal">
+-                    <RadzenSwitch Value=@(userState.Value.User.Status == UserStatus.ACTIVATED) ValueChanged="ToggleUser" />
+-                    <RadzenBadge BadgeStyle=@(userState.Value.User.Status == UserStatus.ACTIVATED ? BadgeStyle.Success : BadgeStyle.Danger) Text=@(userState.Value.User.Status == UserStatus.ACTIVATED ? Global.Active : Global.Blocked)></RadzenBadge>
++                    @* A block whose UnblockDateTime is in the past is no longer effective (User.IsBlocked): show the user as active. *@
++                    @{ var isActive = userState.Value.User.Status == UserStatus.ACTIVATED || (userState.Value.User.UnblockDateTime != null && userState.Value.User.UnblockDateTime < DateTime.UtcNow); }
++                    <RadzenSwitch Value=@isActive ValueChanged="ToggleUser" />
++                    <RadzenBadge BadgeStyle=@(isActive ? BadgeStyle.Success : BadgeStyle.Danger) Text=@(isActive ? Global.Active : Global.Blocked)></RadzenBadge>
+                     @if(userState.Value.User.ActivePassword != null)
+                     {
+                         <RadzenSwitch Value=@(userState.Value.User.ActivePassword.IsTemporary) ValueChanged="ToggleTemporaryPassword" />
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor
 index a1dbb45..bf7d0dc 100644
 --- a/src/IdServer/SimpleIdServer.IdServer.Website/Pages/User/UserSettings.razor
@@ -275,7 +295,7 @@ index a1dbb45..bf7d0dc 100644
      <!-- First name -->
      <div>
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
-index 42be56a..b456e8b 100644
+index 42be56a..7b5b2bd 100644
 --- a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
 +++ b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.resx
 @@ -1690,7 +1690,7 @@ The &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; will be set to &lt;b&gt
@@ -287,21 +307,25 @@ index 42be56a..b456e8b 100644
    </data>
    <data name="SignatureKey" xml:space="preserve">
      <value>Signature Key</value>
-@@ -2226,4 +2226,7 @@ The &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; will be set to &lt;b&gt
+@@ -2226,4 +2226,11 @@ The &lt;b&gt;authorization_signed_response_alg&lt;/b&gt; will be set to &lt;b&gt
    <data name="Middlename" xml:space="preserve">
      <value>Middlename</value>
    </data>
 +  <data name="LogoutSettings" xml:space="preserve"><value>Logout settings</value></data>
 +  <data name="OpenIdConfiguration" xml:space="preserve"><value>OpenID configuration</value></data>
 +  <data name="CredentialType" xml:space="preserve"><value>Credential type</value></data>
++  <data name="NavIdentities" xml:space="preserve"><value>Identities</value></data>
++  <data name="NavAccess" xml:space="preserve"><value>Applications &amp; access</value></data>
++  <data name="NavSources" xml:space="preserve"><value>Sources</value></data>
++  <data name="NavMonitoring" xml:space="preserve"><value>Monitoring</value></data>
  </root>
 \ No newline at end of file
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx
 new file mode 100644
-index 0000000..73c55d8
+index 0000000..06378dd
 --- /dev/null
 +++ b/src/IdServer/SimpleIdServer.IdServer.Website/Resources/Global.uz.resx
-@@ -0,0 +1,711 @@
+@@ -0,0 +1,715 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<root>
 +  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
@@ -1012,6 +1036,10 @@ index 0000000..73c55d8
 +  <data name="LogoutSettings" xml:space="preserve"><value>Chiqish sozlamalari</value></data>
 +  <data name="OpenIdConfiguration" xml:space="preserve"><value>OpenID sozlamalari</value></data>
 +  <data name="CredentialType" xml:space="preserve"><value>Hisob ma'lumoti turi</value></data>
++  <data name="NavIdentities" xml:space="preserve"><value>Foydalanuvchilar</value></data>
++  <data name="NavAccess" xml:space="preserve"><value>Ilovalar va kirish</value></data>
++  <data name="NavSources" xml:space="preserve"><value>Manbalar</value></data>
++  <data name="NavMonitoring" xml:space="preserve"><value>Monitoring</value></data>
 +</root>
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs b/src/IdServer/SimpleIdServer.IdServer.Website/ServiceCollectionExtensions.cs
 index 8b76d9c..51e1602 100644
@@ -1100,7 +1128,7 @@ index a619026..1db7d3b 100644
              <div class="ml-auto"></div>
              <div class="p-2">
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
-index d75632c..1199c30 100644
+index d75632c..5e14747 100644
 --- a/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
 +++ b/src/IdServer/SimpleIdServer.IdServer.Website/Shared/MainLayout.razor
 @@ -33,17 +33,21 @@
@@ -1133,7 +1161,7 @@ index d75632c..1199c30 100644
                  @if(!languagesState.Value.IsLoading)
                  {
                      <RadzenDropDown Name="UserPropertyName" Class="w-100"
-@@ -53,30 +57,30 @@
+@@ -53,38 +57,34 @@
                                      TextProperty="Description" ValueProperty="Code" />
                  }
              </div>
@@ -1147,30 +1175,48 @@ index d75632c..1199c30 100644
              <RadzenPanelMenu>
 -                <RadzenPanelMenuItem Text=@(string.Format(Global.ActiveRealm, activeRealm)) Path="@(urlHelper.GetUrl("/realm/overview"))" />
 -                <RadzenPanelMenuItem Text="@Global.Manage" />
++                @* IdM tartibi: avval odamlar, keyin ilovalar va kirish, manbalar, monitoring.
++                   Bank uchun keraksiz bo'limlar (federatsiya, migratsiya, sertifikat markazlari, o'zini ro'yxatdan
++                   o'tkazish jarayonlari) menyudan olib tashlangan; sahifalar manzil orqali admin uchun ochiq qoladi. *@
 +                <RadzenPanelMenuItem class="bk-nav-realm" Icon="domain" Text=@(string.Format(Global.ActiveRealm, activeRealm)) Path="@(urlHelper.GetUrl("/realm/overview"))" />
-+                <RadzenPanelMenuItem class="bk-nav-section" Text="@Global.Manage" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@(Global.ResourceManager.GetString("NavIdentities"))" />
++                <RadzenPanelMenuItem Text="@Global.Users" Icon="person" Path="@(urlHelper.GetUrl("/users"))" />
++                <RadzenPanelMenuItem Text="@Global.Groups" Icon="group" Path="@(urlHelper.GetUrl("/groups"))" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@(Global.ResourceManager.GetString("NavAccess"))" />
                  <RadzenPanelMenuItem Text="@Global.Clients" Icon="apps" Path="@(urlHelper.GetUrl("/clients"))" />
-                 <RadzenPanelMenuItem Text="@Global.Scopes" Icon="visibility" Path="@(urlHelper.GetUrl("/scopes"))" />
+-                <RadzenPanelMenuItem Text="@Global.Scopes" Icon="visibility" Path="@(urlHelper.GetUrl("/scopes"))" />
 -                <RadzenPanelMenuItem Text="@Global.UserMgt">
-+                <RadzenPanelMenuItem Text="@Global.UserMgt" Icon="manage_accounts">
-                     <RadzenPanelMenuItem Text="@Global.Users" Icon="person" Path="@(urlHelper.GetUrl("/users"))" />
-                     <RadzenPanelMenuItem Text="@Global.Groups" Icon="group" Path="@(urlHelper.GetUrl("/groups"))" />
-                 </RadzenPanelMenuItem>
+-                    <RadzenPanelMenuItem Text="@Global.Users" Icon="person" Path="@(urlHelper.GetUrl("/users"))" />
+-                    <RadzenPanelMenuItem Text="@Global.Groups" Icon="group" Path="@(urlHelper.GetUrl("/groups"))" />
+-                </RadzenPanelMenuItem>
 -                <RadzenPanelMenuItem Text="@Global.Authentication">
-+                <RadzenPanelMenuItem Text="@Global.Authentication" Icon="lock">
-                     <RadzenPanelMenuItem Text="@Global.AuthenticationContext" Icon="security" Path="@(urlHelper.GetUrl("/acrs/workflows"))" />
-                     <RadzenPanelMenuItem Text="@Global.Authentication" Icon="person" Path="@(urlHelper.GetUrl("/authentications/authmethods"))" />
-                 </RadzenPanelMenuItem>
+-                    <RadzenPanelMenuItem Text="@Global.AuthenticationContext" Icon="security" Path="@(urlHelper.GetUrl("/acrs/workflows"))" />
+-                    <RadzenPanelMenuItem Text="@Global.Authentication" Icon="person" Path="@(urlHelper.GetUrl("/authentications/authmethods"))" />
+-                </RadzenPanelMenuItem>
 -                <RadzenPanelMenuItem Text="@Global.IdentityProvisioning">
-+                <RadzenPanelMenuItem Text="@Global.IdentityProvisioning" Icon="sync_alt">
-                     <RadzenPanelMenuItem Text="@Global.ManualIdentityProvisioning" Icon="back_hand" Path="@(urlHelper.GetUrl("/registrations/workflows"))"></RadzenPanelMenuItem>
-                     <RadzenPanelMenuItem Text="@Global.AutomaticIdentityProvisioning" Icon="refresh" Path="@(urlHelper.GetUrl("/identityprovisioning"))" />
-                 </RadzenPanelMenuItem>
+-                    <RadzenPanelMenuItem Text="@Global.ManualIdentityProvisioning" Icon="back_hand" Path="@(urlHelper.GetUrl("/registrations/workflows"))"></RadzenPanelMenuItem>
+-                    <RadzenPanelMenuItem Text="@Global.AutomaticIdentityProvisioning" Icon="refresh" Path="@(urlHelper.GetUrl("/identityprovisioning"))" />
+-                </RadzenPanelMenuItem>
 -                <RadzenPanelMenuItem Text="@Global.Configure" />
-+                <RadzenPanelMenuItem class="bk-nav-section" Text="@Global.Configure" />
-                 <RadzenPanelMenuItem Text="@Global.CertificateAuthoritiesTitle" Icon="shield" Path="@(urlHelper.GetUrl("/certificateauthorities"))" />
+-                <RadzenPanelMenuItem Text="@Global.CertificateAuthoritiesTitle" Icon="shield" Path="@(urlHelper.GetUrl("/certificateauthorities"))" />
++                <RadzenPanelMenuItem Text="@Global.Scopes" Icon="key" Path="@(urlHelper.GetUrl("/scopes"))" />
++                <RadzenPanelMenuItem Text="@Global.AuthenticationMethods" Icon="lock" Path="@(urlHelper.GetUrl("/authentications/authmethods"))" />
++                <RadzenPanelMenuItem Text="@Global.AcrsTitle" Icon="security" Path="@(urlHelper.GetUrl("/acrs/workflows"))" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@(Global.ResourceManager.GetString("NavSources"))" />
++                <RadzenPanelMenuItem Text="@Global.AutomaticIdentityProvisioning" Icon="sync_alt" Path="@(urlHelper.GetUrl("/identityprovisioning"))" />
++                <RadzenPanelMenuItem class="bk-nav-section" Text="@(Global.ResourceManager.GetString("NavMonitoring"))" />
++                <RadzenPanelMenuItem Text="@Global.Auditing" Icon="fact_check" Path="@(urlHelper.GetUrl("/auditing"))" />
++                <RadzenPanelMenuItem Text="@Global.RecurringJobs" Icon="schedule" Path="@(urlHelper.GetUrl("/recurringjobs/list"))" />
                  @if(options.Value.Features.IsFederationEntitiesEnabled)
                  {
+                     <RadzenPanelMenuItem Text="@Global.FederationEntitiesTitle" Icon="anchor" Path="@(urlHelper.GetUrl("/federationentities"))" />
+                 }
+-
+-                <RadzenPanelMenuItem Text="@Global.Auditing" Icon="source" Path="@(urlHelper.GetUrl("/auditing"))" />
+-                <RadzenPanelMenuItem Text="@Global.RecurringJobs" Icon="schedule" Path="@(urlHelper.GetUrl("/recurringjobs/list"))" />
+                 @if(options.Value.Features.IsMigrationsEnabled)
+                 {
+                     <RadzenPanelMenuItem Text="@Global.Migrations" Icon="upgrade" Path="@(urlHelper.GetUrl("/migrations"))" />
 diff --git a/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs b/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs
 index 5fb0aaf..796ef99 100644
 --- a/src/IdServer/SimpleIdServer.IdServer.Website/WebsiteHttpClientFactory.cs

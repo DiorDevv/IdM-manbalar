@@ -1,88 +1,120 @@
-# Bank IdM: hozirgi daraja va yo'l xaritasi
+# Bank IdM: reja
 
-Holat sanasi: 2026-10-19.
+Yangilangan: 2026-10-20.
 
-## Hozirgi daraja: sinov stendi (PoC)
+## 1. IdM tizimi nimalar qila olishi kerak
 
-Hozir bor narsa:
+Zamonaviy IdM (IGA) tizimlarida (SailPoint, Saviynt, Omada, ochiq kodli midPoint) asosan bir xil vazifalar bor.
+O'ng ustunda bizning holatimiz.
 
-| Qism | Holat |
-|---|---|
-| SSO (OpenID Connect) va admin panel | SimpleIdServer ishlaydi, PostgreSQL'da saqlanadi |
-| LDAP'dan o'qish (sinov `dc=bank,dc=local`) | 8 xodim, 4 guruh. Delta sinxronlash ishlaydi |
-| SCIM server | Alohida ishlaydi, IdM oqimiga ulanmagan |
-| Rol/ruxsat, ariza portali, AD parol portali | Namuna sifatida alohida ishlaydi (AuthPermissions, CustomApproval, SelfService), bir-biriga ulanmagan |
+| # | Vazifa | Nima degani | Bizda |
+|---|---|---|---|
+| 1 | **Haqiqat manbai (HR)** | Xodim ma'lumoti kadrlar tizimidan keladi, IdM o'zi xodim "o'ylab topmaydi" | ❌ |
+| 2 | **Hayot sikli (JML)** | Ishga kirdi → akkauntlar ochiladi; lavozim o'zgardi → ruxsatlar almashadi; ketdi → hammasi yopiladi | ⚠️ faqat AD'dan o'qish va bloklash |
+| 3 | **Korrelyatsiya** | HR'dagi xodim ↔ AD, ABS va boshqa tizimlardagi akkauntlari. "Egasiz" akkauntlarni topish | ❌ |
+| 4 | **Provisioning (yozish)** | Tizimlarda akkaunt yaratish, bloklash, guruh va rol berish (AD, ABS, pochta…) | ❌ faqat o'qish |
+| 5 | **Rol modeli (RBAC)** | Lavozim va bo'limga qarab avtomatik ruxsatlar; rol → tizim ruxsatlari | ❌ |
+| 6 | **SoD siyosati** | Bir odamda ziddiyatli ruxsatlar bo'lmasligi (kredit beradi va o'zi tasdiqlaydi) | ❌ |
+| 7 | **Ariza va tasdiqlash** | Xodim ruxsat so'raydi → rahbar → resurs egasi → avtomatik beriladi | ❌ |
+| 8 | **Attestatsiya** | Har chorakda rahbar xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi | ❌ |
+| 9 | **Audit va hisobotlar** | Kim, nimaga, qachondan, kim bergan; regulyator (Markaziy bank) uchun hisobotlar | ⚠️ faqat SSO jurnali |
+| 10 | **SSO va MFA** | Bitta login bilan barcha ilovalar, ikki bosqichli tasdiqlash | ✅ SSO, ❌ MFA |
+| 11 | **Parol xizmatlari** | Parolni o'zi tiklash, parol siyosati | ❌ |
+| 12 | **Imtiyozli akkauntlar (PAM)** | Adminlar, xizmat akkauntlari nazorati | ❌ (odatda alohida mahsulot) |
 
-IdM'ning asosiy vazifalari hali yo'q:
+**Xulosa:** hozir bizda "AD'ga ulangan SSO va xodimlar ro'yxati" bor. Bu 10-band va 2-bandning bir qismi.
+IdM'ning asosiy qiymati (1, 3, 4, 5, 7, 8, 9-bandlar) hali yo'q.
 
-- Xodimning hayot sikli: ishga kirish, lavozim o'zgarishi, ishdan ketish (Joiner/Mover/Leaver).
-- HR tizimining "haqiqat manbai" (authoritative source) sifatida ulanishi.
-- Maqsadli tizimlarga yozish: AD'da akkaunt yaratish yoki bloklash, ABS va boshqa tizimlar.
-- Rol modeli (lavozim + bo'lim → rollar) va SoD (vazifalar ziddiyati) qoidalari.
-- Ruxsat so'rash va tasdiqlash jarayoni.
-- Davriy qayta tasdiqlash (attestatsiya) va hisobotlar.
-- Bank darajasidagi xavfsizlik va ishonchlilik.
+## 2. Asosiy tavsiya: o'z IdM yadrosi va portali
 
-## Yo'l xaritasi
+SimpleIdServer admin paneli — **SSO serverining texnik paneli** (ilovalar, tokenlar, autentifikatsiya sozlamalari).
+U IdM paneli emas: unda xodimning tizimlardagi akkauntlari, rollar, arizalar, attestatsiya yo'q. Uni bezash bilan IdM bo'lmaydi.
 
-Har bir bosqich oldingisiga tayanadi. Bajarilganda `[x]` qo'yiladi.
+Shuning uchun:
 
-### 0. Barqarorlashtirish (bajarildi, 2026-10-19)
-- [x] Restartdan keyin login 404 bermaydi.
-- [x] PostgreSQL: ma'lumotlar va kalitlar restartda saqlanadi.
-- [x] LDAP: takroriy guruh xatosi tuzatildi, delta sinxronlash ishlaydi, `memberOf` bir nechta guruh bilan ishlaydi.
-- [x] Admin panel token muddati o'tganda o'zi yangilaydi. EF Core/linq2db versiya ziddiyati tuzatildi.
+| Qatlam | Nima | Kim uchun |
+|---|---|---|
+| **SSO** | SimpleIdServer (bor, sozlangan) | Barcha xodimlar uchun login |
+| **SSO texnik paneli** | SimpleIdServer admin (tozalanadi, kam ishlatiladi) | Faqat IT administrator |
+| **IdM yadrosi** (yangi) | C#, ASP.NET Core, PostgreSQL: xodimlar, akkauntlar, rollar, arizalar, audit, konnektorlar | — |
+| **IdM portali** (yangi) | Zamonaviy veb-interfeys, o'zbekcha, SSO orqali kiriladi | Xodim, rahbar, resurs egasi, IdM administratori, auditor |
 
-### 1. AD'dan o'qishni to'liq qilish (faqat o'qish), 2026-10-19
-- [x] Sinxronlash jadval bo'yicha (standart har 15 daqiqa), import va deprovisioning avtomatik.
-- [x] Deprovisioning: o'chirilgan yoki bloklangan xodim IdM'da bloklanadi, SSO sessiyalari bekor qilinadi, 20% xavfsizlik chegarasi.
-- [x] Guruh a'zoligi o'zgarishi: qo'shilgan va olib tashlangan a'zoliklar sinxronlanadi.
-- [x] Admin paneliga faqat admin roli bilan kirish (sinov paytida topilgan xavfsizlik teshigi).
-- [x] Sinov AD (Samba AD DC, Docker): LDAPS, xizmat akkaunti, `objectGUID`, `whenChanged`, `memberOf`, `userAccountControl`.
-  Barcha ssenariylar AD'da qayta sinaldi, AD paroli bilan login ishlaydi, qayta ishga olish hal qilindi. 6 ta yangi xato tuzatildi.
-- [ ] Bankning haqiqiy sinov AD'si: CA sertifikati, xizmat akkaunti, OU tuzilmasi bankdan olinadi (kodda o'zgarish kutilmaydi).
-  Katta guruhlar uchun `member;range=` va bir nechta DC (failover) hali sinalmagan.
-- [ ] Ochiq savollar: deprovisioning jurnali admin paneldagi Auditing'da ko'rinmaydi (hozircha faqat log);
-  provisioning tarixi (`IdentityProvisioningHistory`) har sync'da o'sadi, tozalash siyosati kerak.
+**Qaror (2026-10-20):** IdM yadrosi — o'zimizning C# (ASP.NET Core + PostgreSQL); portal — React + TypeScript
+(backend bilan REST API orqali). midPoint ishlatilmaydi.
 
-### Login sahifasi (2026-10-20)
-- [x] Zamonaviy ko'k-oq dizayn, mobil ko'rinish, o'zbek tili (standart) va ingliz tili; consent va xato sahifalari ham.
-- [x] Xavfsizlik: o'zini o'zi ro'yxatdan o'tkazish yopildi, demo Facebook/Google olib tashlandi, login mavjudligi oshkor qilinmaydi.
-- [x] Admin panel ko'k-oq professional mavzuda (shapka, menyu, jadvallar, formalar, belgilar).
-- [x] Admin panelning o'zbekcha tarjimasi (704 ta matn + koddagi qattiq yozilgan sarlavhalar), standart til o'zbekcha.
-- [ ] Rus tili (bank xodimlari uchun kerak bo'lsa). Audit yozuvlari va vazifa holatlari serverdan inglizcha keladi.
+Bugungi ish bekor ketmaydi: AD sozlamalari, sinov AD, PostgreSQL, SSO, login sahifasi, dizayn tizimi
+(ko'k-oq mavzu) va topilgan xatolar yangi qismlarda ham ishlatiladi.
 
-### 2. HR'ni haqiqat manbai qilish
-- [ ] HR tizimidan (kadrlar bazasi) xodimlarni tabel raqami bo'yicha import qilish.
-- [ ] HR ↔ AD moslashtirish (korrelyatsiya), mos kelmaganlar hisoboti (masalan "egasiz" akkauntlar).
-- [ ] JML hodisalari: HR'dagi o'zgarish IdM'da hodisa hosil qiladi.
+## 3. Ketma-ket ish rejasi
 
-### 3. Rol modeli
-- [ ] Biznes rollari: lavozim va bo'lim bo'yicha avtomatik beriladigan rollar.
-- [ ] Rol → tizim ruxsatlari (AD guruhlari, ABS rollari).
-- [ ] SoD qoidalari (masalan "kredit beruvchi" va "kreditni tasdiqlovchi" bitta odamda bo'lmasin).
+Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni bor. Bosqichlar shu tartibda bajariladi.
 
-### 4. Ariza va tasdiqlash portali
-- [ ] Xodim qo'shimcha ruxsat so'raydi, keyin rahbar va resurs egasi tasdiqlaydi.
-- [ ] Har bir qadam auditga yoziladi. Workflow dvigateli tanlanadi (Elsa yoki o'zimiz).
+### A. Tozalash va tartib (1–2 kun)
+- [x] Admin menyusi qayta tuzildi: Foydalanuvchilar / Ilovalar va kirish / Manbalar / Monitoring. Noto'g'ri nomlangan
+  "Qo'lda provisioning" va takroriy "Autentifikatsiya" tuzatildi; Federatsiya, Migratsiya, Sertifikat markazlari yashirildi.
+- [x] Demo ma'lumotlar o'chirildi (7 ta demo ilova, `administrator-ro`, 2 guruh, SCIM provisioning); `administrator` paroli va
+  `SIDS-manager` siri tasodifiy qiymatga almashtirildi (`bootstrap/secure-defaults.sh`, `.secrets/idserver.env`).
+- [x] Bloklash muddati o'tgan foydalanuvchi endi "Faol" ko'rinadi.
+- **Tayyor:** admin panelda faqat bank uchun kerakli bo'limlar, hammasi to'g'ri nomlangan.
 
-### 5. Maqsadli tizimlarga yozish (provisioning)
-- [ ] Konnektor interfeysi: har bir tizim alohida modul.
+### B. IdM yadrosi poydevori (1 hafta)
+- [ ] Yangi yechim `idm/`: ASP.NET Core (.NET 10) Web API, EF Core + PostgreSQL (alohida baza `idm`), OpenAPI.
+- [ ] Ma'lumot modeli: Xodim (Identity), Tizim (Application), Akkaunt, Rol, Ruxsat (Entitlement), Ariza, Tasdiq, Audit hodisasi.
+- [ ] Portalga kirish SSO (OIDC) orqali, rollar: xodim, rahbar, IdM-admin, auditor.
+- [ ] Audit jurnali birinchi kundan: har bir o'zgarish o'chirilmaydigan jurnalga yoziladi.
+- [ ] Testlar va CI (build + test har commit'da).
+- **Tayyor:** API ishlaydi, SSO bilan kiriladi, bo'sh portal ochiladi.
+
+### C. AD konnektori va xodimlar ro'yxati (1 hafta)
+- [ ] Konnektor interfeysi (har bir tizim alohida modul): `Read`, keyin `Create/Disable/AddToGroup`.
+- [ ] AD konnektori (o'qish): bugungi sozlamalar asosida (LDAPS, `objectGUID`, `whenChanged`, `memberOf`, bloklash filtri).
+- [ ] Portal: **Bosh sahifa** (xodimlar soni, bloklanganlar, oxirgi sinxronlash, xatolar), **Xodimlar** ro'yxati va kartochkasi
+  (ma'lumotlar, guruhlar, tizimlardagi akkauntlar, tarix).
+- **Tayyor:** portalda AD xodimlari va guruhlari ko'rinadi, kartochkada barcha ma'lumot bor.
+
+### D. HR manbai va korrelyatsiya (1–2 hafta)
+- [ ] HR importi: avval CSV/Excel yoki HR bazasidan ko'rinish (view), tabel raqami bo'yicha.
+- [ ] Korrelyatsiya qoidalari: HR xodim ↔ AD akkaunt (`employeeNumber`), mos kelmaganlar ro'yxati (egasiz akkauntlar, akkauntsiz xodimlar).
+- [ ] JML hodisalari: ishga kirish, lavozim o'zgarishi, ketish — portalda hodisalar lentasi.
+- **Tayyor:** "egasiz akkauntlar" hisoboti, ishdan ketgan xodimning hamma akkauntlari bir joyda ko'rinadi.
+
+### E. Rollar va SoD (1–2 hafta)
+- [ ] Rollar katalogi: biznes roli → tizim ruxsatlari (AD guruhlari, keyin ABS rollari).
+- [ ] Avtomatik ("tug'ma") rollar: lavozim + bo'lim → rollar.
+- [ ] SoD qoidalari va buzilishlar hisoboti.
+- **Tayyor:** har bir xodim uchun "bo'lishi kerak" va "haqiqatda bor" ruxsatlar farqi ko'rinadi.
+
+### F. Ariza va tasdiqlash (1–2 hafta)
+- [ ] Xodim katalogdan rol so'raydi → rahbar → resurs egasi tasdiqlaydi; muddat va eslatmalar.
+- [ ] SoD tekshiruvi ariza paytida.
+- **Tayyor:** ariza boshidan oxirigacha portalda o'tadi, har qadam auditda.
+
+### G. AD'ga yozish (1–2 hafta)
 - [ ] AD konnektori: akkaunt yaratish, bloklash, guruhga qo'shish va olib tashlash.
-- [ ] Navbat, qayta urinish, xatolar jurnali. Keyin ABS va pochta konnektorlari.
+- [ ] Avval "quruq ishga tushirish" (dry-run): nima o'zgarishi ko'rsatiladi, admin tasdiqlaydi. Navbat va qayta urinish.
+- [ ] Ishdan ketish: HR'da ketdi → AD'da bloklanadi, guruhlardan chiqariladi.
+- **Tayyor:** tasdiqlangan ariza AD'da o'zi bajariladi, ishdan ketgan xodim avtomatik bloklanadi.
 
-### 6. Attestatsiya va hisobotlar
-- [ ] Davriy kampaniyalar: rahbar o'z xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi.
-- [ ] Hisobotlar: kim nimaga kirish huquqiga ega, kim berdi, qachon.
+### H. Attestatsiya va hisobotlar (1–2 hafta)
+- [ ] Kampaniyalar: rahbar o'z xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi.
+- [ ] Hisobotlar (PDF/Excel): kim nimaga kirish huquqiga ega, imtiyozli akkauntlar, SoD buzilishlari, egasiz akkauntlar.
 
-### 7. Xavfsizlik va ekspluatatsiya
-- [ ] Standart parollarni almashtirish: `administrator/password`, `SIDS-manager` sirri. Demo klientlarni va `appsettings.json`dagi Facebook/Google sirlarini olib tashlash.
-- [ ] Sirlar saqlovchisi (Vault yoki shunga o'xshash), haqiqiy TLS sertifikatlari, admin uchun MFA.
-- [ ] Zaif paketlarni yangilash (`System.Linq.Dynamic.Core` 1.3.7, `SQLitePCLRaw` 2.1.6).
-- [ ] Audit loglarini SIEM'ga yuborish, bazani zaxiralash, monitoring, yuqori mavjudlik (HA).
+### I. Ishlab chiqarishga tayyorlash
+- [ ] MFA (adminlar uchun majburiy), sirlar saqlovchisi, haqiqiy TLS sertifikatlari, zaif paketlar.
+- [ ] Audit SIEM'ga, zaxira nusxa, monitoring, ikki nusxada ishlash (HA), yuklama testi (10 000+ xodim).
+- [ ] Pentest va bankning axborot xavfsizligi bo'limi tekshiruvi.
 
-### Arxitektura qarori (1-bosqichdan oldin)
-SimpleIdServer'ni IdM yadrosi sifatida kengaytiramizmi, yoki uni faqat SSO/provisioning uchun ishlatib,
-IdM yadrosini (JML, rollar, arizalar) alohida C# xizmat sifatida yozamizmi? Tavsiya: alohida yadro.
-Sabab: SimpleIdServer'da rol modeli, ariza va attestatsiya yo'q, upstream kodga kirib borish esa har bir
-yangilanishda patch'larni qayta moslashtirishni talab qiladi.
+## 4. Bajarilgan ishlar
+
+**2026-10-19 — 2026-10-20: SSO va AD poydevori**
+- Barqarorlashtirish: restartdan keyin login, PostgreSQL, data-protection kalitlari, EF Core 9 / linq2db mosligi.
+- AD'dan o'qish: jadval bo'yicha sinxronlash, delta, deprovisioning (20% chegara, sessiyalarni yopish),
+  a'zolik o'zgarishi, qayta ishga olish, `objectGUID`/`objectSid`, LDAPS bilan login.
+- Sinov AD (Samba AD DC, Docker), xizmat akkaunti, 8 xodim va 4 guruh.
+- Xavfsizlik: admin paneliga faqat admin roli, o'zini ro'yxatdan o'tkazish yopildi, bo'sh parol rad etiladi,
+  login mavjudligi oshkor qilinmaydi.
+- Login sahifasi va admin panel: ko'k-oq dizayn, o'zbek tili (standart), mobil ko'rinish.
+- SimpleIdServer'da 20 dan ortiq xato topildi va tuzatildi (`patches/`, batafsil: MANBALAR.md).
+
+Ochiq qolganlar: bankning haqiqiy AD'si, katta guruhlar (`member;range=`), bir nechta DC, rus tili,
+deprovisioning hodisalari auditda ko'rinmaydi, provisioning tarixini tozalash siyosati.

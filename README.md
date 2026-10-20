@@ -35,7 +35,7 @@ Loglar `.logs/` papkasida.
 
 | UI | Manzil | Kirish |
 |---|---|---|
-| SimpleIdServer admin paneli | https://localhost:5002/master/users | `administrator` / `password` |
+| SimpleIdServer admin paneli | https://localhost:5002/master/users | `administrator` / parol `.secrets/idserver.env` da (`IDS_ADMIN_PASSWORD`) |
 | SimpleIdServer login | https://localhost:5001/master | xuddi shu |
 | AuthPermissions (rol va ruxsatlar) | http://localhost:6002 | `Super@g1.com` / `Super@g1.com` |
 | SelfService (AD parol portali) | https://localhost:6014 | AD kerak |
@@ -45,6 +45,13 @@ Loglar `.logs/` papkasida.
 Sertifikatlar sinov uchun o'z-o'zidan imzolangan: brauzer ogohlantirishini qabul qiling.
 Admin panelda: **Identity provisioning → Automatic Identity Provisioning → LDAP** (sozlamalar, mapping, tarix),
 **Users** (Source = LDAP bo'lgan 8 xodim), **Groups** (4 guruh).
+
+## Xavfsiz standart holat
+
+`bootstrap/secure-defaults.sh` (`start-all.sh` o'zi chaqiradi, qayta ishga tushirish xavfsiz):
+admin panel ilovasi (`SIDS-manager`) siri va `administrator` paroli tasodifiy qiymatga almashtiriladi
+(`.secrets/idserver.env`), demo ilovalar, `administrator-ro`, fastFed guruhi va demo SCIM provisioning o'chiriladi.
+Parolni ko'rish: `grep IDS_ADMIN_PASSWORD .secrets/idserver.env`.
 
 ## Login sahifasi
 

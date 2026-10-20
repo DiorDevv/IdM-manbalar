@@ -7,7 +7,7 @@ IDS=https://localhost:5001/master
 B=$IDS/provisioning/LDAP
 
 T=$(curl -sk -X POST $IDS/token \
-  -d "grant_type=client_credentials&client_id=SIDS-manager&client_secret=password&scope=provisioning" \
+  --data-urlencode "client_secret=${IDS_MANAGER_SECRET:-password}" -d "grant_type=client_credentials&client_id=SIDS-manager&scope=provisioning" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
 H=(-H "Authorization: Bearer $T" -H "Content-Type: application/json")
 get() { curl -sk "$B" "${H[@]}"; }
