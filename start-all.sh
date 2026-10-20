@@ -70,7 +70,9 @@ start() {
   if [ -f "$RUN/$name.pid" ] && kill -0 "$(cat "$RUN/$name.pid")" 2>/dev/null; then
     echo "   ishlayapti: $name"; return
   fi
-  ( cd "$dir" || exit 1; eval "exec setsid dotnet run --no-build $args" ) > "$LOGS/$name.log" 2>&1 < /dev/null &
+  # args "cmd:" bilan boshlansa, dotnet emas, o'sha buyruq ishga tushiriladi (masalan portal uchun npm)
+  local cmd="dotnet run --no-build $args"; [[ $args == cmd:* ]] && cmd=${args#cmd:}
+  ( cd "$dir" || exit 1; eval "exec setsid $cmd" ) > "$LOGS/$name.log" 2>&1 < /dev/null &
   echo $! > "$RUN/$name.pid"
   echo "   ishga tushdi: $name"
 }
@@ -119,6 +121,17 @@ start adauth          "$P5/ADAuth/ADAuth"                                     "-
 start selfservice     "$P5/SelfService/src/DirectorySelfService"              "--no-launch-profile --urls 'http://localhost:6004;https://localhost:6014'"
 start customapproval  "$P5/active-directory-dotnet-external-identities-api-connectors-approvals/CustomApproval.Web" "--no-launch-profile --urls http://localhost:6005"
 
+# IdM yadrosi (idm/): API + portal. Faqat PostgreSQL rejimida (o'z "idm" bazasi bor).
+if [ -n "${StorageConfiguration__Type:-}" ] && [ -d "$HERE/idm/src/Bank.Idm.Api/bin" ]; then
+  docker exec bank-idm-postgres psql -U "$PG_USER" -d postgres -tAc "select 1 from pg_database where datname = 'idm'" | grep -q 1 \
+    || docker exec bank-idm-postgres psql -U "$PG_USER" -d postgres -qc "create database idm"
+  "$HERE/bootstrap/register-idm-portal.sh" | sed 's/^/   /'
+  ConnectionStrings__Idm="Host=127.0.0.1;Port=$PG_PORT;Database=idm;Username=$PG_USER;Password=$PG_PASSWORD" \
+  Idm__BootstrapAdmins__0=administrator \
+    start idm-api "$HERE/idm/src/Bank.Idm.Api" "--no-launch-profile --urls http://localhost:7100"
+  [ -d "$HERE/idm/portal/node_modules" ] && start idm-portal "$HERE/idm/portal" "cmd:npm run dev"
+fi
+
 echo "== Tayyorlikni kutish"
 wait_url website         https://localhost:5002/master/users
 wait_url scim-sid        https://localhost:5003/Schemas
@@ -127,6 +140,8 @@ wait_url authpermissions http://localhost:6002/
 wait_url adauth          https://127.0.0.1:6003/
 wait_url selfservice     https://localhost:6014/
 wait_url customapproval  http://localhost:6005/
+[ -f "$RUN/idm-api.pid" ] && wait_url idm-api http://localhost:7100/health
+[ -f "$RUN/idm-portal.pid" ] && wait_url idm-portal http://localhost:5173/
 
 echo "== LDAP sinxronlash ($LDAP_SOURCE)"
 if [ "$LDAP_SOURCE" = ad ]; then
@@ -154,6 +169,7 @@ fi
 cat <<'EOF'
 
 == Brauzerda oching (sertifikat ogohlantirishini qabul qiling)
+   IdM portali:       http://localhost:5173                   administrator / .secrets/idserver.env (IDS_ADMIN_PASSWORD)
    Admin panel:       https://localhost:5002/master/users     administrator / .secrets/idserver.env (IDS_ADMIN_PASSWORD)
    IdServer login:    https://localhost:5001/master
    AuthPermissions:   http://localhost:6002                   Super@g1.com / Super@g1.com

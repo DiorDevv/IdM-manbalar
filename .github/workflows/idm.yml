@@ -1,0 +1,36 @@
+# IdM yadrosi va portali: har bir push va pull request'da build va testlar.
+name: idm
+
+on:
+  push:
+    paths: [ "idm/**", ".github/workflows/idm.yml" ]
+  pull_request:
+    paths: [ "idm/**", ".github/workflows/idm.yml" ]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: idm } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { global-json-file: idm/global.json }
+      - run: dotnet restore
+      - run: dotnet build --no-restore -warnaserror
+      # Testlar Testcontainers bilan haqiqiy PostgreSQL'da (audit triggeri va xesh zanjiri)
+      - run: dotnet test --no-build
+
+  portal:
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: idm/portal } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: idm/portal/package-lock.json }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

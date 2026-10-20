@@ -35,6 +35,7 @@ Loglar `.logs/` papkasida.
 
 | UI | Manzil | Kirish |
 |---|---|---|
+| **IdM portali** (yangi) | http://localhost:5173 | `administrator` / `.secrets/idserver.env` (batafsil: [idm/README.md](idm/README.md)) |
 | SimpleIdServer admin paneli | https://localhost:5002/master/users | `administrator` / parol `.secrets/idserver.env` da (`IDS_ADMIN_PASSWORD`) |
 | SimpleIdServer login | https://localhost:5001/master | xuddi shu |
 | AuthPermissions (rol va ruxsatlar) | http://localhost:6002 | `Super@g1.com` / `Super@g1.com` |

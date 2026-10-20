@@ -57,13 +57,14 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Bloklash muddati o'tgan foydalanuvchi endi "Faol" ko'rinadi.
 - **Tayyor:** admin panelda faqat bank uchun kerakli bo'limlar, hammasi to'g'ri nomlangan.
 
-### B. IdM yadrosi poydevori (1 hafta)
-- [ ] Yangi yechim `idm/`: ASP.NET Core (.NET 10) Web API, EF Core + PostgreSQL (alohida baza `idm`), OpenAPI.
-- [ ] Ma'lumot modeli: Xodim (Identity), Tizim (Application), Akkaunt, Rol, Ruxsat (Entitlement), Ariza, Tasdiq, Audit hodisasi.
-- [ ] Portalga kirish SSO (OIDC) orqali, rollar: xodim, rahbar, IdM-admin, auditor.
-- [ ] Audit jurnali birinchi kundan: har bir o'zgarish o'chirilmaydigan jurnalga yoziladi.
-- [ ] Testlar va CI (build + test har commit'da).
-- **Tayyor:** API ishlaydi, SSO bilan kiriladi, bo'sh portal ochiladi.
+### B. IdM yadrosi poydevori (bajarildi, 2026-10-20)
+- [x] `idm/`: ASP.NET Core (.NET 10) Web API, EF Core + PostgreSQL (alohida `idm` bazasi), OpenAPI. Batafsil: [idm/README.md](idm/README.md).
+- [x] Ma'lumot modeli: xodim, tizim, akkaunt, ruxsat, rol, rol biriktirish, ariza, tasdiq, audit, portal vakolatlari.
+- [x] Portal (React + TypeScript): SSO (OIDC + PKCE) bilan kirish, bosh sahifa, xodimlar ro'yxati va kartochkasi, tizimlar, audit jurnali.
+  Vakolatlar IdM bazasida (admin, auditor, kadrlar); oddiy xodim "Ruxsat yo'q" ko'radi.
+- [x] Audit jurnali: trigger bilan o'zgartirib/o'chirib bo'lmaydi, SHA-256 xesh zanjiri, portalda "Yaxlitlikni tekshirish".
+- [x] Testlar: 14 ta backend (haqiqiy PostgreSQL, Testcontainers) + 3 ta portal; CI (GitHub Actions) har push'da.
+- [ ] Ochiq: ilova uchun alohida, faqat INSERT/SELECT huquqli baza roli (I bosqichi); portalda til tanlash (hozir faqat o'zbekcha).
 
 ### C. AD konnektori va xodimlar ro'yxati (1 hafta)
 - [ ] Konnektor interfeysi (har bir tizim alohida modul): `Read`, keyin `Create/Disable/AddToGroup`.

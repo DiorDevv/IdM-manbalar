@@ -1,0 +1,160 @@
+using System.Text;
+using Bank.Idm.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace Bank.Idm.Infrastructure;
+
+public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(options)
+{
+    public DbSet<Identity> Identities => Set<Identity>();
+    public DbSet<Application> Applications => Set<Application>();
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<Entitlement> Entitlements => Set<Entitlement>();
+    public DbSet<AccountEntitlement> AccountEntitlements => Set<AccountEntitlement>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RoleEntitlement> RoleEntitlements => Set<RoleEntitlement>();
+    public DbSet<IdentityRole> IdentityRoles => Set<IdentityRole>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
+    public DbSet<Approval> Approvals => Set<Approval>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<PortalRoleAssignment> PortalRoleAssignments => Set<PortalRoleAssignment>();
+
+    protected override void OnModelCreating(ModelBuilder b)
+    {
+        b.Entity<Identity>(e =>
+        {
+            e.HasIndex(x => x.EmployeeNumber).IsUnique();
+            e.HasIndex(x => x.Email);
+            e.Property(x => x.EmployeeNumber).HasMaxLength(64);
+            e.Property(x => x.FirstName).HasMaxLength(128);
+            e.Property(x => x.LastName).HasMaxLength(128);
+            e.Property(x => x.MiddleName).HasMaxLength(128);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.Department).HasMaxLength(256);
+            e.Property(x => x.JobTitle).HasMaxLength(256);
+            e.HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.SetNull);
+            e.Ignore(x => x.DisplayName);
+        });
+        b.Entity<Application>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(32);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<Account>(e =>
+        {
+            e.HasIndex(x => new { x.ApplicationId, x.ExternalId }).IsUnique();
+            e.HasIndex(x => new { x.ApplicationId, x.Login });
+            e.HasIndex(x => x.IdentityId);
+            e.Property(x => x.ExternalId).HasMaxLength(256);
+            e.Property(x => x.Login).HasMaxLength(256);
+            e.HasOne(x => x.Application).WithMany(x => x.Accounts).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Identity).WithMany(x => x.Accounts).HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<Entitlement>(e =>
+        {
+            e.HasIndex(x => new { x.ApplicationId, x.ExternalId }).IsUnique();
+            e.Property(x => x.ExternalId).HasMaxLength(512);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasOne(x => x.Application).WithMany(x => x.Entitlements).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AccountEntitlement>(e =>
+        {
+            e.HasKey(x => new { x.AccountId, x.EntitlementId });
+            e.HasOne(x => x.Account).WithMany(x => x.Entitlements).HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Role>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<RoleEntitlement>(e =>
+        {
+            e.HasKey(x => new { x.RoleId, x.EntitlementId });
+            e.HasOne(x => x.Role).WithMany(x => x.Entitlements).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<IdentityRole>(e =>
+        {
+            e.HasIndex(x => new { x.IdentityId, x.RoleId });
+            e.HasOne(x => x.Identity).WithMany(x => x.Roles).HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AccessRequest>(e =>
+        {
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Justification).HasMaxLength(2000);
+            e.HasOne(x => x.Requester).WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Beneficiary).WithMany().HasForeignKey(x => x.BeneficiaryId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Approval>(e =>
+        {
+            e.HasIndex(x => new { x.ApproverId, x.Decision });
+            e.Property(x => x.Comment).HasMaxLength(2000);
+            e.HasOne(x => x.AccessRequest).WithMany(x => x.Approvals).HasForeignKey(x => x.AccessRequestId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Approver).WithMany().HasForeignKey(x => x.ApproverId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AuditEvent>(e =>
+        {
+            e.Property(x => x.Id).UseIdentityAlwaysColumn();
+            e.HasIndex(x => x.OccurredAt);
+            e.HasIndex(x => new { x.TargetType, x.TargetId });
+            e.HasIndex(x => x.ActorId);
+            e.Property(x => x.ActorId).HasMaxLength(256);
+            e.Property(x => x.ActorName).HasMaxLength(256);
+            e.Property(x => x.Action).HasMaxLength(128);
+            e.Property(x => x.TargetType).HasMaxLength(64);
+            e.Property(x => x.TargetId).HasMaxLength(256);
+            // text, jsonb emas: jsonb JSON'ni normallashtiradi va saqlangan xesh qayta hisoblanganiga mos kelmay qoladi
+            e.Property(x => x.Details).HasColumnType("text");
+            e.Property(x => x.IpAddress).HasMaxLength(64);
+            e.Property(x => x.CorrelationId).HasMaxLength(128);
+            e.Property(x => x.PreviousHash).HasMaxLength(64).IsFixedLength();
+            e.Property(x => x.Hash).HasMaxLength(64).IsFixedLength();
+            e.HasIndex(x => x.Hash).IsUnique();
+        });
+        b.Entity<PortalRoleAssignment>(e =>
+        {
+            e.HasIndex(x => new { x.Login, x.Role }).IsUnique();
+            e.Property(x => x.Login).HasMaxLength(256);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+        });
+
+        // Enum'lar matn sifatida (DBA va hisobotlar uchun o'qiladigan), jadval va ustunlar snake_case.
+        foreach (var entity in b.Model.GetEntityTypes())
+        {
+            entity.SetTableName(ToSnakeCase(entity.GetTableName()!));
+            foreach (var property in entity.GetProperties())
+            {
+                property.SetColumnName(ToSnakeCase(property.Name));
+                var type = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
+                if (type.IsEnum) property.SetProviderClrType(typeof(string));
+                if (type.IsEnum) property.SetMaxLength(32);
+            }
+            foreach (var key in entity.GetKeys()) key.SetName(ToSnakeCase(key.GetName()!));
+            foreach (var fk in entity.GetForeignKeys()) fk.SetConstraintName(ToSnakeCase(fk.GetConstraintName()!));
+            foreach (var index in entity.GetIndexes()) index.SetDatabaseName(ToSnakeCase(index.GetDatabaseName()!));
+        }
+    }
+
+    internal static string ToSnakeCase(string name)
+    {
+        var sb = new StringBuilder(name.Length + 8);
+        for (var i = 0; i < name.Length; i++)
+        {
+            var c = name[i];
+            if (char.IsUpper(c))
+            {
+                if (i > 0 && name[i - 1] != '_' && (char.IsLower(name[i - 1]) || (i + 1 < name.Length && char.IsLower(name[i + 1])))) sb.Append('_');
+                sb.Append(char.ToLowerInvariant(c));
+            }
+            else sb.Append(c);
+        }
+        return sb.ToString();
+    }
+}

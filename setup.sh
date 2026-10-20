@@ -95,6 +95,11 @@ for line in $BUILDS; do
   fi
   if grep -q "Build succeeded" "$log"; then ok "$name"; else fail "$name  ($log)"; fi
 done
+# IdM yadrosi (idm/): API va portal
+if (cd "$HERE/idm" && dotnet build Bank.Idm.slnx > "$LOGS/build-idm.log" 2>&1); then ok "idm (API)"; else fail "idm (API)  ($LOGS/build-idm.log)"; fi
+if command -v npm >/dev/null; then
+  if (cd "$HERE/idm/portal" && npm ci --no-audit --no-fund > "$LOGS/build-idm-portal.log" 2>&1); then ok "idm portal (npm ci)"; else fail "idm portal  ($LOGS/build-idm-portal.log)"; fi
+else fail "npm topilmadi: IdM portali o'rnatilmadi"; fi
 dotnet build-server shutdown >/dev/null 2>&1   # build tugagach MSBuild/Razor yordamchi jarayonlarini yopadi
 
 say "4. ADAuth uchun sinov sertifikati va config.json"

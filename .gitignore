@@ -4,3 +4,5 @@ manbalar/
 .certs/
 .secrets/
 .backups/
+idm/**/bin/
+idm/**/obj/
