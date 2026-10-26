@@ -37,6 +37,7 @@ export function DashboardPage() {
               {d.leaversWithActiveAccounts > 0
                 ? <Link to="/reports?tab=leavers" className="insight bad"><Icon name="warning" size={14} />{dash.insightLeavers(d.leaversWithActiveAccounts)}</Link>
                 : <span className="insight ok"><Icon name="shield" size={14} />{dash.insightClean}</span>}
+              {d.pendingRequests > 0 && <Link to="/requests?tab=all" className="insight"><Icon name="request" size={14} />{dash.insightRequests(d.pendingRequests)}</Link>}
               {d.sodViolations > 0 && <Link to="/sod" className="insight bad"><Icon name="shield" size={14} />{dash.insightSod(d.sodViolations)}</Link>}
               {d.orphanAccounts > 0 && <Link to="/reports?tab=orphans" className="insight"><Icon name="user" size={14} />{dash.insightOrphans(d.orphanAccounts)}</Link>}
               {failing.length > 0

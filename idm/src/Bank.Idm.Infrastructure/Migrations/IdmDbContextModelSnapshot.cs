@@ -55,6 +55,10 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
+                    b.Property<string>("SodConflicts")
+                        .HasColumnType("text")
+                        .HasColumnName("sod_conflicts");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -65,11 +69,14 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("valid_to");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_access_requests");
-
-                    b.HasIndex("BeneficiaryId")
-                        .HasDatabaseName("ix_access_requests_beneficiary_id");
 
                     b.HasIndex("RequesterId")
                         .HasDatabaseName("ix_access_requests_requester_id");
@@ -79,6 +86,9 @@ namespace Bank.Idm.Infrastructure.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_access_requests_status");
+
+                    b.HasIndex("BeneficiaryId", "Status")
+                        .HasDatabaseName("ix_access_requests_beneficiary_id_status");
 
                     b.ToTable("access_requests");
                 });
@@ -276,6 +286,16 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("decided_at");
 
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecidedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("decided_by_name");
+
                     b.Property<string>("Decision")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -291,6 +311,12 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Property<int>("Step")
                         .HasColumnType("integer")
                         .HasColumnName("step");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_approvals");

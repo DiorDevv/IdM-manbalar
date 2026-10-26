@@ -100,6 +100,31 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
         return result.OrderByDescending(v => v.Risk).ThenBy(v => v.RuleCode).ToList();
     }
 
+    /// <summary>
+    /// Xodimga yangi ruxsatlar (rol) berilsa paydo bo'ladigan SoD buzilishlari: hozirgi (haqiqiy + rollar bo'yicha) ruxsatlar bilan
+    /// birga tekshiriladi va faqat yangi ruxsat qatnashgan ziddiyatlar qaytadi (eski buzilish arizaga yuklanmaydi).
+    /// </summary>
+    public async Task<IReadOnlyList<SodViolation>> SodPreviewAsync(Guid identityId, IReadOnlyCollection<Guid> added, CancellationToken ct = default)
+    {
+        var rules = await db.SodRules.AsNoTracking().Include(r => r.Entitlements).ThenInclude(e => e.Entitlement).ToListAsync(ct);
+        if (rules.Count == 0 || added.Count == 0) return [];
+        var held = (await ActualQuery().Where(a => a.IdentityId == identityId).Select(a => a.EntitlementId).ToListAsync(ct))
+            .Concat(await ExpectedQuery().Where(e => e.IdentityId == identityId).Select(e => e.EntitlementId).ToListAsync(ct))
+            .ToHashSet();
+        var after = held.Concat(added).ToHashSet();
+        var result = new List<SodViolation>();
+        foreach (var rule in rules)
+        {
+            var left = rule.Entitlements.Where(e => e.Side == SodSide.Left && after.Contains(e.EntitlementId)).ToList();
+            var right = rule.Entitlements.Where(e => e.Side == SodSide.Right && after.Contains(e.EntitlementId)).ToList();
+            if (left.Count == 0 || right.Count == 0) continue;
+            if (!left.Concat(right).Any(e => added.Contains(e.EntitlementId))) continue;
+            result.Add(new SodViolation(rule.Id, rule.Code, rule.Name, rule.Risk, identityId,
+                left.Select(e => e.Entitlement.Name).Order().ToList(), right.Select(e => e.Entitlement.Name).Order().ToList()));
+        }
+        return result;
+    }
+
     /// <summary>Rolning o'zi SoD qoidasini buzadimi (ikkala tomondan ruxsat bitta rolda): rol yaratishda ogohlantirish uchun.</summary>
     public async Task<IReadOnlyList<string>> RoleConflictsAsync(IReadOnlyCollection<Guid> entitlementIds, CancellationToken ct = default)
     {

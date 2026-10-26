@@ -10,7 +10,7 @@ public record BirthrightResult(int Assigned, int Removed, int IdentitiesChecked)
 /// <summary>
 /// Avtomatik ("tug'ma") rollar: qoidaga (bo'lim, lavozim) mos ishlayotgan xodimga rol beriladi, mos kelmay qolsa yoki xodim ishdan
 /// ketsa — olib tashlanadi (yozuvga tugash sanasi qo'yiladi, tarix saqlanadi). Faqat Birthright manbali tayinlashlarga tegadi:
-/// ariza yoki qo'lda berilgan rollar o'zgarmaydi. Har o'zgarish auditda; hammasi bitta tranzaksiyada, parallel ishga tushishdan qulf bilan himoyalangan.
+/// ariza yoki qo'lda berilgan rollar o'zgarmaydi — faqat xodim ishdan ketganda: unda barcha rollari tugaydi va kutilayotgan arizalari bekor qilinadi. Har o'zgarish auditda; hammasi bitta tranzaksiyada, parallel ishga tushishdan qulf bilan himoyalangan.
 /// </summary>
 public class BirthrightService(IdmDbContext db, AuditLog audit, TimeProvider time)
 {
@@ -53,6 +53,25 @@ public class BirthrightService(IdmDbContext db, AuditLog audit, TimeProvider tim
                     JsonSerializer.Serialize(new { role = roles.GetValueOrDefault(assignment.RoleId), i.EmployeeNumber, source = "birthright",
                         reason = i.Status == IdentityStatus.Terminated ? "terminated" : "rule-no-longer-matches" }, Json)));
             }
+        }
+        // Ishdan ketganlar: ariza yoki qo'lda berilgan rollar ham tugaydi, ko'rib chiqilayotgan arizalar bekor qilinadi
+        var terminated = identities.Where(i => i.Status == IdentityStatus.Terminated).ToDictionary(i => i.Id, i => i.EmployeeNumber);
+        var leftovers = await db.IdentityRoles.Where(r => r.Source != RoleAssignmentSource.Birthright && r.ValidTo == null && terminated.Keys.Contains(r.IdentityId))
+            .ToListAsync(ct);
+        foreach (var assignment in leftovers)
+        {
+            assignment.ValidTo = now;
+            removed++;
+            entries.Add(new AuditEntry(actorId, actorName, "identity.role-removed", "identity", assignment.IdentityId.ToString(),
+                JsonSerializer.Serialize(new { role = roles.GetValueOrDefault(assignment.RoleId), employeeNumber = terminated[assignment.IdentityId],
+                    source = assignment.Source.ToString().ToLowerInvariant(), reason = "terminated" }, Json)));
+        }
+        var pending = await db.AccessRequests.Where(r => r.Status == AccessRequestStatus.Pending && terminated.Keys.Contains(r.BeneficiaryId)).ToListAsync(ct);
+        foreach (var request in pending)
+        {
+            (request.Status, request.ClosedAt) = (AccessRequestStatus.Cancelled, now);
+            entries.Add(new AuditEntry(actorId, actorName, "request.cancelled", "access-request", request.Id.ToString(),
+                JsonSerializer.Serialize(new { reason = "beneficiary-terminated", employeeNumber = terminated[request.BeneficiaryId] }, Json)));
         }
         if (entries.Count > 0) await audit.SaveChangesAsync(entries, ct);
         await transaction.CommitAsync(ct);

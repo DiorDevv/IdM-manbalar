@@ -64,6 +64,11 @@ const actions: Record<string, [label: string, icon: string, tone: Tone]> = {
   'role.rule-removed': ['Avtomatik qoida olib tashlandi', 'sparkle', 'warn'],
   'sod.rule-created': ['SoD qoidasi yaratildi', 'shield', 'violet'],
   'sod.rule-deleted': ['SoD qoidasi o\'chirildi', 'shield', 'bad'],
+  'request.created': ['Ariza yuborildi', 'request', 'sky'],
+  'request.step-approved': ['Ariza bosqichi tasdiqlandi', 'check', 'ok'],
+  'request.approved': ['Ariza tasdiqlandi', 'check', 'ok'],
+  'request.rejected': ['Ariza rad etildi', 'x', 'bad'],
+  'request.cancelled': ['Ariza bekor qilindi', 'x', 'warn'],
 }
 
 /** Audit amali → odam tilidagi nom, ikonka, rang va tafsilotlardan qisqa xulosa (login, tizim, guruh...). */
@@ -73,7 +78,7 @@ export function describeAction(action: string, details: string | null): { label:
   if (details) {
     try {
       const d = lowerKeys(JSON.parse(details) as Record<string, unknown>)
-      const parts = ['application', 'login', 'employeenumber', 'group', 'code', 'name', 'role', 'department', 'jobtitle', 'error']
+      const parts = ['application', 'login', 'employeenumber', 'beneficiary', 'group', 'code', 'name', 'role', 'step', 'department', 'jobtitle', 'comment', 'error']
         .map(k => d[k]).filter((v): v is string | number => typeof v === 'string' || typeof v === 'number')
       if (typeof d.accountsread === 'number') parts.push(`${d.accountsread} akkaunt`)
       if (typeof d.records === 'number') parts.push(`${d.records} yozuv`)

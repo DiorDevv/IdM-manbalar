@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './auth/AuthProvider'
 import { ApiError } from './api/client'
 import { Layout } from './components/Layout'
-import { DashboardPage } from './pages/DashboardPage'
 import { IdentitiesPage } from './pages/IdentitiesPage'
 import { IdentityDetailPage } from './pages/IdentityDetailPage'
 import { ApplicationsPage } from './pages/ApplicationsPage'
@@ -16,6 +15,10 @@ import { EventsPage } from './pages/EventsPage'
 import { RolesPage } from './pages/RolesPage'
 import { RoleDetailPage } from './pages/RoleDetailPage'
 import { SodPage } from './pages/SodPage'
+import { RequestsPage } from './pages/RequestsPage'
+import { NewRequestPage } from './pages/NewRequestPage'
+import { RequestDetailPage } from './pages/RequestDetailPage'
+import { HomePage } from './pages/HomePage'
 import './styles.css'
 import { initTheme } from './theme'
 
@@ -35,7 +38,7 @@ createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
-              <Route index element={<DashboardPage />} />
+              <Route index element={<HomePage />} />
               <Route path="identities" element={<IdentitiesPage />} />
               <Route path="identities/:id" element={<IdentityDetailPage />} />
               <Route path="applications" element={<ApplicationsPage />} />
@@ -45,6 +48,9 @@ createRoot(document.getElementById('root')!).render(
               <Route path="roles" element={<RolesPage />} />
               <Route path="roles/:id" element={<RoleDetailPage />} />
               <Route path="sod" element={<SodPage />} />
+              <Route path="requests" element={<RequestsPage />} />
+              <Route path="requests/new" element={<NewRequestPage />} />
+              <Route path="requests/:id" element={<RequestDetailPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="callback" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />

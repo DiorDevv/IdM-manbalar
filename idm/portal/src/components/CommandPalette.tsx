@@ -11,6 +11,7 @@ interface Item { key: string; group: string; icon: string; label: string; meta?:
 
 /** ⌘K / Ctrl+K: sahifaga o'tish va xodimni ism yoki tabel raqami bo'yicha topish. */
 export function CommandPalette({ open, onClose, canSearch }: { open: boolean; onClose: () => void; canSearch: boolean }) {
+  // canSearch — administrator/auditor: xodim qidirish va barcha sahifalar; oddiy xodim — faqat o'ziga ochiq sahifalar
   const navigate = useNavigate()
   const [text, setText] = useState('')
   const [active, setActive] = useState(0)
@@ -26,13 +27,13 @@ export function CommandPalette({ open, onClose, canSearch }: { open: boolean; on
 
   const items = useMemo<Item[]>(() => {
     const q = text.trim().toLowerCase()
-    const pages = NAV.flatMap(s => s.items).filter(i => !i.soon && (!q || i.label.toLowerCase().includes(q)))
+    const pages = NAV.flatMap(s => s.items).filter(i => !i.soon && (canSearch || i.everyone) && (!q || i.label.toLowerCase().includes(q)))
       .map(i => ({ key: i.to, group: t.cmd.pages, icon: i.icon, label: i.label, to: i.to }))
     const found = (deferred.length >= 2 ? people.data?.items ?? [] : []).map(p => ({
       key: p.id, group: t.cmd.people, icon: 'user', label: p.displayName, meta: p.employeeNumber, to: `/identities/${p.id}`,
     }))
     return [...found, ...pages]
-  }, [text, deferred, people.data])
+  }, [text, deferred, people.data, canSearch])
 
   useEffect(() => { if (open) { setText(''); setActive(0); setTimeout(() => input.current?.focus(), 0) } }, [open])
   useEffect(() => { setActive(0) }, [text])

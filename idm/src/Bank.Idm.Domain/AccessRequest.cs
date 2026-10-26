@@ -16,6 +16,10 @@ public class AccessRequest
     public DateTimeOffset? ValidTo { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ClosedAt { get; set; }
+    /// <summary>Ariza paytida aniqlangan SoD ziddiyatlari (JSON). Bo'lsa — xavfsizlik bo'limi tasdig'i majburiy.</summary>
+    public string? SodConflicts { get; set; }
+    /// <summary>Optimistik qulf (PostgreSQL xmin): bir arizani ikki kishi bir vaqtda tasdiqlay olmaydi.</summary>
+    public uint Version { get; set; }
 
     public List<Approval> Approvals { get; set; } = [];
 }
@@ -39,11 +43,17 @@ public class Approval
     /// <summary>Bosqich tartibi: 1 = rahbar, 2 = resurs egasi.</summary>
     public int Step { get; set; }
     public ApprovalStepKind Kind { get; set; }
+    /// <summary>Tasdiqlovchi xodim. Bo'sh bo'lsa — IdM administratorlari navbati (rahbar yoki resurs egasi belgilanmagan).</summary>
     public Guid? ApproverId { get; set; }
     public Identity? Approver { get; set; }
     public ApprovalDecision Decision { get; set; } = ApprovalDecision.Pending;
     public string? Comment { get; set; }
     public DateTimeOffset? DecidedAt { get; set; }
+    /// <summary>Kim qaror qildi (SSO logini; avtomatik bo'lsa "system").</summary>
+    public string? DecidedBy { get; set; }
+    public string? DecidedByName { get; set; }
+    /// <summary>Optimistik qulf: bir bosqichni ikki kishi bir vaqtda hal qila olmaydi.</summary>
+    public uint Version { get; set; }
 }
 
 public enum ApprovalStepKind

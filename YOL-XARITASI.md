@@ -15,7 +15,7 @@ O'ng ustunda bizning holatimiz.
 | 4 | **Provisioning (yozish)** | Tizimlarda akkaunt yaratish, bloklash, guruh va rol berish (AD, ABS, pochta…) | ❌ faqat o'qish |
 | 5 | **Rol modeli (RBAC)** | Lavozim va bo'limga qarab avtomatik ruxsatlar; rol → tizim ruxsatlari | ✅ katalog, avtomatik rollar, farq |
 | 6 | **SoD siyosati** | Bir odamda ziddiyatli ruxsatlar bo'lmasligi (kredit beradi va o'zi tasdiqlaydi) | ✅ qoidalar va buzilishlar (ariza paytida — F) |
-| 7 | **Ariza va tasdiqlash** | Xodim ruxsat so'raydi → rahbar → resurs egasi → avtomatik beriladi | ❌ |
+| 7 | **Ariza va tasdiqlash** | Xodim ruxsat so'raydi → rahbar → resurs egasi → avtomatik beriladi | ✅ IdM'da beriladi, tizimda — G |
 | 8 | **Attestatsiya** | Har chorakda rahbar xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi | ❌ |
 | 9 | **Audit va hisobotlar** | Kim, nimaga, qachondan, kim bergan; regulyator (Markaziy bank) uchun hisobotlar | ⚠️ faqat SSO jurnali |
 | 10 | **SSO va MFA** | Bitta login bilan barcha ilovalar, ikki bosqichli tasdiqlash | ✅ SSO, ❌ MFA |
@@ -95,9 +95,13 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [ ] Ochiq: SoD istisnolari (vaqtinchalik ruxsat, kompensatsion nazorat), rol egasi (F bosqichida tasdiqlovchi sifatida).
 - **Tayyor:** har bir xodim uchun "bo'lishi kerak" va "haqiqatda bor" ruxsatlar farqi ko'rinadi.
 
-### F. Ariza va tasdiqlash (1–2 hafta)
-- [ ] Xodim katalogdan rol so'raydi → rahbar → resurs egasi tasdiqlaydi; muddat va eslatmalar.
-- [ ] SoD tekshiruvi ariza paytida.
+### F. Ariza va tasdiqlash (bajarildi, 2026-10-26)
+- [x] Xodim katalogdan rol so'raydi (o'zi yoki xodimlari uchun) → rahbar → rol egasi → SoD bo'lsa axborot xavfsizligi; muddatli ruxsat.
+- [x] SoD tekshiruvi ariza paytida (oldindan ko'rish va qo'shimcha bosqich), o'zini tasdiqlash taqiqi, parallel qarorlardan himoya.
+- [x] Portal: arizalar (tasdiqlash navbati, mening arizalarim, hammasi), yangi ariza (katalog, jonli zanjir), ariza kartochkasi.
+  Oddiy xodim portalda faqat arizalar bo'limini ko'radi.
+- [x] Ishdan ketganda barcha rollar tugaydi va kutilayotgan arizalar bekor qilinadi.
+- [ ] Ochiq: eslatmalar va muddati o'tgan arizalar (pochta/xabarnoma kanali kerak), tasdiqlovchini almashtirish (ta'til), rol egasini portalda belgilash.
 - **Tayyor:** ariza boshidan oxirigacha portalda o'tadi, har qadam auditda.
 
 ### G. AD'ga yozish (1–2 hafta)

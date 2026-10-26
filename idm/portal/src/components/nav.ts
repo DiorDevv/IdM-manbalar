@@ -1,7 +1,8 @@
 import { t } from '../i18n'
 
 /** Menyu bo'limlari: yon panel va ⌘K palitrasi shu ro'yxatdan quriladi. */
-export interface NavEntry { to: string; icon: string; label: string; soon?: boolean }
+/** everyone — har bir xodim (ariza berish va tasdiqlash); qolganlari faqat administrator va auditor uchun. */
+export interface NavEntry { to: string; icon: string; label: string; soon?: boolean; everyone?: boolean }
 export interface NavSection { title: string; items: NavEntry[] }
 
 export const NAV: NavSection[] = [
@@ -16,7 +17,7 @@ export const NAV: NavSection[] = [
     title: t.nav.access, items: [
       { to: '/applications', icon: 'apps', label: t.nav.applications },
       { to: '/roles', icon: 'role', label: t.nav.roles },
-      { to: '/requests', icon: 'request', label: t.nav.requests, soon: true },
+      { to: '/requests', icon: 'request', label: t.nav.requests, everyone: true },
       { to: '/reviews', icon: 'review', label: t.nav.reviews, soon: true },
     ],
   },

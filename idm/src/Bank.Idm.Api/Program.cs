@@ -24,6 +24,7 @@ builder.Services.AddScoped<ConnectorSync>();
 builder.Services.AddScoped<HrSync>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.BirthrightService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.AccessAnalyzer>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Requests.AccessRequestService>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
 builder.Services.AddSingleton<ConnectorSyncCoordinator>();
 builder.Services.AddHostedService<ConnectorSyncWorker>();

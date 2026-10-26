@@ -4,7 +4,7 @@ namespace Bank.Idm.Api.Endpoints;
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
-public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId);
+public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0);
 
 public record DashboardSummary(
     int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,
@@ -101,3 +101,30 @@ public record SodViolationItem(Guid RuleId, string RuleCode, string RuleName, Ri
     string EmployeeNumber, string? Department, IReadOnlyList<string> Left, IReadOnlyList<string> Right);
 
 public record DriftItem(Guid IdentityId, string Name, string EmployeeNumber, string? Department, IdentityStatus Status, int Missing, int Excess);
+
+// ---------- Arizalar (F bosqichi) ----------
+public record CatalogRole(Guid Id, string Code, string Name, string? Description, RiskLevel Risk, IReadOnlyList<string> Entitlements);
+
+public record PersonBrief(Guid Id, string Name, string EmployeeNumber, string? Department, string? JobTitle);
+
+public record PreviewRequestBody(Guid? BeneficiaryId, Guid RoleId);
+
+public record PreviewStep(ApprovalStepKind Kind, string? ApproverName, bool Auto);
+
+public record RequestPreview(bool CanSubmit, string? Blocker, IReadOnlyList<PreviewStep> Steps, IReadOnlyList<Bank.Idm.Infrastructure.Requests.SodConflictInfo> Sod);
+
+public record CreateRequestBody(Guid? BeneficiaryId, Guid RoleId, string? Justification, DateTimeOffset? ValidTo);
+
+public record DecisionBody(bool Approve, string? Comment);
+
+public record RequestListItem(Guid Id, AccessRequestStatus Status, Guid RoleId, string RoleCode, string RoleName, RiskLevel Risk,
+    Guid BeneficiaryId, string BeneficiaryName, string BeneficiaryNumber, string RequesterName, DateTimeOffset CreatedAt, DateTimeOffset? ClosedAt,
+    ApprovalStepKind? CurrentStep, string? CurrentApprover, bool HasSod);
+
+public record ApprovalItem(int Step, ApprovalStepKind Kind, Guid? ApproverId, string? ApproverName, ApprovalDecision Decision, string? Comment,
+    DateTimeOffset? DecidedAt, string? DecidedBy, string? DecidedByName);
+
+public record RequestDetails(Guid Id, AccessRequestStatus Status, Guid RoleId, string RoleCode, string RoleName, string? RoleDescription, RiskLevel Risk,
+    IReadOnlyList<string> Entitlements, PersonBrief Beneficiary, PersonBrief Requester, string Justification, DateTimeOffset? ValidTo,
+    DateTimeOffset CreatedAt, DateTimeOffset? ClosedAt, IReadOnlyList<ApprovalItem> Approvals,
+    IReadOnlyList<Bank.Idm.Infrastructure.Requests.SodConflictInfo> SodConflicts, bool CanDecide, bool CanCancel);

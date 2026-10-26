@@ -441,3 +441,36 @@ textarea.input { height: auto; min-height: 72px; padding: 8px 10px; resize: vert
 .state-missing { color: var(--warn); }
 .state-excess { color: var(--violet); }
 @media (max-width: 1000px) { .form-row, .sides { grid-template-columns: 1fr; } .sides .vs { justify-self: center; } }
+
+/* ---------- Arizalar ---------- */
+.request-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.request-layout .sticky { position: sticky; top: calc(var(--header-h) + 16px); }
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; padding: 14px; }
+.role-card { position: relative; display: grid; gap: 6px; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel);
+  text-align: left; cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s; }
+.role-card:hover { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow-pop); }
+.role-card[aria-checked="true"] { border-color: var(--accent); box-shadow: var(--ring); background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+.role-card .title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13.5px; }
+.role-card .desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.role-card .check-dot { position: absolute; top: 12px; right: 12px; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border-strong);
+  display: grid; place-items: center; color: #fff; }
+.role-card[aria-checked="true"] .check-dot { background: var(--accent); border-color: var(--accent); }
+.segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--border); flex-wrap: wrap; }
+.segmented button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; font-size: 13px; font-weight: 550; color: var(--muted); cursor: pointer; }
+.segmented button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm); }
+.chain { list-style: none; margin: 0; padding: 6px 0; }
+.chain li { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 10px 18px; }
+.chain li:not(:last-child)::before { content: ""; position: absolute; left: 33px; top: 44px; bottom: -10px; width: 2px; border-radius: 2px; background: var(--border); }
+.chain li.done:not(:last-child)::before { background: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.chain .node { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--border-strong); background: var(--panel);
+  color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: 0 0 0 4px var(--panel); }
+.chain li.done .node { background: var(--ok); border-color: var(--ok); color: #fff; }
+.chain li.rejected .node { background: var(--bad); border-color: var(--bad); color: #fff; }
+.chain li.current .node { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px var(--panel), 0 0 0 7px var(--accent-soft); }
+.chain .who { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.chain .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.chain .note { margin-top: 6px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+.quote { margin: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13.5px; color: var(--text); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.decision-card { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-sm); }
+@media (max-width: 1000px) { .request-layout { grid-template-columns: 1fr; } .request-layout .sticky { position: static; } }

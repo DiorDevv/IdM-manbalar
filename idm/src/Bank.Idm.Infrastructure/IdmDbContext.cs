@@ -122,6 +122,9 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.Status);
             e.Property(x => x.Justification).HasMaxLength(2000);
+            e.Property(x => x.SodConflicts).HasColumnType("text");
+            e.Property(x => x.Version).IsRowVersion();
+            e.HasIndex(x => new { x.BeneficiaryId, x.Status });
             e.HasOne(x => x.Requester).WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Beneficiary).WithMany().HasForeignKey(x => x.BeneficiaryId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
@@ -130,6 +133,9 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         {
             e.HasIndex(x => new { x.ApproverId, x.Decision });
             e.Property(x => x.Comment).HasMaxLength(2000);
+            e.Property(x => x.DecidedBy).HasMaxLength(256);
+            e.Property(x => x.DecidedByName).HasMaxLength(256);
+            e.Property(x => x.Version).IsRowVersion();
             e.HasOne(x => x.AccessRequest).WithMany(x => x.Approvals).HasForeignKey(x => x.AccessRequestId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Approver).WithMany().HasForeignKey(x => x.ApproverId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -180,6 +186,8 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             entity.SetTableName(ToSnakeCase(entity.GetTableName()!));
             foreach (var property in entity.GetProperties())
             {
+                // Npgsql row version — PostgreSQL'ning tizim ustuni xmin (jadvalga ustun qo'shilmaydi)
+                if (property.IsConcurrencyToken && property.ClrType == typeof(uint)) { property.SetColumnName("xmin"); continue; }
                 property.SetColumnName(ToSnakeCase(property.Name));
                 var type = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
                 if (type.IsEnum) property.SetProviderClrType(typeof(string));

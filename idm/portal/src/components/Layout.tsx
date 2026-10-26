@@ -55,10 +55,11 @@ export function Layout() {
           <span className="mark"><BrandMark /></span>
           <span><div className="name">Bank IdM</div><div className="sub">{t.brandSub}</div></span>
         </div>
-        {NAV.map(section => (
+        {NAV.map(section => ({ ...section, items: section.items.filter(i => canSearch || i.everyone) })).filter(s => s.items.length > 0).map(section => (
           <div key={section.title}>
             <div className="nav-section">{section.title}</div>
-            {section.items.map(item => <NavItem key={item.to} item={item} count={item.to === '/reports' ? risks : item.to === '/sod' ? dashboard.data?.sodViolations : undefined} />)}
+            {section.items.map(item => <NavItem key={item.to} item={item} count={item.to === '/reports' ? risks : item.to === '/sod' ? dashboard.data?.sodViolations
+              : item.to === '/requests' ? me.data?.inboxCount : undefined} />)}
           </div>
         ))}
         <div className="sidebar-foot">

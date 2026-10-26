@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number
@@ -74,3 +74,22 @@ export interface SodViolationItem { ruleId: string; ruleCode: string; ruleName: 
 export interface IdentityAccess { roles: IdentityRoleItem[]; lines: AccessLine[]; sod: SodViolationItem[] }
 export interface SodRuleItem { id: string; code: string; name: string; description: string | null; risk: RiskLevel; left: EntitlementPick[]; right: EntitlementPick[]; violationCount: number; createdAt: string; createdBy: string }
 export interface DriftItem { identityId: string; name: string; employeeNumber: string; department: string | null; status: IdentityStatus; missing: number; excess: number }
+
+// ---------- Arizalar ----------
+export type RequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Fulfilled' | 'Failed'
+export type StepKind = 'Manager' | 'ResourceOwner' | 'Security'
+export type Decision = 'Pending' | 'Approved' | 'Rejected'
+export interface CatalogRole { id: string; code: string; name: string; description: string | null; risk: RiskLevel; entitlements: string[] }
+export interface PersonBrief { id: string; name: string; employeeNumber: string; department: string | null; jobTitle: string | null }
+export interface SodConflictInfo { ruleCode: string; ruleName: string; risk: string; left: string[]; right: string[] }
+export interface RequestPreview { canSubmit: boolean; blocker: string | null; steps: { kind: StepKind; approverName: string | null; auto: boolean }[]; sod: SodConflictInfo[] }
+export interface RequestListItem {
+  id: string; status: RequestStatus; roleId: string; roleCode: string; roleName: string; risk: RiskLevel; beneficiaryId: string; beneficiaryName: string
+  beneficiaryNumber: string; requesterName: string; createdAt: string; closedAt: string | null; currentStep: StepKind | null; currentApprover: string | null; hasSod: boolean
+}
+export interface ApprovalItem { step: number; kind: StepKind; approverId: string | null; approverName: string | null; decision: Decision; comment: string | null; decidedAt: string | null; decidedBy: string | null; decidedByName: string | null }
+export interface RequestDetails {
+  id: string; status: RequestStatus; roleId: string; roleCode: string; roleName: string; roleDescription: string | null; risk: RiskLevel; entitlements: string[]
+  beneficiary: PersonBrief; requester: PersonBrief; justification: string; validTo: string | null; createdAt: string; closedAt: string | null
+  approvals: ApprovalItem[]; sodConflicts: SodConflictInfo[]; canDecide: boolean; canCancel: boolean
+}

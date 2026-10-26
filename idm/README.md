@@ -84,6 +84,18 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
   qoidani buzsa, rol sahifasida ogohlantirish. Buzilishlar bosh sahifa, menyu va xodim kartochkasida ko'rinadi.
 - Ishlatilgan yoki arizada qatnashgan rolni o'chirib bo'lmaydi (tarix uchun).
 
+## Arizalar (F bosqichi)
+- Portalga kirgan har bir xodim (AD akkaunti orqali xodim yozuviga bog'langan) o'zi yoki **bevosita xodimlari** uchun
+  `IsRequestable` rolni so'raydi: asos (10–2000 belgi), ixtiyoriy muddat (≤ 1 yil, tugaganda rol o'zi tugaydi).
+- **Zanjir:** rahbar → rol egasi (rahbar bilan bir xil bo'lsa — bitta bosqich) → SoD ziddiyati bo'lsa axborot xavfsizligi.
+  Tasdiqlovchi belgilanmagan bosqich IdM administratorlari navbatiga tushadi. Rahbar o'zi so'rasa, rahbar bosqichi avtomatik.
+  Yuborishdan oldin "oldindan ko'rish" zanjir va SoD ziddiyatlarini ko'rsatadi.
+- **Qoidalar:** o'z arizasini (so'ragan yoki kim uchun so'ralgan) hech kim tasdiqlay olmaydi; faqat navbatdagi bosqich egasi qaror
+  qiladi; rad etishda sabab majburiy; takror ariza va mavjud rolga ariza rad etiladi; ikki kishi bir vaqtda qaror qilsa —
+  ikkinchisi 409 (PostgreSQL `xmin` optimistik qulfi). Begona xodim arizaning borligini ham ko'rmaydi (404).
+- Oxirgi tasdiqdan keyin rol beriladi (`Source = Request`) — "bo'lishi kerak"; tizimlarda bajarilishi — G bosqichi.
+- **Ishdan ketganda** barcha rollar (ariza va qo'lda berilganlar ham) tugaydi, kutilayotgan arizalar bekor qilinadi.
+
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.
 - **API:** JWT imzosi, issuer, audience (`idm-portal`) va `idm` ruxsat doirasi tekshiriladi.
@@ -103,6 +115,8 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
 | `GET /api/applications`, `/api/applications/{kod}`, `.../accounts?orphan=true`, `.../entitlements`, `.../runs` | admin, auditor |
 | `GET /api/reports/correlation`, `/api/reports/{leavers-with-active-accounts, orphan-accounts, identities-without-accounts, not-in-hr}`, `/api/events?kind=` | admin, auditor |
 | `GET /api/roles`, `/api/roles/{id}`, `/api/identities/{id}/access`, `/api/reports/access-drift`, `/api/sod/rules`, `/api/sod/violations`, `/api/entitlements`, `/api/identity-attributes` | admin, auditor |
+| `GET /api/catalog/roles`, `/api/me/team`, `POST /api/requests/preview`, `POST /api/requests`, `GET /api/requests?scope=mine\|inbox`, `GET /api/requests/{id}`, `POST /api/requests/{id}/decision`, `POST /api/requests/{id}/cancel` | har qanday xodim (huquq xizmatda tekshiriladi) |
+| `GET /api/requests?scope=all` | admin, auditor |
 | `POST /api/identities`, `POST /api/applications/{kod}/sync[?allowMassDelete=true]` | admin |
 | `POST/PUT/DELETE /api/roles…` (rol, ruxsatlar, qoidalar), `POST /api/roles/recalculate`, `POST/DELETE /api/sod/rules…` | admin |
 
