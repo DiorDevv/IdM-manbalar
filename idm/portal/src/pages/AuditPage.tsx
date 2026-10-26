@@ -2,7 +2,7 @@ import { useState, useDeferredValue } from 'react'
 import { useMutation, useQuery, keepPreviousData } from '@tanstack/react-query'
 import { api, query } from '../api/client'
 import type { AuditItem, AuditVerification, PagedResult } from '../api/types'
-import { formatDateTime, t } from '../i18n'
+import { describeAction, formatDateTime, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { Empty, ErrorBox, PageHead, SkeletonRows } from '../components/ui'
 
@@ -45,9 +45,9 @@ export function AuditPage() {
                       <td className="mono" style={{ color: 'var(--muted)' }}>{e.id}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(e.occurredAt)}</td>
                       <td><div className="cell-main">{e.actorName ?? e.actorId}</div><div className="cell-sub">{e.ipAddress ?? ''}</div></td>
-                      <td><span className="action-code">{e.action}</span></td>
+                      <td><ActionLabel action={e.action} details={e.details} /></td>
                       <td><div>{e.targetType ?? '—'}</div><div className="cell-sub mono">{e.targetId ?? ''}</div></td>
-                      <td className="mono" style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.details ?? ''}>{e.details ?? '—'}</td>
+                      <td style={{ maxWidth: 360 }} title={e.details ?? ''}><div className="cell-sub" style={{ overflowWrap: 'anywhere', marginTop: 0 }}>{describeAction(e.action, e.details).summary || '—'}</div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -67,5 +67,15 @@ export function AuditPage() {
         )}
       </section>
     </>
+  )
+}
+
+function ActionLabel({ action, details }: { action: string; details: string | null }) {
+  const d = describeAction(action, details)
+  return (
+    <div className="feed-item" data-tone={d.tone} style={{ padding: 0, gridTemplateColumns: '26px minmax(0, 1fr)', gap: 10, alignItems: 'center' }}>
+      <span className="feed-icon" style={{ width: 26, height: 26, boxShadow: 'none' }}><Icon name={d.icon} size={13} /></span>
+      <div><div className="cell-main">{d.label}</div><div className="cell-sub mono">{action}</div></div>
+    </div>
   )
 }

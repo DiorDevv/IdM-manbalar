@@ -18,6 +18,11 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<Approval> Approvals => Set<Approval>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<PortalRoleAssignment> PortalRoleAssignments => Set<PortalRoleAssignment>();
+    public DbSet<ConnectorRun> ConnectorRuns => Set<ConnectorRun>();
+    public DbSet<IdentityEvent> IdentityEvents => Set<IdentityEvent>();
+    public DbSet<RoleRule> RoleRules => Set<RoleRule>();
+    public DbSet<SodRule> SodRules => Set<SodRule>();
+    public DbSet<SodRuleEntitlement> SodRuleEntitlements => Set<SodRuleEntitlement>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -47,8 +52,13 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.ApplicationId, x.ExternalId }).IsUnique();
             e.HasIndex(x => new { x.ApplicationId, x.Login });
             e.HasIndex(x => x.IdentityId);
+            e.HasIndex(x => x.EmployeeNumber);
             e.Property(x => x.ExternalId).HasMaxLength(256);
             e.Property(x => x.Login).HasMaxLength(256);
+            e.Property(x => x.DisplayName).HasMaxLength(256);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.EmployeeNumber).HasMaxLength(64);
+            e.Property(x => x.DistinguishedName).HasMaxLength(1024);
             e.HasOne(x => x.Application).WithMany(x => x.Accounts).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Identity).WithMany(x => x.Accounts).HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
         });
@@ -70,17 +80,41 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasIndex(x => x.Code).IsUnique();
             e.Property(x => x.Code).HasMaxLength(64);
             e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(2000);
             e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.SetNull);
         });
         b.Entity<RoleEntitlement>(e =>
         {
             e.HasKey(x => new { x.RoleId, x.EntitlementId });
             e.HasOne(x => x.Role).WithMany(x => x.Entitlements).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<RoleRule>(e =>
+        {
+            e.HasIndex(x => x.RoleId);
+            e.Property(x => x.Department).HasMaxLength(256);
+            e.Property(x => x.JobTitle).HasMaxLength(256);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+            e.HasOne(x => x.Role).WithMany(x => x.Rules).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<SodRule>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+        });
+        b.Entity<SodRuleEntitlement>(e =>
+        {
+            e.HasKey(x => new { x.SodRuleId, x.EntitlementId });
+            e.HasOne(x => x.SodRule).WithMany(x => x.Entitlements).HasForeignKey(x => x.SodRuleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<IdentityRole>(e =>
         {
-            e.HasIndex(x => new { x.IdentityId, x.RoleId });
+            // Bir xodimda bir rol bir manbadan faqat bitta amaldagi yozuv (parallel qayta hisoblashdan himoya)
+            e.HasIndex(x => new { x.IdentityId, x.RoleId, x.Source }).IsUnique().HasFilter("valid_to IS NULL");
             e.HasOne(x => x.Identity).WithMany(x => x.Roles).HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -123,6 +157,21 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.Login, x.Role }).IsUnique();
             e.Property(x => x.Login).HasMaxLength(256);
             e.Property(x => x.CreatedBy).HasMaxLength(256);
+        });
+        b.Entity<ConnectorRun>(e =>
+        {
+            e.HasIndex(x => new { x.ApplicationId, x.StartedAt });
+            e.Property(x => x.TriggeredBy).HasMaxLength(256);
+            e.Property(x => x.Error).HasMaxLength(4000);
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<IdentityEvent>(e =>
+        {
+            e.HasIndex(x => x.OccurredAt);
+            e.HasIndex(x => new { x.IdentityId, x.OccurredAt });
+            e.Property(x => x.Source).HasMaxLength(32);
+            e.Property(x => x.Details).HasColumnType("text");
+            e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Enum'lar matn sifatida (DBA va hisobotlar uchun o'qiladigan), jadval va ustunlar snake_case.

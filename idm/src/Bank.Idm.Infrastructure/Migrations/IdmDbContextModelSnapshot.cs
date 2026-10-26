@@ -98,6 +98,26 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("DistinguishedName")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("distinguished_name");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("EmployeeNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("employee_number");
+
                     b.Property<string>("ExternalId")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -132,6 +152,9 @@ namespace Bank.Idm.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_accounts");
+
+                    b.HasIndex("EmployeeNumber")
+                        .HasDatabaseName("ix_accounts_employee_number");
 
                     b.HasIndex("IdentityId")
                         .HasDatabaseName("ix_accounts_identity_id");
@@ -368,6 +391,109 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("audit_events");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.ConnectorRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AccountsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_created");
+
+                    b.Property<int>("AccountsDeleted")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_deleted");
+
+                    b.Property<int>("AccountsDisabled")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_disabled");
+
+                    b.Property<int>("AccountsRead")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_read");
+
+                    b.Property<int>("AccountsUpdated")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_updated");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("application_id");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("GroupsRead")
+                        .HasColumnType("integer")
+                        .HasColumnName("groups_read");
+
+                    b.Property<int>("IdentitiesCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("identities_created");
+
+                    b.Property<int>("IdentitiesMissing")
+                        .HasColumnType("integer")
+                        .HasColumnName("identities_missing");
+
+                    b.Property<int>("IdentitiesTerminated")
+                        .HasColumnType("integer")
+                        .HasColumnName("identities_terminated");
+
+                    b.Property<int>("IdentitiesUpdated")
+                        .HasColumnType("integer")
+                        .HasColumnName("identities_updated");
+
+                    b.Property<int>("MembershipsAdded")
+                        .HasColumnType("integer")
+                        .HasColumnName("memberships_added");
+
+                    b.Property<int>("MembershipsRemoved")
+                        .HasColumnType("integer")
+                        .HasColumnName("memberships_removed");
+
+                    b.Property<int>("OrphanAccounts")
+                        .HasColumnType("integer")
+                        .HasColumnName("orphan_accounts");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("trigger");
+
+                    b.Property<string>("TriggeredBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("triggered_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_connector_runs");
+
+                    b.HasIndex("ApplicationId", "StartedAt")
+                        .HasDatabaseName("ix_connector_runs_application_id_started_at");
+
+                    b.ToTable("connector_runs");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Entitlement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -378,6 +504,10 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Property<Guid>("ApplicationId")
                         .HasColumnType("uuid")
                         .HasColumnName("application_id");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")
@@ -392,6 +522,10 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Property<bool>("IsPrivileged")
                         .HasColumnType("boolean")
                         .HasColumnName("is_privileged");
+
+                    b.Property<DateTimeOffset?>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_synced_at");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -508,6 +642,53 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("identities");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.IdentityEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ConnectorRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("connector_run_id");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("text")
+                        .HasColumnName("details");
+
+                    b.Property<Guid>("IdentityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identity_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("source");
+
+                    b.HasKey("Id")
+                        .HasName("pk_identity_events");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("ix_identity_events_occurred_at");
+
+                    b.HasIndex("IdentityId", "OccurredAt")
+                        .HasDatabaseName("ix_identity_events_identity_id_occurred_at");
+
+                    b.ToTable("identity_events");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.IdentityRole", b =>
                 {
                     b.Property<Guid>("Id")
@@ -547,8 +728,10 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.HasIndex("RoleId")
                         .HasDatabaseName("ix_identity_roles_role_id");
 
-                    b.HasIndex("IdentityId", "RoleId")
-                        .HasDatabaseName("ix_identity_roles_identity_id_role_id");
+                    b.HasIndex("IdentityId", "RoleId", "Source")
+                        .IsUnique()
+                        .HasDatabaseName("ix_identity_roles_identity_id_role_id_source")
+                        .HasFilter("valid_to IS NULL");
 
                     b.ToTable("identity_roles");
                 });
@@ -605,8 +788,13 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("code");
 
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsRequestable")
@@ -659,6 +847,121 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasDatabaseName("ix_role_entitlements_entitlement_id");
 
                     b.ToTable("role_entitlements");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.RoleRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("department");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("job_title");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("role_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_role_rules");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_role_rules_role_id");
+
+                    b.ToTable("role_rules");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.SodRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Risk")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("risk");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sod_rules");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sod_rules_code");
+
+                    b.ToTable("sod_rules");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.SodRuleEntitlement", b =>
+                {
+                    b.Property<Guid>("SodRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sod_rule_id");
+
+                    b.Property<Guid>("EntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entitlement_id");
+
+                    b.Property<string>("Side")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("side");
+
+                    b.HasKey("SodRuleId", "EntitlementId")
+                        .HasName("pk_sod_rule_entitlements");
+
+                    b.HasIndex("EntitlementId")
+                        .HasDatabaseName("ix_sod_rule_entitlements_entitlement_id");
+
+                    b.ToTable("sod_rule_entitlements");
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.AccessRequest", b =>
@@ -763,6 +1066,18 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Navigation("Approver");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.ConnectorRun", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_connector_runs_applications_application_id");
+
+                    b.Navigation("Application");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Entitlement", b =>
                 {
                     b.HasOne("Bank.Idm.Domain.Application", "Application")
@@ -784,6 +1099,18 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasConstraintName("fk_identities_identities_manager_id");
 
                     b.Navigation("Manager");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.IdentityEvent", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Identity", "Identity")
+                        .WithMany()
+                        .HasForeignKey("IdentityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_identity_events_identities_identity_id");
+
+                    b.Navigation("Identity");
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.IdentityRole", b =>
@@ -823,7 +1150,7 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.HasOne("Bank.Idm.Domain.Entitlement", "Entitlement")
                         .WithMany()
                         .HasForeignKey("EntitlementId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_role_entitlements_entitlements_entitlement_id");
 
@@ -837,6 +1164,39 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Navigation("Entitlement");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.RoleRule", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Role", "Role")
+                        .WithMany("Rules")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_role_rules_roles_role_id");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.SodRuleEntitlement", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Entitlement", "Entitlement")
+                        .WithMany()
+                        .HasForeignKey("EntitlementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sod_rule_entitlements_entitlements_entitlement_id");
+
+                    b.HasOne("Bank.Idm.Domain.SodRule", "SodRule")
+                        .WithMany("Entitlements")
+                        .HasForeignKey("SodRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sod_rule_entitlements_sod_rules_sod_rule_id");
+
+                    b.Navigation("Entitlement");
+
+                    b.Navigation("SodRule");
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.AccessRequest", b =>
@@ -864,6 +1224,13 @@ namespace Bank.Idm.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.Role", b =>
+                {
+                    b.Navigation("Entitlements");
+
+                    b.Navigation("Rules");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.SodRule", b =>
                 {
                     b.Navigation("Entitlements");
                 });

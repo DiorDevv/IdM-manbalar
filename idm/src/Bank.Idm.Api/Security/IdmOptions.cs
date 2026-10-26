@@ -1,3 +1,5 @@
+using Bank.Idm.Infrastructure.Sync;
+
 namespace Bank.Idm.Api.Security;
 
 public class IdmOptions
@@ -8,6 +10,8 @@ public class IdmOptions
     public string[] BootstrapAdmins { get; set; } = [];
     /// <summary>Ishga tushishda migratsiyalarni qo'llash (ishlab chiqarishda alohida bosqichda qilinadi).</summary>
     public bool MigrateOnStartup { get; set; }
+    /// <summary>Ulangan tizimlar: kalit — tizim kodi (masalan "AD").</summary>
+    public Dictionary<string, ConnectorDefinition> Connectors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public class SsoOptions

@@ -57,13 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (
       <div className="center-screen">
         <div className="card" style={{ maxWidth: 480, padding: 24 }}>
-          <h2 style={{ marginTop: 0 }}>{t.errorTitle}</h2>
+          <h2 style={{ marginTop: 0, fontSize: 16 }}>{t.errorTitle}</h2>
           <div className="alert bad">{error}</div>
           <p><button className="btn primary" onClick={() => { void userManager.removeUser().then(() => signIn('/')) }}>{t.retry}</button></p>
         </div>
       </div>
     )
   }
-  if (!user) return <div className="center-screen" style={{ color: 'var(--muted)' }}>{t.signingIn}</div>
+  if (!user) return <div className="center-screen"><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="spinner" />{t.signingIn}</div></div>
   return <AuthContext.Provider value={{ user, signOut }}>{children}</AuthContext.Provider>
 }

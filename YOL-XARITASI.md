@@ -1,6 +1,6 @@
 # Bank IdM: reja
 
-Yangilangan: 2026-10-20.
+Yangilangan: 2026-10-26.
 
 ## 1. IdM tizimi nimalar qila olishi kerak
 
@@ -9,12 +9,12 @@ O'ng ustunda bizning holatimiz.
 
 | # | Vazifa | Nima degani | Bizda |
 |---|---|---|---|
-| 1 | **Haqiqat manbai (HR)** | Xodim ma'lumoti kadrlar tizimidan keladi, IdM o'zi xodim "o'ylab topmaydi" | ❌ |
-| 2 | **Hayot sikli (JML)** | Ishga kirdi → akkauntlar ochiladi; lavozim o'zgardi → ruxsatlar almashadi; ketdi → hammasi yopiladi | ⚠️ faqat AD'dan o'qish va bloklash |
-| 3 | **Korrelyatsiya** | HR'dagi xodim ↔ AD, ABS va boshqa tizimlardagi akkauntlari. "Egasiz" akkauntlarni topish | ❌ |
+| 1 | **Haqiqat manbai (HR)** | Xodim ma'lumoti kadrlar tizimidan keladi, IdM o'zi xodim "o'ylab topmaydi" | ✅ CSV eksport (haqiqiy HR bilan ulash ochiq) |
+| 2 | **Hayot sikli (JML)** | Ishga kirdi → akkauntlar ochiladi; lavozim o'zgardi → ruxsatlar almashadi; ketdi → hammasi yopiladi | ⚠️ hodisalar aniqlanadi, tizimlarda bajarish G'da |
+| 3 | **Korrelyatsiya** | HR'dagi xodim ↔ AD, ABS va boshqa tizimlardagi akkauntlari. "Egasiz" akkauntlarni topish | ✅ tabel raqami bo'yicha, 4 hisobot |
 | 4 | **Provisioning (yozish)** | Tizimlarda akkaunt yaratish, bloklash, guruh va rol berish (AD, ABS, pochta…) | ❌ faqat o'qish |
-| 5 | **Rol modeli (RBAC)** | Lavozim va bo'limga qarab avtomatik ruxsatlar; rol → tizim ruxsatlari | ❌ |
-| 6 | **SoD siyosati** | Bir odamda ziddiyatli ruxsatlar bo'lmasligi (kredit beradi va o'zi tasdiqlaydi) | ❌ |
+| 5 | **Rol modeli (RBAC)** | Lavozim va bo'limga qarab avtomatik ruxsatlar; rol → tizim ruxsatlari | ✅ katalog, avtomatik rollar, farq |
+| 6 | **SoD siyosati** | Bir odamda ziddiyatli ruxsatlar bo'lmasligi (kredit beradi va o'zi tasdiqlaydi) | ✅ qoidalar va buzilishlar (ariza paytida — F) |
 | 7 | **Ariza va tasdiqlash** | Xodim ruxsat so'raydi → rahbar → resurs egasi → avtomatik beriladi | ❌ |
 | 8 | **Attestatsiya** | Har chorakda rahbar xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi | ❌ |
 | 9 | **Audit va hisobotlar** | Kim, nimaga, qachondan, kim bergan; regulyator (Markaziy bank) uchun hisobotlar | ⚠️ faqat SSO jurnali |
@@ -66,23 +66,33 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Testlar: 14 ta backend (haqiqiy PostgreSQL, Testcontainers) + 3 ta portal; CI (GitHub Actions) har push'da.
 - [ ] Ochiq: ilova uchun alohida, faqat INSERT/SELECT huquqli baza roli (I bosqichi); portalda til tanlash (hozir faqat o'zbekcha).
 
-### C. AD konnektori va xodimlar ro'yxati (1 hafta)
-- [ ] Konnektor interfeysi (har bir tizim alohida modul): `Read`, keyin `Create/Disable/AddToGroup`.
-- [ ] AD konnektori (o'qish): bugungi sozlamalar asosida (LDAPS, `objectGUID`, `whenChanged`, `memberOf`, bloklash filtri).
-- [ ] Portal: **Bosh sahifa** (xodimlar soni, bloklanganlar, oxirgi sinxronlash, xatolar), **Xodimlar** ro'yxati va kartochkasi
-  (ma'lumotlar, guruhlar, tizimlardagi akkauntlar, tarix).
+### C. AD konnektori va xodimlar ro'yxati (bajarildi, 2026-10-26)
+- [x] Konnektor interfeysi (`Bank.Idm.Connectors`, `IConnector.ReadAsync`); yozish G bosqichida qo'shiladi.
+- [x] LDAP/AD konnektori (o'qish): LDAPS, sahifalash, `member;range=`, `objectGUID`, bloklash filtri, `manager`; OpenLDAP ham sozlanadi.
+- [x] Sinxronlash: akkaunt/guruh/a'zolik solishtiriladi, har bir o'zgarish auditda, tabel raqami bo'yicha korrelyatsiya,
+  20% o'chirish chegarasi (administrator tasdig'i bilan), ishga tushishlar tarixi, jadval (15 daqiqa) va qo'lda ishga tushirish.
+- [x] Portal: bosh sahifada sinxronlash holati va bloklangan akkauntlar; **tizim kartochkasi** (akkauntlar, egasizlar filtri,
+  guruhlar, sinxronlash tarixi, "Sinxronlash" tugmasi); xodim kartochkasida guruhlar va **tarix**.
+- [x] Testlar: 29 ta backend (sinxronlash, API, LDAP xaritalash, haqiqiy OpenLDAP'ga qarshi) + 6 ta portal.
+- [ ] Ochiq: sinov AD (Samba) bilan jonli tekshiruv (bu mashinada Docker yo'q, OpenLDAP bilan tekshirildi); ichma-ich guruhlar;
+  delta sinxronlash (`whenChanged`, 10 000+ xodimda kerak bo'lsa); bir nechta DC.
 - **Tayyor:** portalda AD xodimlari va guruhlari ko'rinadi, kartochkada barcha ma'lumot bor.
 
-### D. HR manbai va korrelyatsiya (1–2 hafta)
-- [ ] HR importi: avval CSV/Excel yoki HR bazasidan ko'rinish (view), tabel raqami bo'yicha.
-- [ ] Korrelyatsiya qoidalari: HR xodim ↔ AD akkaunt (`employeeNumber`), mos kelmaganlar ro'yxati (egasiz akkauntlar, akkauntsiz xodimlar).
-- [ ] JML hodisalari: ishga kirish, lavozim o'zgarishi, ketish — portalda hodisalar lentasi.
+### D. HR manbai va korrelyatsiya (bajarildi, 2026-10-26)
+- [x] HR importi: CSV eksport (ustun nomlari sozlanadi), qat'iy tekshiruv (takror tabel, majburiy ustun, UTF-8), jadval va qo'lda.
+- [x] HR haqiqat manbai: HR'dagi xodim AD manbalidan HR manbaliga o'tadi; HR ulanganda AD xodim yaratmaydi.
+- [x] Korrelyatsiya hisobotlari: ishdan ketgan, lekin akkaunti faol; egasiz akkauntlar; akkauntsiz xodimlar; HR'da yo'q xodimlar.
+- [x] JML hodisalari lentasi (portal "Hodisalar"), Toshkent vaqti bo'yicha sanalar, ommaviy ishdan ketishda to'xtash.
+- [ ] Ochiq: bankning haqiqiy HR tizimi bilan ulash (fayl joyi va formati yoki bazadagi view) — HR bo'limi bilan kelishiladi.
 - **Tayyor:** "egasiz akkauntlar" hisoboti, ishdan ketgan xodimning hamma akkauntlari bir joyda ko'rinadi.
 
-### E. Rollar va SoD (1–2 hafta)
-- [ ] Rollar katalogi: biznes roli → tizim ruxsatlari (AD guruhlari, keyin ABS rollari).
-- [ ] Avtomatik ("tug'ma") rollar: lavozim + bo'lim → rollar.
-- [ ] SoD qoidalari va buzilishlar hisoboti.
+### E. Rollar va SoD (bajarildi, 2026-10-26)
+- [x] Rollar katalogi: rol → tizim ruxsatlari (AD guruhlari), xavf darajasi, ariza orqali so'raladimi.
+- [x] Avtomatik ("tug'ma") rollar: bo'lim + lavozim qoidalari, sinxronlashdan keyin va qo'lda qayta hisoblash, tarix saqlanadi.
+- [x] "Bo'lishi kerak" va "haqiqatda bor" farqi: xodim kartochkasida va "Ruxsatlar farqi" hisobotida.
+- [x] SoD qoidalari (ruxsat darajasida, ikki tomon) va buzilishlar hisoboti; rolning o'zi qoidani buzsa ogohlantirish.
+- [x] Portal: Rollar, rol kartochkasi (ruxsatlar, qoidalar, xodimlar), SoD sahifasi; dizayn tizimi (`.claude/skills/idm-portal-ui`).
+- [ ] Ochiq: SoD istisnolari (vaqtinchalik ruxsat, kompensatsion nazorat), rol egasi (F bosqichida tasdiqlovchi sifatida).
 - **Tayyor:** har bir xodim uchun "bo'lishi kerak" va "haqiqatda bor" ruxsatlar farqi ko'rinadi.
 
 ### F. Ariza va tasdiqlash (1–2 hafta)

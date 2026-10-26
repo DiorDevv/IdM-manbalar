@@ -35,16 +35,36 @@ case "$LDAP_SOURCE" in
     export ${P}RetrievingStrategies=LOAD_FROM_USER_MEMBEROF_ATTRIBUTE ${P}MemberOfAttribute=memberOf
     export ${P}UserIdLDAPAttribute=objectGUID ${P}GroupIdLDAPAttribute=objectGUID ${P}ModificationDateAttribute=whenChanged
     export ${P}DisabledUserFilter="(userAccountControl:1.2.840.113556.1.4.803:=2)"
-    export LDAP_LOGIN_ATTRIBUTE=sAMAccountName LDAP_DEPARTMENT_ATTRIBUTE=department ;;
+    export LDAP_LOGIN_ATTRIBUTE=sAMAccountName LDAP_DEPARTMENT_ATTRIBUTE=department
+    # IdM AD konnektori (idm/): standart sozlamalar AD uchun, faqat ulanish va OU'lar beriladi
+    idm_connector_env() {
+      local C=Idm__Connectors__AD__
+      export ${C}Name="Active Directory" ${C}Description="Sinov AD (BANK.TEST)" ${C}PrivilegedGroups__0=it-adminlar
+      export ${C}Ldap__Server=127.0.0.1 ${C}Ldap__Port="$AD_LDAPS_PORT" ${C}Ldap__UseSsl=true
+      export ${C}Ldap__BindDn="$AD_SVC_DN" ${C}Ldap__BindPassword="$AD_SVC_PASSWORD"
+      export ${C}Ldap__UsersDn="OU=Xodimlar,DC=bank,DC=test" ${C}Ldap__GroupsDn="OU=Guruhlar,DC=bank,DC=test"
+    } ;;
   openldap)
-    export ${P}Server=localhost ${P}Port=389 ${P}UseSsl=false ${P}BindDN="cn=admin,dc=bank,dc=local" ${P}BindCredentials=TestAdmin123
+    OPENLDAP_PORT=${OPENLDAP_PORT:-389}
+    export ${P}Server=localhost ${P}Port="$OPENLDAP_PORT" ${P}UseSsl=false ${P}BindDN="cn=admin,dc=bank,dc=local" ${P}BindCredentials=TestAdmin123
     export ${P}UsersDN="ou=people,dc=bank,dc=local" ${P}UserObjectClasses=inetOrgPerson
     export ${P}GroupsDN="ou=groups,dc=bank,dc=local" ${P}GroupObjectClasses=posixGroup
     export ${P}MembershipLDAPAttribute=memberUid ${P}MembershipUserLDAPAttribute=uid ${P}RetrievingStrategies=LOAD_BY_MEMBER_ATTRIBUTE
     export ${P}UserIdLDAPAttribute=uidNumber ${P}GroupIdLDAPAttribute=gidNumber ${P}ModificationDateAttribute=modifyTimestamp
     # Sinov LDAP'ida ishdan ketgan xodim: employeeType=disabled
     export ${P}DisabledUserFilter="(employeeType=disabled)"
-    export LDAP_LOGIN_ATTRIBUTE=uid LDAP_DEPARTMENT_ATTRIBUTE=departmentNumber ;;
+    export LDAP_LOGIN_ATTRIBUTE=uid LDAP_DEPARTMENT_ATTRIBUTE=departmentNumber
+    # IdM konnektori OpenLDAP uchun: atributlar va posixGroup a'zoligi (memberUid = login)
+    idm_connector_env() {
+      local C=Idm__Connectors__AD__
+      export ${C}Name="Sinov LDAP (OpenLDAP)" ${C}PrivilegedGroups__0=it-adminlar
+      export ${C}Ldap__Server=127.0.0.1 ${C}Ldap__Port="$OPENLDAP_PORT" ${C}Ldap__UseSsl=false
+      export ${C}Ldap__BindDn="cn=admin,dc=bank,dc=local" ${C}Ldap__BindPassword=TestAdmin123
+      export ${C}Ldap__UsersDn="ou=people,dc=bank,dc=local" ${C}Ldap__UserFilter="(objectClass=inetOrgPerson)" ${C}Ldap__DisabledFilter="(employeeType=disabled)"
+      export ${C}Ldap__GroupsDn="ou=groups,dc=bank,dc=local" ${C}Ldap__GroupFilter="(objectClass=posixGroup)"
+      export ${C}Ldap__UserIdAttribute=entryUUID ${C}Ldap__GroupIdAttribute=entryUUID ${C}Ldap__LoginAttribute=uid
+      export ${C}Ldap__DepartmentAttribute=departmentNumber ${C}Ldap__GroupMemberAttribute=memberUid ${C}Ldap__GroupMemberIsDn=false
+    } ;;
   *) echo "LDAP_SOURCE noma'lum: $LDAP_SOURCE (ad yoki openldap)"; exit 1 ;;
 esac
 echo "== Xodimlar manbai: $LDAP_SOURCE"
@@ -126,9 +146,17 @@ if [ -n "${StorageConfiguration__Type:-}" ] && [ -d "$HERE/idm/src/Bank.Idm.Api/
   docker exec bank-idm-postgres psql -U "$PG_USER" -d postgres -tAc "select 1 from pg_database where datname = 'idm'" | grep -q 1 \
     || docker exec bank-idm-postgres psql -U "$PG_USER" -d postgres -qc "create database idm"
   "$HERE/bootstrap/register-idm-portal.sh" | sed 's/^/   /'
+  # Konnektor sozlamalari (bind paroli bilan) faqat IdM API jarayoniga beriladi
+  ( idm_connector_env
+  # HR (haqiqat manbai): eksport fayli. HR ulanganda xodimlar faqat HR'dan yaratiladi, AD akkauntlari ularga bog'lanadi
+  HR_FILE=${HR_FILE:-$HERE/sinov-hr/xodimlar.csv}
+  if [ -f "$HR_FILE" ]; then
+    export Idm__Connectors__HR__Type=hr-csv Idm__Connectors__HR__Name="Kadrlar tizimi" Idm__Connectors__HR__Description="HR eksport fayli (CSV)"
+    export Idm__Connectors__HR__Csv__Path="$HR_FILE" Idm__Connectors__AD__CreateIdentities=false
+  fi
   ConnectionStrings__Idm="Host=127.0.0.1;Port=$PG_PORT;Database=idm;Username=$PG_USER;Password=$PG_PASSWORD" \
   Idm__BootstrapAdmins__0=administrator \
-    start idm-api "$HERE/idm/src/Bank.Idm.Api" "--no-launch-profile --urls http://localhost:7100"
+    start idm-api "$HERE/idm/src/Bank.Idm.Api" "--no-launch-profile --urls http://localhost:7100" )
   [ -d "$HERE/idm/portal/node_modules" ] && start idm-portal "$HERE/idm/portal" "cmd:npm run dev"
 fi
 
@@ -148,7 +176,7 @@ if [ "$LDAP_SOURCE" = ad ]; then
   source_ok() { ldapsearch -x -H "ldaps://127.0.0.1:$AD_LDAPS_PORT" -D "$AD_SVC_DN" -w "$AD_SVC_PASSWORD" -b DC=bank,DC=test -s base dn >/dev/null 2>&1; }
   hint="./sinov-ad/install-ad.sh"
 else
-  source_ok() { ldapsearch -x -H ldap://localhost -b dc=bank,dc=local -s base -D cn=admin,dc=bank,dc=local -w TestAdmin123 >/dev/null 2>&1; }
+  source_ok() { ldapsearch -x -H "ldap://localhost:$OPENLDAP_PORT" -b dc=bank,dc=local -s base -D cn=admin,dc=bank,dc=local -w TestAdmin123 >/dev/null 2>&1; }
   hint="sudo ./sinov-ldap/install-ldap.sh"
 fi
 # Manba almashganda (masalan OpenLDAP → AD) eski manbadan import qilingan xodim va guruhlarni tozalaymiz:

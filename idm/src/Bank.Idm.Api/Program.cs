@@ -3,8 +3,10 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Bank.Idm.Api.Endpoints;
 using Bank.Idm.Api.Security;
+using Bank.Idm.Api.Sync;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure;
+using Bank.Idm.Infrastructure.Sync;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +20,13 @@ builder.Services.AddDbContext<IdmDbContext>(o => o.UseNpgsql(builder.Configurati
     ?? throw new InvalidOperationException("ConnectionStrings:Idm sozlanmagan")));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditLog>();
+builder.Services.AddScoped<ConnectorSync>();
+builder.Services.AddScoped<HrSync>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.BirthrightService>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.AccessAnalyzer>();
+builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
+builder.Services.AddSingleton<ConnectorSyncCoordinator>();
+builder.Services.AddHostedService<ConnectorSyncWorker>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();
@@ -58,7 +67,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<IdmDbContext>();
     if (options.MigrateOnStartup) await db.Database.MigrateAsync();
-    await BootstrapAdminsAsync(db, scope.ServiceProvider.GetRequiredService<AuditLog>(), options.BootstrapAdmins);
+    var audit = scope.ServiceProvider.GetRequiredService<AuditLog>();
+    await BootstrapAdminsAsync(db, audit, options.BootstrapAdmins);
+    await ConnectorRegistration.EnsureApplicationsAsync(db, audit, TimeProvider.System, options.Connectors);
 }
 
 app.UseIdmSecurityHeaders();

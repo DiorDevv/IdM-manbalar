@@ -26,6 +26,8 @@ public enum ApplicationKind
     CoreBanking = 1,
     Database = 2,
     WebApplication = 3,
+    /// <summary>Kadrlar tizimi: xodimlar haqidagi haqiqat manbai (akkauntlari yo'q).</summary>
+    HumanResources = 4,
     Other = 9
 }
 

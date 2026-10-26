@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Bank.Idm.Api.Security;
+using Bank.Idm.Api.Sync;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -24,17 +25,28 @@ public static class IdmEndpoints
             return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, identityId);
         });
 
-        api.MapGet("/dashboard", async (IdmDbContext db, CancellationToken ct) =>
+        api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer, CancellationToken ct) =>
         {
             var byStatus = await db.Identities.GroupBy(i => i.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
             int Count(IdentityStatus s) => byStatus.FirstOrDefault(x => x.Key == s)?.Count ?? 0;
+            var lastRuns = await ApplicationEndpoints.LastRunsAsync(db, ct);
+            var lastSuccess = await db.ConnectorRuns.Where(r => r.Status == ConnectorRunStatus.Succeeded).GroupBy(r => r.ApplicationId)
+                .Select(g => new { g.Key, At = g.Max(r => r.FinishedAt) }).ToDictionaryAsync(x => x.Key, x => x.At, ct);
+            var connectors = (await db.Applications.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Name).Select(a => new { a.Id, a.Code, a.Name, a.Kind }).ToListAsync(ct))
+                .Where(a => sync.IsConfigured(a.Code) || lastRuns.ContainsKey(a.Id))
+                .Select(a => new ConnectorStatus(a.Code, a.Name, a.Kind, sync.IsRunning(a.Code), lastRuns.GetValueOrDefault(a.Id), lastSuccess.GetValueOrDefault(a.Id)))
+                .ToList();
             return new DashboardSummary(
                 byStatus.Sum(x => x.Count), Count(IdentityStatus.Active), Count(IdentityStatus.Suspended), Count(IdentityStatus.Terminated),
                 await db.Applications.CountAsync(a => a.IsActive, ct),
                 await db.Accounts.CountAsync(a => a.Status != AccountStatus.Deleted, ct),
+                await db.Accounts.CountAsync(a => a.Status == AccountStatus.Disabled, ct),
                 await db.Accounts.CountAsync(a => a.IdentityId == null && a.Status != AccountStatus.Deleted && a.Kind == AccountKind.Personal, ct),
+                await ReportEndpoints.LeaversWithActiveAccounts(db).CountAsync(ct),
+                (await analyzer.SodViolationsAsync(null, ct)).Count,
                 await db.AccessRequests.CountAsync(r => r.Status == AccessRequestStatus.Pending, ct),
-                await db.AuditEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, ct));
+                await db.AuditEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, ct),
+                connectors);
         }).RequireAuthorization(CanReadAll);
 
         var identities = api.MapGroup("/identities").RequireAuthorization(CanReadAll);
@@ -61,13 +73,30 @@ public static class IdmEndpoints
         identities.MapGet("/{id:guid}", async Task<Results<Ok<IdentityDetails>, NotFound>> (Guid id, IdmDbContext db, CancellationToken ct) =>
         {
             var i = await db.Identities.AsNoTracking().Include(x => x.Manager).Include(x => x.Accounts).ThenInclude(a => a.Application)
-                .FirstOrDefaultAsync(x => x.Id == id, ct);
+                .Include(x => x.Accounts).ThenInclude(a => a.Entitlements).ThenInclude(ae => ae.Entitlement)
+                .AsSplitQuery().FirstOrDefaultAsync(x => x.Id == id, ct);
             if (i is null) return TypedResults.NotFound();
             return TypedResults.Ok(new IdentityDetails(i.Id, i.EmployeeNumber, i.FirstName, i.LastName, i.MiddleName, i.Email,
                 i.Department, i.JobTitle, i.ManagerId, i.Manager?.DisplayName, i.Status, i.Source, i.HireDate, i.TerminationDate,
                 i.CreatedAt, i.UpdatedAt,
-                i.Accounts.OrderBy(a => a.Application.Code).Select(a => new AccountItem(a.Id, a.Application.Code, a.Application.Name,
-                    a.Login, a.Status, a.Kind, a.LastSyncedAt)).ToList()));
+                i.Accounts.OrderBy(a => a.Status).ThenBy(a => a.Application.Code).Select(a => new AccountItem(a.Id, a.Application.Code, a.Application.Name,
+                    a.Login, a.Status, a.Kind, a.LastSyncedAt,
+                    a.Entitlements.Select(ae => ae.Entitlement).OrderByDescending(e => e.IsPrivileged).ThenBy(e => e.Name)
+                        .Select(e => new EntitlementRef(e.Id, e.Name, e.IsPrivileged)).ToList())).ToList()));
+        });
+
+        // Xodim tarixi: xodimning o'zi va uning akkauntlari bo'yicha audit yozuvlari (eng yangisi birinchi)
+        identities.MapGet("/{id:guid}/history", async (Guid id, IdmDbContext db, int skip = 0, int take = 50, CancellationToken ct = default) =>
+        {
+            take = Math.Clamp(take, 1, MaxTake); skip = Math.Max(skip, 0);
+            var targets = await db.Accounts.Where(a => a.IdentityId == id).Select(a => a.Id.ToString()).ToListAsync(ct);
+            targets.Add(id.ToString());
+            var query = db.AuditEvents.AsNoTracking().Where(e => e.TargetId != null && targets.Contains(e.TargetId) && (e.TargetType == "identity" || e.TargetType == "account"));
+            var total = await query.CountAsync(ct);
+            var items = await query.OrderByDescending(e => e.Id).Skip(skip).Take(take)
+                .Select(e => new AuditItem(e.Id, e.OccurredAt, e.ActorId, e.ActorName, e.Action, e.TargetType, e.TargetId, e.Details, e.IpAddress, e.CorrelationId))
+                .ToListAsync(ct);
+            return new PagedResult<AuditItem>(items, total, skip, take);
         });
 
         identities.MapPost("/", async Task<Results<Created<IdentityDetails>, ValidationProblem, Conflict<string>>> (
@@ -96,10 +125,9 @@ public static class IdmEndpoints
             return TypedResults.Created($"/api/identities/{identity.Id}", details);
         }).RequireAuthorization(CanAdminister);
 
-        api.MapGet("/applications", async (IdmDbContext db, CancellationToken ct) =>
-            await db.Applications.AsNoTracking().OrderBy(a => a.Name)
-                .Select(a => new ApplicationItem(a.Id, a.Code, a.Name, a.Description, a.Kind, a.Risk, a.IsActive, a.Accounts.Count, a.Entitlements.Count))
-                .ToListAsync(ct)).RequireAuthorization(CanReadAll);
+        api.MapApplicationEndpoints();
+        api.MapReportEndpoints();
+        api.MapAccessEndpoints();
 
         var auditGroup = api.MapGroup("/audit").RequireAuthorization(CanReadAll);
         auditGroup.MapGet("/", async (IdmDbContext db, string? action, string? actor, string? targetId, int skip = 0, int take = 50, CancellationToken ct = default) =>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bank.Idm.Connectors</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bank.Idm.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Linux'da libldap (OpenLDAP) orqali ishlaydi: LDAPS sertifikati LDAPTLS_CACERT bilan tekshiriladi -->
+    <PackageReference Include="System.DirectoryServices.Protocols" />
+  </ItemGroup>
+</Project>

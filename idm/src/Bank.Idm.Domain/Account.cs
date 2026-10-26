@@ -14,6 +14,13 @@ public class Account
     /// <summary>Tizimdagi o'zgarmas identifikator (AD'da objectGUID).</summary>
     public string ExternalId { get; set; } = null!;
     public string Login { get; set; } = null!;
+    /// <summary>Tizimdagi ko'rinadigan ism (xodimga bog'lanmagan akkauntni tanib olish uchun).</summary>
+    public string? DisplayName { get; set; }
+    public string? Email { get; set; }
+    /// <summary>Tizimda yozilgan tabel raqami: shu bo'yicha xodimga bog'lanadi (korrelyatsiya).</summary>
+    public string? EmployeeNumber { get; set; }
+    /// <summary>LDAP tizimlarida to'liq nom (DN): rahbar va a'zolik havolalari shu orqali.</summary>
+    public string? DistinguishedName { get; set; }
     public AccountStatus Status { get; set; } = AccountStatus.Enabled;
     public AccountKind Kind { get; set; } = AccountKind.Personal;
     public DateTimeOffset? LastSyncedAt { get; set; }

@@ -1,0 +1,10 @@
+employeeNumber;lastName;firstName;middleName;email;department;jobTitle;managerEmployeeNumber;hireDate;terminationDate;status
+TAB-10045;Karimov;Aziz;Anvarovich;a.karimov@bank.local;Kredit bo'limi;Kredit mutaxassisi;TAB-10046;01.03.2021;;faol
+TAB-10046;Rahimova;Dilnoza;Baxtiyorovna;d.rahimova@bank.local;Kredit bo'limi;Bo'lim boshlig'i;;15.06.2017;;faol
+TAB-10047;Toshmatov;Sardor;;s.toshmatov@bank.local;Buxgalteriya;Bosh buxgalter;;10.01.2015;;faol
+TAB-10048;Yusupova;Nodira;;n.yusupova@bank.local;Buxgalteriya;Buxgalter;TAB-10047;05.09.2022;;faol
+TAB-10049;Aliyev;Jasur;;j.aliyev@bank.local;IT departamenti;Tizim administratori;;20.02.2019;;faol
+TAB-10050;Qodirov;Murod;;m.qodirov@bank.local;IT departamenti;Dasturchi;TAB-10049;11.04.2023;;faol
+TAB-10051;Ergasheva;Zarina;;z.ergasheva@bank.local;Operatsion bo'lim;Operator;;01.08.2020;;faol
+TAB-10052;Xolmatov;Bekzod;;b.xolmatov@bank.local;Axborot xavfsizligi;AX mutaxassisi;;12.12.2018;01.10.2026;ishdan ketgan
+TAB-10053;Saidova;Malika;;;Kredit bo'limi;Kredit mutaxassisi;TAB-10046;03.11.2026;;

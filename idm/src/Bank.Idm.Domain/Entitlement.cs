@@ -12,6 +12,9 @@ public class Entitlement
     public string? Description { get; set; }
     public RiskLevel Risk { get; set; } = RiskLevel.Medium;
     public bool IsPrivileged { get; set; }
+    /// <summary>Tizimda yo'q bo'lib qolgan sana (rollar unga bog'langan bo'lishi mumkin, shuning uchun o'chirilmaydi).</summary>
+    public DateTimeOffset? DeletedAt { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
 }
 
 /// <summary>Akkauntda haqiqatda bor ruxsat (tizimdan o'qilgan holat).</summary>

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Bank.Idm.Api/Bank.Idm.Api.csproj" />
+    <Project Path="src/Bank.Idm.Connectors/Bank.Idm.Connectors.csproj" />
     <Project Path="src/Bank.Idm.Domain/Bank.Idm.Domain.csproj" />
     <Project Path="src/Bank.Idm.Infrastructure/Bank.Idm.Infrastructure.csproj" />
   </Folder>
