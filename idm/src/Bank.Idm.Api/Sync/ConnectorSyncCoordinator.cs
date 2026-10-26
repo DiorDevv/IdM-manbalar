@@ -15,10 +15,11 @@ public record SyncStart(SyncStartStatus Status, Guid? RunId = null);
 
 /// <summary>
 /// Konnektorlarni ishga tushiradi: bitta tizim uchun bir vaqtda faqat bitta sinxronlash (jadval va qo'lda ishga tushirish
-/// bir-biriga to'qnashmaydi). Qo'lda ishga tushirish fonda bajariladi, portal natijani ishga tushishlar tarixidan oladi.
+/// bir-biriga to'qnashmaydi; bir nechta server nusxasida — baza indeksi bilan). Qo'lda ishga tushirish fonda bajariladi, portal natijani
+/// ishga tushishlar tarixidan oladi.
 /// </summary>
 public class ConnectorSyncCoordinator(IServiceScopeFactory scopes, IOptionsMonitor<IdmOptions> options, IHostApplicationLifetime lifetime,
-    ILogger<ConnectorSyncCoordinator> logger)
+    ILeadership cluster, ILogger<ConnectorSyncCoordinator> logger)
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
 
@@ -72,7 +73,9 @@ public class ConnectorSyncCoordinator(IServiceScopeFactory scopes, IOptionsMonit
             var db = scope.ServiceProvider.GetRequiredService<IdmDbContext>();
             var app = await db.Applications.SingleOrDefaultAsync(a => a.Code == code);
             if (app is null) { gate.Release(); return (SyncStartStatus.NotConfigured, null, null); }
-            var run = await scope.ServiceProvider.GetRequiredService<ConnectorSync>().StartRunAsync(app.Id, trigger, actor);
+            // Boshqa server nusxasida shu tizim sinxronlanayotgan bo'lsa — baza noyob indeksi rad etadi
+            var run = await scope.ServiceProvider.GetRequiredService<ConnectorSync>().StartRunAsync(app.Id, trigger, actor, cluster.NodeId);
+            if (run is null) { gate.Release(); return (SyncStartStatus.AlreadyRunning, null, null); }
             return (SyncStartStatus.Started, run.Id, gate);
         }
         catch

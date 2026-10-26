@@ -51,7 +51,7 @@ public class ConnectorSyncTests(PostgresFixture pg) : IClassFixture<PostgresFixt
     {
         await using var db = pg.CreateContext();
         var sync = new ConnectorSync(db, new AuditLog(db, TimeProvider.System), TimeProvider.System);
-        var run = await sync.StartRunAsync(_appId, ConnectorRunTrigger.Manual, "boss", Ct);
+        var run = (await sync.StartRunAsync(_appId, ConnectorRunTrigger.Manual, "boss", ct: Ct))!;
         return await sync.ExecuteAsync(run.Id, _connector, Settings, "Boss", allowMassDelete, Ct);
     }
 

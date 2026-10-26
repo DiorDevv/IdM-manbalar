@@ -91,8 +91,8 @@ public class ProvisioningCoordinator(ConnectorSyncCoordinator sync, IServiceScop
     }
 }
 
-/// <summary>Tizimga yozish: har ProvisioningIntervalSeconds'da reja va navbat (0 — fon ishlovchisi o'chiq).</summary>
-public class ProvisioningWorker(ProvisioningCoordinator coordinator, IOptionsMonitor<IdmOptions> options, TimeProvider time) : BackgroundService
+/// <summary>Tizimga yozish: har ProvisioningIntervalSeconds'da reja va navbat, faqat yetakchi nusxada (0 — fon ishlovchisi o'chiq).</summary>
+public class ProvisioningWorker(ProvisioningCoordinator coordinator, IOptionsMonitor<IdmOptions> options, ILeadership cluster, TimeProvider time) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -101,7 +101,7 @@ public class ProvisioningWorker(ProvisioningCoordinator coordinator, IOptionsMon
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(5, interval)), time);
         do
         {
-            await coordinator.RunCycleAsync(stoppingToken);
+            if (cluster.IsLeader) await coordinator.RunCycleAsync(stoppingToken);   // faqat yetakchi nusxada
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

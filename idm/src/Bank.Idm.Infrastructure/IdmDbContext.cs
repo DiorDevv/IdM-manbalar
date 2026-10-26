@@ -26,6 +26,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<ProvisioningOperation> ProvisioningOperations => Set<ProvisioningOperation>();
     public DbSet<AccessReviewCampaign> AccessReviewCampaigns => Set<AccessReviewCampaign>();
     public DbSet<AccessReviewItem> AccessReviewItems => Set<AccessReviewItem>();
+    public DbSet<ClusterNode> ClusterNodes => Set<ClusterNode>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -219,9 +220,17 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.Property(x => x.Login).HasMaxLength(256);
             e.Property(x => x.CreatedBy).HasMaxLength(256);
         });
+        b.Entity<ClusterNode>(e =>
+        {
+            e.Property(x => x.Id).HasMaxLength(128);
+            e.Property(x => x.Host).HasMaxLength(256);
+        });
         b.Entity<ConnectorRun>(e =>
         {
             e.HasIndex(x => new { x.ApplicationId, x.StartedAt });
+            // Bir tizimda bir vaqtda bitta sinxronlash — barcha server nusxalari uchun (baza kafolatlaydi)
+            e.HasIndex(x => x.ApplicationId).IsUnique().HasFilter("status = 'Running'").HasDatabaseName("ix_connector_runs_one_running");
+            e.Property(x => x.RunnerId).HasMaxLength(128);
             e.Property(x => x.TriggeredBy).HasMaxLength(256);
             e.Property(x => x.Error).HasMaxLength(4000);
             e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);

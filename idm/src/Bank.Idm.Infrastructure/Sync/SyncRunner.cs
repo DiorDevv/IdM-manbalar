@@ -17,11 +17,21 @@ public abstract class SyncRunner(IdmDbContext db, AuditLog audit, TimeProvider t
     public const string SystemActorName = "IdM sinxronlash";
     protected static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    public async Task<ConnectorRun> StartRunAsync(Guid applicationId, ConnectorRunTrigger trigger, string triggeredBy, CancellationToken ct = default)
+    /// <returns>null — shu tizim boshqa server nusxasida (yoki shu nusxada) allaqachon sinxronlanmoqda.</returns>
+    public async Task<ConnectorRun?> StartRunAsync(Guid applicationId, ConnectorRunTrigger trigger, string triggeredBy, string? runnerId = null,
+        CancellationToken ct = default)
     {
-        var run = new ConnectorRun { ApplicationId = applicationId, Trigger = trigger, TriggeredBy = triggeredBy, StartedAt = Time.GetUtcNow() };
+        var run = new ConnectorRun { ApplicationId = applicationId, Trigger = trigger, TriggeredBy = triggeredBy, StartedAt = Time.GetUtcNow(), RunnerId = runnerId };
         Db.ConnectorRuns.Add(run);
-        await Db.SaveChangesAsync(ct);
+        try
+        {
+            await Db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            Db.Entry(run).State = EntityState.Detached;
+            return null;
+        }
         return run;
     }
 

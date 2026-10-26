@@ -44,6 +44,9 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
         var app = await db.Applications.AsNoTracking().SingleAsync(a => a.Id == applicationId, ct);
         var now = time.GetUtcNow();
 
+        // Sinxronlash ketayotgan bo'lsa (istalgan server nusxasida) — yarim yangilangan holat bilan reja tuzilmaydi
+        if (await db.ConnectorRuns.AnyAsync(r => r.ApplicationId == app.Id && r.Status == ConnectorRunStatus.Running, ct))
+            return new PlanResult(0, 0, 0, false, $"{app.Code} hozir sinxronlanmoqda, birozdan keyin qayta urining", []);
         var lastRun = await db.ConnectorRuns.Where(r => r.ApplicationId == app.Id && r.Status != ConnectorRunStatus.Running)
             .OrderByDescending(r => r.StartedAt).Select(r => (ConnectorRunStatus?)r.Status).FirstOrDefaultAsync(ct);
         if (lastRun != ConnectorRunStatus.Succeeded)

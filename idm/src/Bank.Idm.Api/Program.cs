@@ -39,6 +39,9 @@ builder.Services.AddScoped<ProvisioningService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.AccessReviewService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reports.ReportBuilder>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
+builder.Services.AddSingleton<ClusterMembership>();
+builder.Services.AddSingleton<ILeadership>(sp => sp.GetRequiredService<ClusterMembership>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterMembership>());
 builder.Services.AddSingleton<ConnectorSyncCoordinator>();
 builder.Services.AddHostedService<ConnectorSyncWorker>();
 builder.Services.AddSingleton<ProvisioningCoordinator>();
@@ -98,7 +101,6 @@ using (var scope = app.Services.CreateScope())
     var audit = scope.ServiceProvider.GetRequiredService<AuditLog>();
     await BootstrapAdminsAsync(db, audit, options.BootstrapAdmins);
     await ConnectorRegistration.EnsureApplicationsAsync(db, audit, TimeProvider.System, options.Connectors);
-    await ProvisioningService.RecoverInterruptedAsync(db, TimeProvider.System);
 }
 
 if (options.TrustedProxies.Length > 0)
@@ -118,8 +120,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
-app.MapGet("/health", async (IdmDbContext db, CancellationToken ct) =>
-    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok" }) : Results.Problem("Bazaga ulanib bo'lmadi", statusCode: 503));
+// Yuk taqsimlagich uchun: baza bilan aloqa; qaysi nusxa va yetakchimi (monitoring)
+app.MapGet("/health", async (IdmDbContext db, ILeadership leadership, CancellationToken ct) =>
+    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", node = leadership.NodeId, leader = leadership.IsLeader })
+        : Results.Problem("Bazaga ulanib bo'lmadi", statusCode: 503));
 app.MapIdmEndpoints();
 
 app.Run();
@@ -135,8 +139,15 @@ static async Task BootstrapAdminsAsync(IdmDbContext db, AuditLog audit, IEnumera
     if (missing.Count == 0) return;
     foreach (var login in missing)
         db.PortalRoleAssignments.Add(new PortalRoleAssignment { Login = login, Role = PortalRole.Admin, CreatedBy = "system" });
-    await audit.SaveChangesAsync(missing.Select(l => new AuditEntry("system", "IdM", "portal-role.granted", "portal-role", l,
-        $$"""{"role":"{{PortalRoles.Admin}}","reason":"bootstrap"}""")).ToList());
+    try
+    {
+        await audit.SaveChangesAsync(missing.Select(l => new AuditEntry("system", "IdM", "portal-role.granted", "portal-role", l,
+            $$"""{"role":"{{PortalRoles.Admin}}","reason":"bootstrap"}""")).ToList());
+    }
+    catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+    {
+        db.ChangeTracker.Clear();   // boshqa server nusxasi shu payt qo'shdi
+    }
 }
 
 public partial class Program;

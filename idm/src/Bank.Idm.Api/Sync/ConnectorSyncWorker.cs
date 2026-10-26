@@ -7,15 +7,19 @@ using Microsoft.Extensions.Options;
 
 namespace Bank.Idm.Api.Sync;
 
-/// <summary>Jadval bo'yicha sinxronlash: har daqiqada tekshiradi, oxirgi ishga tushishdan IntervalMinutes o'tgan bo'lsa ishga tushiradi.</summary>
+/// <summary>
+/// Jadval bo'yicha sinxronlash (faqat yetakchi nusxada): har daqiqada tekshiradi, oxirgi ishga tushishdan IntervalMinutes o'tgan bo'lsa
+/// ishga tushiradi.
+/// </summary>
 public class ConnectorSyncWorker(ConnectorSyncCoordinator coordinator, IServiceScopeFactory scopes, IOptionsMonitor<IdmOptions> options,
-    TimeProvider time, ILogger<ConnectorSyncWorker> logger) : BackgroundService
+    ILeadership cluster, TimeProvider time, ILogger<ConnectorSyncWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1), time);
         do
         {
+            if (!cluster.IsLeader) continue;   // jadval faqat yetakchida (bir nechta nusxada takrorlanmasin)
             foreach (var (code, definition) in options.CurrentValue.Connectors.Where(c => c.Value.Enabled && c.Value.IntervalMinutes > 0))
             {
                 try

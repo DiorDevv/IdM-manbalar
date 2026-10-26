@@ -9,6 +9,8 @@ public class ConnectorRun
     public ConnectorRunTrigger Trigger { get; set; }
     /// <summary>Qo'lda ishga tushirgan administrator logini (jadval bo'yicha bo'lsa "system").</summary>
     public string TriggeredBy { get; set; } = null!;
+    /// <summary>Bajarayotgan server nusxasi (ClusterNode.Id): nusxa to'xtasa, yetakchi ishga tushishni yopadi.</summary>
+    public string? RunnerId { get; set; }
     public ConnectorRunStatus Status { get; set; } = ConnectorRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }

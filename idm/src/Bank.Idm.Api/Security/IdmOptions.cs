@@ -14,6 +14,8 @@ public class IdmOptions
     public Dictionary<string, ConnectorDefinition> Connectors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>TLS'ni tugatuvchi teskari proksi(lar) IP manzillari: faqat ulardan X-Forwarded-For/Proto qabul qilinadi.</summary>
     public string[] TrustedProxies { get; set; } = [];
+    /// <summary>Bir nechta server nusxasi: yurak urishi va to'xtagan nusxani aniqlash.</summary>
+    public Sync.ClusterOptions Cluster { get; set; } = new();
     /// <summary>Tizimga yozish aylanishi oralig'i (reja + navbat); 0 — fon ishlovchisi o'chiq.</summary>
     public int ProvisioningIntervalSeconds { get; set; } = 30;
 }

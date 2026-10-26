@@ -143,6 +143,17 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
   (tashqi kutubxonasiz; barcha qiymatlar matn, "=" bilan boshlangani formula bo'lmaydi), aks holda JSON — portalning chop etish
   ko'rinishi (brauzerda "PDF sifatida saqlash", A4 albom). Har bir yuklab olish auditda (`report.exported`).
 
+## Bir nechta server nusxasi (HA)
+- Bir nechta IdM API nusxasi bitta PostgreSQL bilan ishlaydi (yuk taqsimlagich orqasida). Har nusxa `cluster_nodes`da yurak urishini
+  yangilaydi (`Idm:Cluster:HeartbeatSeconds`, standart 10). **Yetakchi** — PostgreSQL session advisory lock egasi: jadval bo'yicha
+  sinxronlash va tizimga yozish faqat unda. Yetakchi to'xtasa yoki bazaga ulanishi uzilsa, lock bo'shaydi va keyingi yurak urishida
+  boshqa nusxa yetakchi bo'ladi (sinovda: 2 soniya).
+- Bir tizimda bir vaqtda bitta sinxronlash — barcha nusxalar uchun baza indeksi (`ix_connector_runs_one_running`) kafolatlaydi.
+- Yurak urishi `DeadAfterSeconds` (45) davomida bo'lmagan nusxaning tugallanmagan sinxronlashlarini yetakchi yopadi; yetakchi
+  bo'lganda "bajarilmoqda"da qolgan yozish amallari navbatga qaytadi (amallar idempotent). To'g'ri to'xtagan nusxa o'zini ro'yxatdan chiqaradi.
+- Qo'lda rejalash, tasdiqlash va API so'rovlari istalgan nusxada: tizim bo'yicha advisory lock va `xmin` qulflari bilan.
+- `/health` — baza aloqasi, nusxa identifikatori va yetakchimi (yuk taqsimlagich va monitoring uchun).
+
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.
 - **API:** JWT imzosi, issuer, audience (`idm-portal`) va `idm` ruxsat doirasi tekshiriladi.

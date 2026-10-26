@@ -620,6 +620,37 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("audit_events");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.ClusterNode", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("HeartbeatAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("heartbeat_at");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("host");
+
+                    b.Property<bool>("IsLeader")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_leader");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cluster_nodes");
+
+                    b.ToTable("cluster_nodes");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.ConnectorRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -692,6 +723,11 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("orphan_accounts");
 
+                    b.Property<string>("RunnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("runner_id");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -716,6 +752,11 @@ namespace Bank.Idm.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_connector_runs");
+
+                    b.HasIndex("ApplicationId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_connector_runs_one_running")
+                        .HasFilter("status = 'Running'");
 
                     b.HasIndex("ApplicationId", "StartedAt")
                         .HasDatabaseName("ix_connector_runs_application_id_started_at");

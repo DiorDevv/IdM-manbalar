@@ -54,7 +54,7 @@ public class HrSyncTests : IAsyncLifetime
     {
         await using var db = pg.CreateContext();
         var sync = new HrSync(db, new AuditLog(db, Clock), Clock);
-        var run = await sync.StartRunAsync(_hrId, ConnectorRunTrigger.Manual, "boss", Ct);
+        var run = (await sync.StartRunAsync(_hrId, ConnectorRunTrigger.Manual, "boss", ct: Ct))!;
         return await sync.ExecuteAsync(run.Id, _hr, settings ?? new HrSettings(MaxDeletePercent: 30), "Boss", allowMassDelete, Ct);
     }
 
@@ -93,7 +93,7 @@ public class HrSyncTests : IAsyncLifetime
         {
             var connector = new FakeConnector { Snapshot = new ConnectorSnapshot([new ExternalAccount("x-1", "a.karimov", true, N("1"), JobTitle: "Boshqa")], []) };
             var sync = new ConnectorSync(db, new AuditLog(db, Clock), Clock);
-            var adRun = await sync.StartRunAsync(_adId, ConnectorRunTrigger.Manual, "boss", Ct);
+            var adRun = (await sync.StartRunAsync(_adId, ConnectorRunTrigger.Manual, "boss", ct: Ct))!;
             await sync.ExecuteAsync(adRun.Id, connector, new SyncSettings(), "Boss", ct: Ct);
         }
         await using (var db = pg.CreateContext())
