@@ -19,6 +19,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with: { global-json-file: idm/global.json }
       - run: dotnet restore
+      # Zaif paketlar (o'tkinchi bog'liqliklar ham): topilsa build to'xtaydi
+      - name: Zaif NuGet paketlari
+        run: |
+          dotnet list Bank.Idm.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          ! grep -q "has the following vulnerable packages" vulnerable.txt
       - run: dotnet build --no-restore -warnaserror
       # Testlar Testcontainers bilan haqiqiy PostgreSQL'da (audit triggeri va xesh zanjiri)
       - run: dotnet test --no-build
@@ -31,6 +36,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm, cache-dependency-path: idm/portal/package-lock.json }
       - run: npm ci
+      - name: Zaif npm paketlari
+        run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
