@@ -64,6 +64,8 @@ case "$LDAP_SOURCE" in
       export ${C}Ldap__GroupsDn="ou=groups,dc=bank,dc=local" ${C}Ldap__GroupFilter="(objectClass=posixGroup)"
       export ${C}Ldap__UserIdAttribute=entryUUID ${C}Ldap__GroupIdAttribute=entryUUID ${C}Ldap__LoginAttribute=uid
       export ${C}Ldap__DepartmentAttribute=departmentNumber ${C}Ldap__GroupMemberAttribute=memberUid ${C}Ldap__GroupMemberIsDn=false
+      # Tizimga yozish (G) OpenLDAP uchun: yangi akkaunt inetOrgPerson, bloklash — employeeType=disabled
+      export ${C}Ldap__CreateObjectClasses__0=inetOrgPerson ${C}Ldap__RdnAttribute=uid ${C}Ldap__DisableAttribute=employeeType
     } ;;
   *) echo "LDAP_SOURCE noma'lum: $LDAP_SOURCE (ad yoki openldap)"; exit 1 ;;
 esac
@@ -148,6 +150,10 @@ if [ -n "${StorageConfiguration__Type:-}" ] && [ -d "$HERE/idm/src/Bank.Idm.Api/
   "$HERE/bootstrap/register-idm-portal.sh" | sed 's/^/   /'
   # Konnektor sozlamalari (bind paroli bilan) faqat IdM API jarayoniga beriladi
   ( idm_connector_env
+  # Tizimga yozish (G bosqichi): standart o'chiq. Yoqish: PROVISIONING_MODE=Approval ./start-all.sh (dry-run, portalda tasdiq)
+  # yoki Automatic. PROVISIONING_CREATE=true — akkauntsiz yangi xodimga bloklangan akkaunt yaratish
+  export Idm__Connectors__AD__Provisioning__Mode="${PROVISIONING_MODE:-Off}" Idm__Connectors__AD__Provisioning__CreateAccounts="${PROVISIONING_CREATE:-false}"
+  export Idm__Connectors__AD__Provisioning__ProtectedLogins__0=administrator
   # HR (haqiqat manbai): eksport fayli. HR ulanganda xodimlar faqat HR'dan yaratiladi, AD akkauntlari ularga bog'lanadi
   HR_FILE=${HR_FILE:-$HERE/sinov-hr/xodimlar.csv}
   if [ -f "$HR_FILE" ]; then

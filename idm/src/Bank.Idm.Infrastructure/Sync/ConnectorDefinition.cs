@@ -31,11 +31,38 @@ public class ConnectorDefinition
     /// <summary>HR sanalari (ishga kirish, ishdan ketish) qaysi vaqt mintaqasida "bugun" bo'lishi.</summary>
     public string TimeZone { get; set; } = "Asia/Tashkent";
     public CsvHrSourceOptions Csv { get; set; } = new();
+    /// <summary>Tizimga yozish (G bosqichi). Standart — o'chiq.</summary>
+    public ProvisioningDefinition Provisioning { get; set; } = new();
 
     public bool IsHr => Type.Equals(ConnectorTypes.HrCsv, StringComparison.OrdinalIgnoreCase);
     public ApplicationKind Kind => IsHr ? ApplicationKind.HumanResources : ApplicationKind.Directory;
     public SyncSettings ToSettings() => new(MaxDeletePercent, CreateIdentities, PrivilegedGroups);
     public HrSettings ToHrSettings() => new(MaxDeletePercent, TerminateMissing, TimeZone);
+    public bool CanProvision => !IsHr && Provisioning.Mode != ProvisioningMode.Off;
+    public Provisioning.ProvisioningSettings ToProvisioningSettings() => new(Provisioning.Mode, Provisioning.CreateAccounts,
+        Provisioning.MaxAutoOperations, Provisioning.ProtectedLogins, Provisioning.DisableSuspended, Provisioning.MaxAttempts, Ldap.LoginMaxLength);
+}
+
+public enum ProvisioningMode
+{
+    Off = 0,
+    /// <summary>Dry-run: har bir amal administrator tasdig'idan keyin bajariladi.</summary>
+    Approval = 1,
+    /// <summary>Darhol bajariladi; bir rejada MaxAutoOperations'dan ko'p amal bo'lsa — hammasi tasdiqqa to'xtatiladi.</summary>
+    Automatic = 2
+}
+
+public class ProvisioningDefinition
+{
+    public ProvisioningMode Mode { get; set; } = ProvisioningMode.Off;
+    /// <summary>Rol kerak, lekin tizimda akkaunti yo'q xodimga akkaunt yaratish (bloklangan, parolsiz).</summary>
+    public bool CreateAccounts { get; set; }
+    public int MaxAutoOperations { get; set; } = 20;
+    /// <summary>Hech qachon o'zgartirilmaydigan akkauntlar (masalan administrator, xizmat akkauntlari).</summary>
+    public string[] ProtectedLogins { get; set; } = [];
+    /// <summary>Vaqtincha to'xtatilgan xodim akkauntini bloklash.</summary>
+    public bool DisableSuspended { get; set; } = true;
+    public int MaxAttempts { get; set; } = 5;
 }
 
 public static class ConnectorTypes
@@ -50,6 +77,7 @@ public interface IConnectorFactory
 {
     IConnector Create(string code, ConnectorDefinition definition);
     IHrSource CreateHrSource(string code, ConnectorDefinition definition);
+    IProvisioningConnector CreateProvisioner(string code, ConnectorDefinition definition);
 }
 
 public class ConnectorFactory : IConnectorFactory
@@ -58,6 +86,12 @@ public class ConnectorFactory : IConnectorFactory
     {
         ConnectorTypes.Ldap => new LdapConnector(definition.Ldap),
         _ => throw new ConnectorException($"{code}: konnektor turi noma'lum: {definition.Type}")
+    };
+
+    public IProvisioningConnector CreateProvisioner(string code, ConnectorDefinition definition) => definition.Type.ToLowerInvariant() switch
+    {
+        ConnectorTypes.Ldap => new LdapProvisioner(definition.Ldap),
+        _ => throw new ConnectorException($"{code}: {definition.Type} konnektori tizimga yozishni qo'llamaydi")
     };
 
     public IHrSource CreateHrSource(string code, ConnectorDefinition definition) => definition.IsHr

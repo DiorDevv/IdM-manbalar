@@ -128,3 +128,14 @@ public record RequestDetails(Guid Id, AccessRequestStatus Status, Guid RoleId, s
     IReadOnlyList<string> Entitlements, PersonBrief Beneficiary, PersonBrief Requester, string Justification, DateTimeOffset? ValidTo,
     DateTimeOffset CreatedAt, DateTimeOffset? ClosedAt, IReadOnlyList<ApprovalItem> Approvals,
     IReadOnlyList<Bank.Idm.Infrastructure.Requests.SodConflictInfo> SodConflicts, bool CanDecide, bool CanCancel);
+
+public record ProvisioningOperationItem(Guid Id, string ApplicationCode, ProvisioningKind Kind, ProvisioningStatus Status, string Reason,
+    Guid? IdentityId, string? IdentityName, string? EmployeeNumber, Guid? AccountId, string? Login, string? Group, bool GroupPrivileged, string? Summary,
+    DateTimeOffset CreatedAt, string? ApprovedBy, string? ApprovedByName, DateTimeOffset? ApprovedAt, int Attempts, DateTimeOffset? NextAttemptAt,
+    string? LastError, DateTimeOffset? CompletedAt);
+
+/// <summary>Tizim bo'yicha yozish holati: rejim va amallar soni.</summary>
+public record ProvisioningApplicationStatus(string Code, string Name, Bank.Idm.Infrastructure.Sync.ProvisioningMode Mode, bool CreateAccounts,
+    int MaxAutoOperations, int Proposed, int Queued, int Running, int Failed, int SucceededLast24h);
+
+public record ProvisioningActionBody(IReadOnlyList<Guid> Ids);

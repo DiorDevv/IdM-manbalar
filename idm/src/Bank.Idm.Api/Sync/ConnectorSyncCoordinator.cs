@@ -35,6 +35,25 @@ public class ConnectorSyncCoordinator(IServiceScopeFactory scopes, IOptionsMonit
         return new SyncStart(SyncStartStatus.Started, runId);
     }
 
+    /// <summary>
+    /// Tizimga yozish shu tizimning sinxronlashi bilan bir vaqtda bajarilmaydi (yozish eskirgan holatga asoslanmasligi va sinxronlash
+    /// yarim yozilgan holatni o'qimasligi uchun). Band bo'lsa — false, keyingi aylanishda.
+    /// </summary>
+    public async Task<bool> TryRunExclusiveAsync(string code, Func<Task> action)
+    {
+        var gate = _locks.GetOrAdd(code, _ => new SemaphoreSlim(1, 1));
+        if (!await gate.WaitAsync(0)) return false;
+        try
+        {
+            await action();
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>Jadval bo'yicha: tugashini kutadi.</summary>
     public async Task<ConnectorRun?> RunAsync(string code, ConnectorRunTrigger trigger, string actor, CancellationToken ct)
     {

@@ -130,6 +130,7 @@ public static class IdmEndpoints
         api.MapReportEndpoints();
         api.MapAccessEndpoints();
         api.MapRequestEndpoints();
+        api.MapProvisioningEndpoints();
 
         var auditGroup = api.MapGroup("/audit").RequireAuthorization(CanReadAll);
         auditGroup.MapGet("/", async (IdmDbContext db, string? action, string? actor, string? targetId, int skip = 0, int take = 50, CancellationToken ct = default) =>

@@ -42,6 +42,7 @@ public class AccessApiTests : IAsyncLifetime
             b.UseEnvironment("Testing");
             b.UseSetting("ConnectionStrings:Idm", pg.ConnectionString);
             b.UseSetting("Idm:Sso:Authority", "https://sso.invalid/master");
+            b.UseSetting("Idm:ProvisioningIntervalSeconds", "0");   // fon ishlovchisi testga aralashmasin
             b.UseSetting("Idm:BootstrapAdmins:0", "boss");
             b.ConfigureTestServices(s => s.AddAuthentication(o =>
             {

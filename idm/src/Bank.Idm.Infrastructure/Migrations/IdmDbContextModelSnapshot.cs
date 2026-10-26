@@ -801,6 +801,125 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("portal_role_assignments");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.ProvisioningOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("application_id");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("approved_by");
+
+                    b.Property<string>("ApprovedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("approved_by_name");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("dedup_key");
+
+                    b.Property<Guid?>("EntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entitlement_id");
+
+                    b.Property<Guid?>("IdentityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identity_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("summary");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provisioning_operations");
+
+                    b.HasIndex("DedupKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_provisioning_operations_dedup_key")
+                        .HasFilter("status IN ('Proposed', 'Queued', 'Running', 'Failed')");
+
+                    b.HasIndex("EntitlementId")
+                        .HasDatabaseName("ix_provisioning_operations_entitlement_id");
+
+                    b.HasIndex("IdentityId")
+                        .HasDatabaseName("ix_provisioning_operations_identity_id");
+
+                    b.HasIndex("AccountId", "EntitlementId")
+                        .HasDatabaseName("ix_provisioning_operations_account_id_entitlement_id");
+
+                    b.HasIndex("ApplicationId", "CreatedAt")
+                        .HasDatabaseName("ix_provisioning_operations_application_id_created_at");
+
+                    b.HasIndex("Status", "NextAttemptAt")
+                        .HasDatabaseName("ix_provisioning_operations_status_next_attempt_at");
+
+                    b.ToTable("provisioning_operations");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1158,6 +1277,42 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Navigation("Identity");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.ProvisioningOperation", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_provisioning_operations_accounts_account_id");
+
+                    b.HasOne("Bank.Idm.Domain.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_provisioning_operations_applications_application_id");
+
+                    b.HasOne("Bank.Idm.Domain.Entitlement", "Entitlement")
+                        .WithMany()
+                        .HasForeignKey("EntitlementId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_provisioning_operations_entitlements_entitlement_id");
+
+                    b.HasOne("Bank.Idm.Domain.Identity", "Identity")
+                        .WithMany()
+                        .HasForeignKey("IdentityId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_provisioning_operations_identities_identity_id");
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Entitlement");
+
+                    b.Navigation("Identity");
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.Role", b =>

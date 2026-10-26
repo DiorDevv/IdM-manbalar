@@ -1,5 +1,4 @@
 using System.DirectoryServices.Protocols;
-using System.Net;
 
 namespace Bank.Idm.Connectors.Ldap;
 
@@ -25,27 +24,7 @@ public sealed class LdapConnector(LdapConnectorOptions options) : IConnector
         return LdapSnapshotBuilder.Build(o, users, disabled, groups);
     }
 
-    private LdapConnection Connect()
-    {
-        var connection = new LdapConnection(new LdapDirectoryIdentifier(options.Server, options.Port), new NetworkCredential(options.BindDn, options.BindPassword), AuthType.Basic)
-        {
-            Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds)
-        };
-        connection.SessionOptions.ProtocolVersion = 3;
-        connection.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
-        if (options.UseSsl) connection.SessionOptions.SecureSocketLayer = true;
-        try
-        {
-            connection.Bind();
-            return connection;
-        }
-        catch (Exception e) when (e is LdapException or DirectoryOperationException)
-        {
-            connection.Dispose();
-            var scheme = options.UseSsl ? "ldaps" : "ldap";
-            throw new ConnectorException($"{scheme}://{options.Server}:{options.Port} ga ulanib bo'lmadi ({options.BindDn}): {e.Message}", e);
-        }
-    }
+    private LdapConnection Connect() => LdapSession.Open(options, options.BindDn, options.BindPassword);
 
     private async Task<List<LdapRecord>> SearchAsync(LdapConnection connection, string baseDn, string filter, string[] attributes, CancellationToken ct)
     {
@@ -107,19 +86,8 @@ public sealed class LdapConnector(LdapConnectorOptions options) : IConnector
         LdapRecord.Create(entry.DistinguishedName, entry.Attributes.AttributeNames.Cast<string>().Select(name =>
             new KeyValuePair<string, object[]>(name, entry.Attributes[name].GetValues(binary.Contains(name) ? typeof(byte[]) : typeof(string)))));
 
-    private async Task<T> SendAsync<T>(LdapConnection connection, DirectoryRequest request, string what) where T : DirectoryResponse
-    {
-        try
-        {
-            return (T)await Task.Factory.FromAsync(
-                (callback, state) => connection.BeginSendRequest(request, PartialResultProcessing.NoPartialResultSupport, callback, state),
-                connection.EndSendRequest, null);
-        }
-        catch (Exception e) when (e is LdapException or DirectoryOperationException)
-        {
-            throw new ConnectorException($"LDAP so'rovi bajarilmadi ({what}): {e.Message}", e);
-        }
-    }
+    private static Task<T> SendAsync<T>(LdapConnection connection, DirectoryRequest request, string what) where T : DirectoryResponse =>
+        LdapSession.SendAsync<T>(connection, request, what);
 
     private static string Wrap(string filter) => filter.StartsWith('(') ? filter : $"({filter})";
 }

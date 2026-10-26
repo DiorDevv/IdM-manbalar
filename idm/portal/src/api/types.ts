@@ -93,3 +93,19 @@ export interface RequestDetails {
   beneficiary: PersonBrief; requester: PersonBrief; justification: string; validTo: string | null; createdAt: string; closedAt: string | null
   approvals: ApprovalItem[]; sodConflicts: SodConflictInfo[]; canDecide: boolean; canCancel: boolean
 }
+
+export type ProvisioningKind = 'CreateAccount' | 'DisableAccount' | 'AddMembership' | 'RemoveMembership'
+export type ProvisioningStatus = 'Proposed' | 'Queued' | 'Running' | 'Succeeded' | 'Failed' | 'Obsolete' | 'Cancelled'
+export type ProvisioningMode = 'Off' | 'Approval' | 'Automatic'
+export interface ProvisioningOperationItem {
+  id: string; applicationCode: string; kind: ProvisioningKind; status: ProvisioningStatus; reason: string
+  identityId: string | null; identityName: string | null; employeeNumber: string | null; accountId: string | null; login: string | null
+  group: string | null; groupPrivileged: boolean; summary: string | null; createdAt: string; approvedBy: string | null; approvedByName: string | null
+  approvedAt: string | null; attempts: number; nextAttemptAt: string | null; lastError: string | null; completedAt: string | null
+}
+export interface ProvisioningApplicationStatus {
+  code: string; name: string; mode: ProvisioningMode; createAccounts: boolean; maxAutoOperations: number
+  proposed: number; queued: number; running: number; failed: number; succeededLast24h: number
+}
+export interface PlanResult { planned: number; created: number; obsoleted: number; held: boolean; skipped: string | null; warnings: string[] }
+export interface ProvisioningActionResult { changed: number; skipped: number; error: string | null }

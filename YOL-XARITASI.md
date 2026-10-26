@@ -104,10 +104,17 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [ ] Ochiq: eslatmalar va muddati o'tgan arizalar (pochta/xabarnoma kanali kerak), tasdiqlovchini almashtirish (ta'til), rol egasini portalda belgilash.
 - **Tayyor:** ariza boshidan oxirigacha portalda o'tadi, har qadam auditda.
 
-### G. AD'ga yozish (1–2 hafta)
-- [ ] AD konnektori: akkaunt yaratish, bloklash, guruhga qo'shish va olib tashlash.
-- [ ] Avval "quruq ishga tushirish" (dry-run): nima o'zgarishi ko'rsatiladi, admin tasdiqlaydi. Navbat va qayta urinish.
-- [ ] Ishdan ketish: HR'da ketdi → AD'da bloklanadi, guruhlardan chiqariladi.
+### G. AD'ga yozish (bajarildi, 2026-10-26)
+- [x] AD/LDAP konnektori: akkaunt yaratish (bloklangan, parolsiz), bloklash, guruhga qo'shish va olib tashlash — idempotent,
+  o'zgarmas identifikator bo'yicha, faqat ruxsat etilgan OU ichida, alohida yozish akkaunti bilan.
+- [x] Dry-run (`Approval`): reja portalda, administrator tanlab tasdiqlaydi; `Automatic` rejimda ham ko'p amal chiqsa — tasdiqqa.
+  Navbat, kechikishli qayta urinish, doimiy xatoda to'xtash, keraksiz bo'lib qolgan amallarni bekor qilish.
+- [x] Ishdan ketish: HR'da ketdi → rollar tugaydi → AD'da bloklanadi va barcha guruhlardan chiqariladi.
+- [x] Rol olib tashlansa faqat IdM qo'shgan a'zolik olinadi; tasdiqlangan ariza guruh haqiqatda paydo bo'lgach "Bajarildi".
+- [x] Portal: "Tizimga yozish" sahifasi (tizimlar rejimi, reja, tasdiq / qayta urinish / yopish, holatlar).
+- [x] Jonli sinov (OpenLDAP + HR fayli): ishdan ketgan xodim bloklandi, yangi xodimga akkaunt yaratilib rol guruhiga qo'shildi.
+- [ ] Ochiq: bankning haqiqiy AD'sida sinov (LDAPS, alohida yozish akkaunti va huquqlari), yangi akkauntni ishga kirish kunida
+  yoqish va parolni xavfsiz yetkazish (helpdesk jarayoni), akkauntni qayta yoqish (qayta ishga olish), ABS va boshqa tizimlar konnektorlari.
 - **Tayyor:** tasdiqlangan ariza AD'da o'zi bajariladi, ishdan ketgan xodim avtomatik bloklanadi.
 
 ### H. Attestatsiya va hisobotlar (1–2 hafta)

@@ -6,6 +6,7 @@ using Bank.Idm.Api.Security;
 using Bank.Idm.Api.Sync;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure;
+using Bank.Idm.Infrastructure.Provisioning;
 using Bank.Idm.Infrastructure.Sync;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -25,9 +26,14 @@ builder.Services.AddScoped<HrSync>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.BirthrightService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.AccessAnalyzer>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Requests.AccessRequestService>();
+builder.Services.AddScoped<ProvisioningPlanner>();
+builder.Services.AddScoped<ProvisioningExecutor>();
+builder.Services.AddScoped<ProvisioningService>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
 builder.Services.AddSingleton<ConnectorSyncCoordinator>();
 builder.Services.AddHostedService<ConnectorSyncWorker>();
+builder.Services.AddSingleton<ProvisioningCoordinator>();
+builder.Services.AddHostedService<ProvisioningWorker>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();
@@ -71,6 +77,7 @@ using (var scope = app.Services.CreateScope())
     var audit = scope.ServiceProvider.GetRequiredService<AuditLog>();
     await BootstrapAdminsAsync(db, audit, options.BootstrapAdmins);
     await ConnectorRegistration.EnsureApplicationsAsync(db, audit, TimeProvider.System, options.Connectors);
+    await ProvisioningService.RecoverInterruptedAsync(db, TimeProvider.System);
 }
 
 app.UseIdmSecurityHeaders();

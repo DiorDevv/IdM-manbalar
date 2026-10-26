@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Bank.Idm.Api.Endpoints;
+using Bank.Idm.Api.Sync;
+using Bank.Idm.Infrastructure.Provisioning;
 using Bank.Idm.Connectors;
 using Bank.Idm.Connectors.Hr;
 using Bank.Idm.Domain;
@@ -19,14 +21,16 @@ namespace Bank.Idm.Tests;
 public class ConnectorApiTests : IAsyncLifetime
 {
     private readonly PostgresFixture pg = new();
-    private sealed class FakeFactory(FakeConnector connector, FakeHrSource hr) : IConnectorFactory
+    private sealed class FakeFactory(FakeConnector connector, FakeHrSource hr, FakeProvisioner provisioner) : IConnectorFactory
     {
         public IConnector Create(string code, ConnectorDefinition definition) => connector;
         public IHrSource CreateHrSource(string code, ConnectorDefinition definition) => hr;
+        public IProvisioningConnector CreateProvisioner(string code, ConnectorDefinition definition) => provisioner;
     }
 
     private readonly FakeConnector _connector = new() { Snapshot = TestDirectory.Snapshot() };
     private readonly FakeHrSource _hr = new();
+    private readonly FakeProvisioner _directory = new();
     private WebApplicationFactory<Program> _factory = null!;
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
@@ -39,17 +43,19 @@ public class ConnectorApiTests : IAsyncLifetime
             b.UseEnvironment("Testing");
             b.UseSetting("ConnectionStrings:Idm", pg.ConnectionString);
             b.UseSetting("Idm:Sso:Authority", "https://sso.invalid/master");
+            b.UseSetting("Idm:ProvisioningIntervalSeconds", "0");   // fon ishlovchisi testga aralashmasin
             b.UseSetting("Idm:BootstrapAdmins:0", "boss");
             b.UseSetting("Idm:Connectors:AD:Name", "Active Directory");
             b.UseSetting("Idm:Connectors:AD:IntervalMinutes", "0");   // faqat qo'lda: jadval testga aralashmasin
             b.UseSetting("Idm:Connectors:AD:PrivilegedGroups:0", "Domain Admins");
+            b.UseSetting("Idm:Connectors:AD:Provisioning:Mode", "Approval");
             b.UseSetting("Idm:Connectors:HR:Name", "Kadrlar tizimi");
             b.UseSetting("Idm:Connectors:HR:Type", "hr-csv");
             b.UseSetting("Idm:Connectors:HR:IntervalMinutes", "0");
             b.UseSetting("Idm:Connectors:HR:MaxDeletePercent", "50");   // 3 xodimdan 1 tasi ketadi
             b.ConfigureTestServices(s =>
             {
-                s.AddSingleton<IConnectorFactory>(new FakeFactory(_connector, _hr));
+                s.AddSingleton<IConnectorFactory>(new FakeFactory(_connector, _hr, _directory));
                 s.AddAuthentication(o =>
                 {
                     o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
@@ -158,6 +164,51 @@ public class ConnectorApiTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, (await Client("a.karimov").GetAsync("/api/reports/correlation", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Client("a.karimov").GetAsync("/api/events", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Leaver_from_hr_is_proposed_approved_by_admin_and_disabled_in_the_directory()
+    {
+        var admin = Client("boss");
+        _hr.Snapshot = new HrSnapshot([new HrRecord("TAB-1", "Aziz", "Karimov"), new HrRecord("TAB-2", "Dilnoza", "Rahimova"), new HrRecord("TAB-3", "Jasur", "Aliyev")]);
+        await SyncAsync(admin, "HR");
+        await SyncAsync(admin, "AD");
+        _hr.Snapshot = new HrSnapshot([new HrRecord("TAB-1", "Aziz", "Karimov"), new HrRecord("TAB-2", "Dilnoza", "Rahimova"),
+            new HrRecord("TAB-3", "Jasur", "Aliyev", TerminationDate: new DateOnly(2020, 1, 1))]);
+        await SyncAsync(admin, "HR");
+
+        // Dry-run: reja tuziladi, tizimga hech narsa yozilmaydi
+        var plan = await (await admin.PostAsync("/api/provisioning/AD/plan", null, Ct)).Content.ReadFromJsonAsync<PlanResult>(Json, Ct);
+        Assert.Equal((2, 2), (plan!.Planned, plan.Created));
+        var status = Assert.Single((await admin.GetFromJsonAsync<List<ProvisioningApplicationStatus>>("/api/provisioning/status", Json, Ct))!);
+        Assert.Equal((ProvisioningMode.Approval, 2), (status.Mode, status.Proposed));
+        var proposed = await admin.GetFromJsonAsync<PagedResult<ProvisioningOperationItem>>("/api/provisioning/operations?status=Proposed", Json, Ct);
+        Assert.All(proposed!.Items, o => Assert.Equal(("j.aliyev", "TAB-3", "leaver"), (o.Login, o.EmployeeNumber, o.Reason)));
+        Assert.Contains(proposed.Items, o => o is { Kind: ProvisioningKind.RemoveMembership, Group: "Domain Admins", GroupPrivileged: true });
+        Assert.Empty(_directory.Calls);
+
+        // Oddiy xodim ko'ra ham, tasdiqlay ham olmaydi; auditor faqat ko'radi
+        var karimov = Client("a.karimov");
+        Assert.Equal(HttpStatusCode.Forbidden, (await karimov.GetAsync("/api/provisioning/operations", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await karimov.PostAsJsonAsync("/api/provisioning/operations/approve", new { ids = proposed.Items.Select(o => o.Id) }, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await karimov.PostAsync("/api/provisioning/AD/plan", null, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync("/api/provisioning/HR/plan", null, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/provisioning/operations/delete", new { ids = proposed.Items.Select(o => o.Id) }, Ct)).StatusCode);
+
+        var approved = await admin.PostAsJsonAsync("/api/provisioning/operations/approve", new { ids = proposed.Items.Select(o => o.Id) }, Ct);
+        Assert.Equal(2, (await approved.Content.ReadFromJsonAsync<ProvisioningActionResult>(Json, Ct))!.Changed);
+        await _factory.Services.GetRequiredService<ProvisioningCoordinator>().RunCycleAsync(Ct);
+
+        Assert.Equal(["disable u-3", "remove u-3 g-admins"], _directory.Calls);
+        var done = await admin.GetFromJsonAsync<PagedResult<ProvisioningOperationItem>>("/api/provisioning/operations?status=Succeeded", Json, Ct);
+        Assert.All(done!.Items, o => Assert.Equal("boss", o.ApprovedBy));
+        Assert.Equal(2, done.Total);
+        // Hisobot: ishdan ketgan xodimning faol akkaunti endi yo'q
+        Assert.Equal(0, (await admin.GetFromJsonAsync<DashboardSummary>("/api/dashboard", Json, Ct))!.LeaversWithActiveAccounts);
+        var aliyev = Assert.Single((await admin.GetFromJsonAsync<PagedResult<IdentityListItem>>("/api/identities?search=TAB-3", Json, Ct))!.Items);
+        var history = await admin.GetFromJsonAsync<PagedResult<AuditItem>>($"/api/identities/{aliyev.Id}/history", Json, Ct);
+        Assert.Contains(history!.Items, e => e.Action == "provisioning.account-disabled");
+        Assert.Contains(history.Items, e => e.Action == "provisioning.approved" && e.ActorId == "boss");
     }
 
     [Fact]

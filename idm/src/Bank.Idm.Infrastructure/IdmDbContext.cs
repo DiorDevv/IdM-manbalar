@@ -23,6 +23,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<RoleRule> RoleRules => Set<RoleRule>();
     public DbSet<SodRule> SodRules => Set<SodRule>();
     public DbSet<SodRuleEntitlement> SodRuleEntitlements => Set<SodRuleEntitlement>();
+    public DbSet<ProvisioningOperation> ProvisioningOperations => Set<ProvisioningOperation>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -138,6 +139,26 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.Property(x => x.Version).IsRowVersion();
             e.HasOne(x => x.AccessRequest).WithMany(x => x.Approvals).HasForeignKey(x => x.AccessRequestId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Approver).WithMany().HasForeignKey(x => x.ApproverId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ProvisioningOperation>(e =>
+        {
+            // Bir amal bir vaqtda faqat bitta faol yozuvda (parallel rejalashtirishdan himoya)
+            e.HasIndex(x => x.DedupKey).IsUnique().HasFilter("status IN ('Proposed', 'Queued', 'Running', 'Failed')");
+            e.HasIndex(x => new { x.Status, x.NextAttemptAt });
+            e.HasIndex(x => new { x.ApplicationId, x.CreatedAt });
+            e.HasIndex(x => new { x.AccountId, x.EntitlementId });
+            e.HasIndex(x => x.IdentityId);
+            e.Property(x => x.Reason).HasMaxLength(32);
+            e.Property(x => x.Summary).HasMaxLength(1000);
+            e.Property(x => x.DedupKey).HasMaxLength(256);
+            e.Property(x => x.ApprovedBy).HasMaxLength(256);
+            e.Property(x => x.ApprovedByName).HasMaxLength(256);
+            e.Property(x => x.LastError).HasMaxLength(2000);
+            e.Property(x => x.Version).IsRowVersion();
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.SetNull);
         });
         b.Entity<AuditEvent>(e =>
         {

@@ -66,7 +66,7 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
 - **Egalik:** HR'dagi xodim HR manbali bo'ladi (AD'dan yaratilgan bo'lsa ham). HR ulanganda AD xodim yaratmaydi
   (`CreateIdentities=false`): HR'da yo'q akkaunt — egasiz.
 - **JML hodisalari** (`identity_events`): ishga kirish, lavozim/bo'lim/rahbar o'zgarishi, ishdan ketish, qayta ishga olish, to'xtatish.
-  Birinchi yuklash hodisa yozmaydi. G bosqichida shu hodisalar AD'da amallarni boshlaydi; hozir tizimlarga tegilmaydi.
+  Birinchi yuklash hodisa yozmaydi. Xodim holati (ishdan ketgan, to'xtatilgan) tizimga yozish rejasiga kiradi (G bosqichi).
 - **HR faylida yo'q xodim:** standart — faqat ogohlantirish. `TerminateMissing=true` — ishdan ketgan deb belgilanadi
   (eksport to'liq ekaniga ishonch bo'lgandagina). Ko'p xodim birdan ketsa (`MaxDeletePercent`) — import to'xtatiladi.
 - **Hisobotlar:** ishdan ketgan, lekin akkaunti faol; egasiz akkauntlar; akkauntsiz xodimlar; HR'da yo'q xodimlar.
@@ -93,8 +93,37 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
 - **Qoidalar:** o'z arizasini (so'ragan yoki kim uchun so'ralgan) hech kim tasdiqlay olmaydi; faqat navbatdagi bosqich egasi qaror
   qiladi; rad etishda sabab majburiy; takror ariza va mavjud rolga ariza rad etiladi; ikki kishi bir vaqtda qaror qilsa —
   ikkinchisi 409 (PostgreSQL `xmin` optimistik qulfi). Begona xodim arizaning borligini ham ko'rmaydi (404).
-- Oxirgi tasdiqdan keyin rol beriladi (`Source = Request`) — "bo'lishi kerak"; tizimlarda bajarilishi — G bosqichi.
+- Oxirgi tasdiqdan keyin rol beriladi (`Source = Request`) — "bo'lishi kerak"; rolning guruhlari xodimda haqiqatda paydo bo'lgach
+  (IdM yozgan yoki administrator qo'lda bergan) ariza "Bajarildi" holatiga o'tadi (`request.fulfilled`).
 - **Ishdan ketganda** barcha rollar (ariza va qo'lda berilganlar ham) tugaydi, kutilayotgan arizalar bekor qilinadi.
+
+## Tizimga yozish (G bosqichi)
+Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan holatni solishtirib amallar navbatini tuzadi
+(`provisioning_operations`), ishlovchi ularni tizimda bajaradi. Standart — o'chiq; har tizim uchun alohida yoqiladi:
+```json
+"AD": { "Provisioning": { "Mode": "Approval", "CreateAccounts": false, "MaxAutoOperations": 20, "ProtectedLogins": [ "administrator" ],
+                          "DisableSuspended": true, "MaxAttempts": 5 },
+        "Ldap": { "WriteBindDn": "CN=svc-idm-write,...", "WriteBindPassword": "<sir>", "CreateDn": "OU=Yangi,OU=Xodimlar,DC=bank,DC=uz",
+                  "UpnSuffix": "bank.uz" } }
+```
+- **Rejimlar:** `Off`; `Approval` — dry-run: amallar "Tasdiq kutmoqda", administrator portalda (*Tizimga yozish*) tanlab tasdiqlaydi;
+  `Automatic` — darhol navbatga, lekin bitta rejada `MaxAutoOperations`dan ko'p yangi amal chiqsa hammasi tasdiqqa to'xtatiladi
+  (`provisioning.held`) — noto'g'ri HR fayli yoki rol butun bankni bloklab yubormasligi uchun.
+- **Nima qilinadi:** ishdan ketgan xodim — barcha akkauntlari bloklanadi va barcha guruhlardan chiqariladi; to'xtatilgan — bloklanadi;
+  rol bo'yicha kerak guruh — shaxsiy akkauntga qo'shiladi; akkaunt yo'q bo'lsa (`CreateAccounts`) — **bloklangan va parolsiz** yaratiladi
+  (login `i.familiya`, band bo'lsa raqam bilan; parolni helpdesk beradi, IdM'da parol hech qachon bo'lmaydi); rol olib tashlansa —
+  **faqat IdM o'zi qo'shgan** a'zolik olinadi. Qo'lda berilgan ortiqcha ruxsatlarga tegilmaydi (H bosqichida attestatsiya).
+- **Tegilmaydi:** xizmat akkauntlari (`Kind = Service`) va `ProtectedLogins`. Yozish faqat `UsersDn`/`GroupsDn` ichida, obyektlar
+  o'zgarmas identifikator (`objectGUID`/`entryUUID`) bo'yicha topiladi. Alohida yozish akkaunti (`WriteBindDn`) — eng kam huquq.
+- **Ishonchlilik:** oxirgi sinxronlash muvaffaqiyatsiz bo'lsa reja tuzilmaydi; keraksiz bo'lib qolgan amal bekor qilinadi (`Obsolete`);
+  amallar idempotent (allaqachon a'zo / bloklangan — xato emas); yaratishdan oldin tabel raqami bo'yicha qidiriladi (javobi yo'qolgan
+  urinish takror akkaunt yaratmaydi). Vaqtinchalik xato (tarmoq, server band) — 1, 5, 15, 60 daqiqadan keyin qayta urinish; doimiy
+  xato yoki urinishlar tugashi — "Xato", administrator qayta ishga tushiradi yoki yopadi. Tartib: avval bloklash va chiqarish.
+  Reja, tasdiq va amalni olish tizim bo'yicha advisory lock ostida, sinxronlash bilan bir vaqtda emas; ikki ishlovchi bitta amalni
+  bajarmaydi (`xmin`). Server bajarish paytida to'xtasa, amal navbatga qaytadi.
+- **Audit:** reja, har bir tasdiq (kim), har bir bajarilgan va xato amal — akkaunt obyekti bilan, xodim tarixida ko'rinadi.
+- Aylanish oralig'i: `Idm:ProvisioningIntervalSeconds` (standart 30, 0 — o'chiq). OpenLDAP uchun: `CreateObjectClasses: ["inetOrgPerson"]`,
+  `RdnAttribute: "uid"`, `DisableAttribute: "employeeType"` (`DisabledFilter` bilan mos).
 
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.

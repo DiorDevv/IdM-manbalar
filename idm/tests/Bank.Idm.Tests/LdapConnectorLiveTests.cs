@@ -34,7 +34,9 @@ public class LdapConnectorLiveTests
         var snapshot = await new LdapConnector(OpenLdap()).ReadAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(snapshot.Warnings);
-        Assert.Equal(8, snapshot.Accounts.Count);
+        // bank-test-data.ldif'dagi 8 xodim (IdM tizimga yozish yoqilgan stendda yangi akkauntlar ham qo'shilgan bo'lishi mumkin)
+        Assert.Subset(snapshot.Accounts.Select(a => a.Login).ToHashSet(),
+            new HashSet<string> { "a.karimov", "d.rahimova", "s.toshmatov", "n.yusupova", "j.aliyev", "m.qodirov", "z.ergasheva", "b.xolmatov" });
         Assert.Equal(4, snapshot.Groups.Count);
         var karimov = snapshot.Accounts.Single(a => a.Login == "a.karimov");
         Assert.Equal("TAB-10045", karimov.EmployeeNumber);

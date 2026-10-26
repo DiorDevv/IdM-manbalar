@@ -12,6 +12,8 @@ public class IdmOptions
     public bool MigrateOnStartup { get; set; }
     /// <summary>Ulangan tizimlar: kalit — tizim kodi (masalan "AD").</summary>
     public Dictionary<string, ConnectorDefinition> Connectors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Tizimga yozish aylanishi oralig'i (reja + navbat); 0 — fon ishlovchisi o'chiq.</summary>
+    public int ProvisioningIntervalSeconds { get; set; } = 30;
 }
 
 public class SsoOptions

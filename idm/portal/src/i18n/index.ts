@@ -69,6 +69,18 @@ const actions: Record<string, [label: string, icon: string, tone: Tone]> = {
   'request.approved': ['Ariza tasdiqlandi', 'check', 'ok'],
   'request.rejected': ['Ariza rad etildi', 'x', 'bad'],
   'request.cancelled': ['Ariza bekor qilindi', 'x', 'warn'],
+  'request.fulfilled': ['Ariza bajarildi', 'check', 'ok'],
+  'provisioning.planned': ['Tizimga yozish rejalandi', 'sync', 'sky'],
+  'provisioning.held': ['Ko\'p amal: tasdiqqa to\'xtatildi', 'warning', 'warn'],
+  'provisioning.approved': ['Tizimga yozish tasdiqlandi', 'check', 'violet'],
+  'provisioning.retried': ['Qayta urinish buyurildi', 'sync', 'sky'],
+  'provisioning.dismissed': ['Xato amal yopildi', 'x', 'warn'],
+  'provisioning.account-created': ['Tizimda akkaunt yaratildi', 'user', 'ok'],
+  'provisioning.account-disabled': ['Tizimda akkaunt bloklandi', 'lock', 'warn'],
+  'provisioning.membership-added': ['Tizimda guruhga qo\'shildi', 'people', 'violet'],
+  'provisioning.membership-removed': ['Tizimda guruhdan chiqarildi', 'people', 'warn'],
+  'provisioning.failed': ['Tizimga yozib bo\'lmadi', 'warning', 'bad'],
+  'provisioning.obsolete': ['Amal keraksiz bo\'lib qoldi', 'x', 'accent'],
 }
 
 /** Audit amali → odam tilidagi nom, ikonka, rang va tafsilotlardan qisqa xulosa (login, tizim, guruh...). */

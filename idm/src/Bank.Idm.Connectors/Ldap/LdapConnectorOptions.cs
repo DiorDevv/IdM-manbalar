@@ -43,4 +43,34 @@ public class LdapConnectorOptions
     public string GroupMemberAttribute { get; set; } = "member";
     /// <summary>true: a'zo qiymati foydalanuvchi DN'i; false: foydalanuvchi logini.</summary>
     public bool GroupMemberIsDn { get; set; } = true;
+
+    // --- Yozish (G bosqichi). Faqat provisioning yoqilganda ishlatiladi ---
+
+    /// <summary>
+    /// Yozish uchun alohida xizmat akkaunti (eng kam huquq: faqat UsersDn/GroupsDn'da akkaunt yaratish, bloklash, a'zolik).
+    /// Bo'sh bo'lsa — BindDn. Parol faqat muhit o'zgaruvchisi yoki sirlar saqlovchisidan.
+    /// </summary>
+    public string? WriteBindDn { get; set; }
+    public string? WriteBindPassword { get; set; }
+    /// <summary>Yangi akkauntlar yaratiladigan OU (UsersDn ichida bo'lishi shart). Bo'sh bo'lsa — UsersDn.</summary>
+    public string? CreateDn { get; set; }
+    /// <summary>
+    /// Yangi akkaunt obyekt sinflari. Bo'sh bo'lsa — AD: top, person, organizationalPerson, user. Standart qiymat massivda emas:
+    /// .NET konfiguratsiyasi massivni almashtirmaydi, indeks bo'yicha ustiga yozadi (CreateObjectClasses__0=inetOrgPerson qolgan AD sinflarini qoldirib ketardi).
+    /// </summary>
+    public string[] CreateObjectClasses { get; set; } = [];
+    public static readonly string[] ActiveDirectoryObjectClasses = ["top", "person", "organizationalPerson", "user"];
+    public string[] EffectiveObjectClasses => CreateObjectClasses.Length > 0 ? CreateObjectClasses : ActiveDirectoryObjectClasses;
+    /// <summary>Yangi akkaunt DN'ining birinchi komponenti: AD'da "cn", OpenLDAP'da odatda "uid". Qiymati — login.</summary>
+    public string RdnAttribute { get; set; } = "cn";
+    /// <summary>AD: userPrincipalName = login@UpnSuffix (bo'sh bo'lsa yozilmaydi).</summary>
+    public string? UpnSuffix { get; set; }
+    /// <summary>AD sAMAccountName chegarasi — 20 belgi.</summary>
+    public int LoginMaxLength { get; set; } = 20;
+    /// <summary>
+    /// Bloklash usuli. Bo'sh — AD: userAccountControl'ga ACCOUNTDISABLE (2) biti qo'yiladi.
+    /// Boshqa kataloglar uchun: shu atributga DisableValue yoziladi (DisabledFilter bilan mos bo'lishi kerak).
+    /// </summary>
+    public string? DisableAttribute { get; set; }
+    public string DisableValue { get; set; } = "disabled";
 }

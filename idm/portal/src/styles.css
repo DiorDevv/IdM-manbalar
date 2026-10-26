@@ -191,6 +191,7 @@ table.data td { padding: 10px 16px; border-bottom: 1px solid var(--border); colo
 table.data tbody tr:last-child td { border-bottom: 0; }
 table.data tbody tr { transition: background .08s; }
 table.data tbody tr:hover td { background: var(--hover); }
+table.data tbody tr.selected td { background: var(--accent-soft); }
 table.data tbody tr.clickable { cursor: pointer; }
 .cell-main { color: var(--text); font-weight: 550; }
 a.cell-main:hover { color: var(--accent-text); }
@@ -253,6 +254,7 @@ a.cell-main:hover { color: var(--accent-text); }
 .alert.bad { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 20%, transparent); }
 .alert.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 20%, transparent); }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 22%, transparent); }
+.alert.info { background: var(--accent-soft); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
 .alert .grow { flex: 1; }
 .skeleton { height: 12px; border-radius: 4px; background: linear-gradient(90deg, var(--panel-2), var(--hover), var(--panel-2)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
