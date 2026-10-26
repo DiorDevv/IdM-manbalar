@@ -4,7 +4,8 @@ namespace Bank.Idm.Api.Endpoints;
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
-public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0);
+public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0,
+    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null);
 
 public record DashboardSummary(
     int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,

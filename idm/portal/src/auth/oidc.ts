@@ -26,6 +26,11 @@ export function signIn(returnTo = window.location.pathname + window.location.sea
   return userManager.signinRedirect({ state: { returnTo } })
 }
 
+/** Qo'shimcha tasdiqlash: SSO'ga ikki bosqichli kirish darajasi (ACR) bilan qayta yuborish. */
+export function signInWithMfa(acr: string, returnTo = window.location.pathname + window.location.search) {
+  return userManager.signinRedirect({ state: { returnTo }, acr_values: acr })
+}
+
 export function signOut() {
   return userManager.signoutRedirect()
 }

@@ -13,5 +13,7 @@ public class CurrentUser(IHttpContextAccessor accessor, Microsoft.Extensions.Opt
     public bool IsAuditor => Principal.IsInRole(PortalRoles.Auditor);
     public string? IpAddress => accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
     public string? CorrelationId => accessor.HttpContext?.TraceIdentifier;
+    /// <summary>Bazada bor, lekin ikki bosqichli kirishsiz berilmagan vakolatlar.</summary>
+    public IReadOnlyList<string> MfaRequiredFor => Principal.FindAll(PortalRolesClaimsTransformation.MfaRequiredClaim).Select(c => c.Value).Distinct().ToList();
     public IReadOnlyList<string> PortalRoleClaims => Principal.FindAll(ClaimTypes.Role).Select(c => c.Value).Where(r => r.StartsWith("idm.")).Distinct().ToList();
 }

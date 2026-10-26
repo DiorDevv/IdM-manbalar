@@ -1,0 +1,58 @@
+diff --git a/src/IdServer/SimpleIdServer.IdServer/Api/Token/TokenBuilders/AccessTokenBuilder.cs b/src/IdServer/SimpleIdServer.IdServer/Api/Token/TokenBuilders/AccessTokenBuilder.cs
+index fce0f7f..b7ad51e 100644
+--- a/src/IdServer/SimpleIdServer.IdServer/Api/Token/TokenBuilders/AccessTokenBuilder.cs
++++ b/src/IdServer/SimpleIdServer.IdServer/Api/Token/TokenBuilders/AccessTokenBuilder.cs
+@@ -10,6 +10,7 @@ using SimpleIdServer.IdServer.DTOs;
+ using SimpleIdServer.IdServer.Extractors;
+ using SimpleIdServer.IdServer.Helpers;
+ using SimpleIdServer.IdServer.Jwt;
++using SimpleIdServer.IdServer.Layout;
+ using SimpleIdServer.IdServer.Options;
+ using System;
+ using System.Collections.Generic;
+@@ -27,17 +28,20 @@ namespace SimpleIdServer.IdServer.Api.Token.TokenBuilders
+         private readonly IJwtBuilder _jwtBuilder;
+         private readonly IScopeClaimsExtractor _scopeClaimsExtractor;
+         private readonly IdServerHostOptions _options;
++        private readonly IAmrHelper _amrHelper;
+ 
+         public AccessTokenBuilder(
+             IGrantedTokenHelper grantedTokenHelper, 
+             IJwtBuilder jwtBuilder,
+             IScopeClaimsExtractor scopeClaimsExtractor,
+-            IOptions<IdServerHostOptions> options)
++            IOptions<IdServerHostOptions> options,
++            IAmrHelper amrHelper)
+         {
+             _grantedTokenHelper = grantedTokenHelper;
+             _jwtBuilder = jwtBuilder;
+             _scopeClaimsExtractor = scopeClaimsExtractor;
+             _options = options.Value;
++            _amrHelper = amrHelper;
+         }
+ 
+         public string Name => TokenResponseParameters.AccessToken;
+@@ -56,6 +60,23 @@ namespace SimpleIdServer.IdServer.Api.Token.TokenBuilders
+                     foreach (var claim in parameter.AdditionalClaims)
+                         tokenDescriptor.Claims.Add(claim.Key, claim.Value);
+ 
++                // Bank IdM: resurs serveri (IdM API) administrator vakolati uchun ikki bosqichli kirishni tekshira olishi uchun
++                // access token'ga ham id_token'dagi kabi acr va amr yoziladi. Avtorizatsiya so'rovi foydalanuvchi shu ACR'ning
++                // barcha usullaridan o'tganini tekshirgan (OAuthAuthorizationRequestValidator). Refresh token'da ham asl so'rov.
++                // "claims" so'rovidagi majburiy acr — id_token talabi, access token uchun tekshirilmaydi: ACR faqat acr_values,
++                // klient yoki realm standartidan.
++                if (handlerContext.User != null)
++                {
++                    var request = handlerContext.OriginalRequest ?? handlerContext.Request.RequestData;
++                    var acrResult = await _amrHelper.FetchDefaultAcr(handlerContext.Realm, FormCategories.Authentication,
++                        request.GetAcrValuesFromAuthorizationRequest(), null, handlerContext.Client, cancellationToken);
++                    if (acrResult != null)
++                    {
++                        tokenDescriptor.Claims[JwtRegisteredClaimNames.Amr] = acrResult.AllAmrs;
++                        tokenDescriptor.Claims[JwtRegisteredClaimNames.Acr] = acrResult.Acr.Name;
++                    }
++                }
++
+                 await SetResponse(handlerContext.Realm, parameter.GrantId, handlerContext, tokenDescriptor, cancellationToken);
+             }
+         }

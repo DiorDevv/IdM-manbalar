@@ -10,10 +10,17 @@ using Bank.Idm.Infrastructure.Provisioning;
 using Bank.Idm.Infrastructure.Sync;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+// Sirlar katalogi (Vault Agent, Kubernetes/Docker secrets): har bir fayl — bitta kalit, nomi "Idm__Connectors__AD__Ldap__BindPassword"
+if (builder.Configuration["Idm:SecretsDirectory"] is { Length: > 0 } secrets)
+{
+    if (!Directory.Exists(secrets)) throw new InvalidOperationException($"Idm:SecretsDirectory topilmadi: {secrets}");
+    builder.Configuration.AddKeyPerFile(secrets, optional: false);
+}
 var options = builder.Configuration.GetSection(IdmOptions.Section).Get<IdmOptions>() ?? new IdmOptions();
 builder.Services.Configure<IdmOptions>(builder.Configuration.GetSection(IdmOptions.Section));
 
@@ -72,6 +79,18 @@ builder.Services.AddAuthorizationBuilder()
 
 var app = builder.Build();
 
+// Ishlab chiqish va testdan boshqa har qanday muhit (Production, Staging) — xavfsiz sozlama majburiy
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    var guard = ProductionGuard.Check(app.Configuration, options);
+    foreach (var warning in guard.Warnings) app.Logger.LogWarning("Sozlama: {Warning}", warning);
+    if (guard.Errors.Count > 0)
+    {
+        foreach (var error in guard.Errors) app.Logger.LogCritical("Xavfsiz bo'lmagan sozlama: {Error}", error);
+        throw new InvalidOperationException($"Ishlab chiqarish sozlamasida {guard.Errors.Count} ta xavfsizlik xatosi, server ishga tushmadi: " + string.Join("; ", guard.Errors));
+    }
+}
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<IdmDbContext>();
@@ -82,6 +101,16 @@ using (var scope = app.Services.CreateScope())
     await ProvisioningService.RecoverInterruptedAsync(db, TimeProvider.System);
 }
 
+if (options.TrustedProxies.Length > 0)
+{
+    // Faqat ko'rsatilgan proksidan: mijozning haqiqiy IP manzili (audit) va HTTPS sxemasi
+    var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto, ForwardLimit = 1 };
+    forwarded.KnownIPNetworks.Clear();
+    forwarded.KnownProxies.Clear();
+    foreach (var proxy in options.TrustedProxies) forwarded.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+    app.UseForwardedHeaders(forwarded);
+}
+if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseIdmSecurityHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();

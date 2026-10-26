@@ -15,6 +15,8 @@ export const uz = {
   },
   errorTitle: 'Xatolik yuz berdi',
   forbiddenTitle: 'Ruxsat yo\'q',
+  mfaRequired: (roles: string) => `${roles} vakolatlari faqat ikki bosqichli kirish bilan beriladi. Ikki bosqichli kirish orqali qayta kiring (parol va bir martalik kod).`,
+  mfaStepUp: 'Ikki bosqichli kirish',
   forbiddenText: 'Bu bo\'lim IdM administratori yoki auditor uchun. Ruxsat kerak bo\'lsa, IdM administratoriga murojaat qiling.',
   nav: {
     label: 'Asosiy menyu', open: 'Menyuni ochish',

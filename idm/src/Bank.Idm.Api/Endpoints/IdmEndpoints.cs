@@ -18,13 +18,14 @@ public static class IdmEndpoints
     {
         var api = app.MapGroup("/api").RequireAuthorization();
 
-        api.MapGet("/me", async (CurrentUser user, IdmDbContext db, CancellationToken ct) =>
+        api.MapGet("/me", async (CurrentUser user, IdmDbContext db, Microsoft.Extensions.Options.IOptions<IdmOptions> options, CancellationToken ct) =>
         {
             var actor = await RequestEndpoints.ActorAsync(db, user, ct);
             var hasTeam = actor.IdentityId is { } me && await db.Identities.AnyAsync(i => i.ManagerId == me && i.Status != IdentityStatus.Terminated, ct);
             var inbox = await RequestEndpoints.Inbox(db.AccessRequests, actor).CountAsync(ct);
             var reviews = await ReviewEndpoints.Inbox(db.AccessReviewItems, actor).CountAsync(ct);
-            return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews);
+            return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews, user.MfaRequiredFor,
+                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null);
         });
 
         api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer, CancellationToken ct) =>

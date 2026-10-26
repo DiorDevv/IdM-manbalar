@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number

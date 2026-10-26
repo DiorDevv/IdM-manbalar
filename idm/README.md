@@ -151,7 +151,20 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - **Audit:** har bir o'zgarish bilan bitta tranzaksiyada yoziladi. Baza triggeri `UPDATE/DELETE/TRUNCATE`ni taqiqlaydi;
   har bir yozuv oldingisining SHA-256 xeshini saqlaydi (`GET /api/audit/verify`), triggerni chetlab o'tgan o'zgarish ham aniqlanadi.
   Ishlab chiqarishda ilova jadval egasi bo'lmagan, faqat `INSERT/SELECT` huquqli rol bilan ulanishi kerak (I bosqichi).
-- Javoblarda `nosniff`, `X-Frame-Options: DENY`, `no-store`, `X-Correlation-Id`.
+- Javoblarda `nosniff`, `X-Frame-Options: DENY`, `no-store`, `X-Correlation-Id`; Development'dan boshqa muhitda HSTS.
+- **Ikki bosqichli kirish (administrator, auditor):** `Idm:Sso:AdminMfa:Required=true` — token'da ikkinchi omil (`amr`: otp, hwk,
+  webauthn...) yoki `AcceptedAcr`/`StepUpAcr` darajasi bo'lmasa, vakolat berilmaydi (foydalanuvchi oddiy xodim sifatida ishlaydi,
+  portal "Ikki bosqichli kirish" tugmasini ko'rsatadi va SSO'ga `acr_values=<StepUpAcr>` bilan qayta yuboradi).
+  SSO'da: parol + OTP ish oqimi bilan ACR yarating (masalan `idm-mfa`) va `StepUpAcr`ga yozing. SimpleIdServer access token'ga
+  `acr`/`amr`ni `patches/simpleidserver-access-token-acr.patch` bilan yozadi (asl holatda faqat id_token'da).
+- **Ishlab chiqarish sozlamasi nazorati** (Development va Testing'dan boshqa har qanday muhit): quyidagilardan biri bo'lsa server
+  ishga tushmaydi — SSO manzili HTTPS emas yoki sertifikat tekshirilmaydi; PostgreSQL `SSL Mode` VerifyFull/VerifyCA emas;
+  LDAP konnektori LDAPS emas; parol/sir `appsettings*.json` faylida; HTTP ochiq, lekin `Idm:TrustedProxies` (TLS'ni tugatuvchi
+  proksi) berilmagan. Ogohlantirish: `MigrateOnStartup`, `BootstrapAdmins`, MFA o'chiq, avtomatik yozish alohida yozish akkauntisiz.
+- **Sirlar:** muhit o'zgaruvchilari yoki sirlar katalogi — `Idm__SecretsDirectory=/run/secrets/idm` (Vault Agent, Kubernetes yoki
+  Docker secrets): har fayl bitta kalit, nomi kalitning o'zi (`ConnectionStrings__Idm`, `Idm__Connectors__AD__Ldap__BindPassword`).
+- **Proksi orqasida:** `Idm:TrustedProxies` — faqat shu manzillardan `X-Forwarded-For/Proto` qabul qilinadi (auditda mijozning
+  haqiqiy IP manzili).
 
 ## API
 | Manzil | Kim |

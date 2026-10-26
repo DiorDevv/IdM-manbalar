@@ -1,3 +1,4 @@
+import { signInWithMfa } from '../auth/oidc'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -89,7 +90,18 @@ export function Layout() {
             <Icon name={themeIcon[theme]} size={17} />
           </button>
         </header>
-        <main className="content" key={location.pathname}><Outlet /></main>
+        <main className="content" key={location.pathname}>
+          {!!me.data?.mfaRequiredFor?.length && (
+            <div className="alert warn no-print" role="alert" style={{ marginBottom: 16 }}>
+              <Icon name="lock" size={18} />
+              <span className="grow">{t.mfaRequired(me.data.mfaRequiredFor.map(r => t.portalRoles[r as keyof typeof t.portalRoles] ?? r).join(', '))}</span>
+              {me.data.mfaStepUpAcr && (
+                <button className="btn secondary sm" onClick={() => { void signInWithMfa(me.data!.mfaStepUpAcr!) }}>{t.mfaStepUp}</button>
+              )}
+            </div>
+          )}
+          <Outlet />
+        </main>
       </div>
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} canSearch={canSearch} />
     </div>

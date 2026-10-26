@@ -28,6 +28,8 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> o, ILo
         claims.Add(new("scope", Request.Headers.TryGetValue("X-Test-Scope", out var scope) ? scope.ToString() : "openid idm"));
         // SSO'dan kelgan "idm.admin" roli e'tiborga olinmasligi kerak (vakolat faqat IdM bazasidan)
         if (Request.Headers.ContainsKey("X-Test-Forged-Role")) claims.Add(new(ClaimTypes.Role, PortalRoles.Admin));
+        // SSO kirish usullari (masalan "pwd otp"): ikki bosqichli kirish tekshiruvi uchun
+        if (Request.Headers.TryGetValue("X-Test-Amr", out var amr)) claims.AddRange(amr.ToString().Split(' ').Select(a => new Claim("amr", a)));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName, "sub", ClaimTypes.Role)), SchemeName)));
     }
 }
