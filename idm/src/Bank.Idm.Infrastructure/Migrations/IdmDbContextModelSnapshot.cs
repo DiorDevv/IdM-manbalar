@@ -93,6 +93,209 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("access_requests");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.AccessReviewCampaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApplicationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("application_id");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<string>("ClosedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("closed_by");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("created_by_name");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("department");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("PrivilegedOnly")
+                        .HasColumnType("boolean")
+                        .HasColumnName("privileged_only");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_access_review_campaigns");
+
+                    b.HasIndex("ApplicationId")
+                        .HasDatabaseName("ix_access_review_campaigns_application_id");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_access_review_campaigns_status_created_at");
+
+                    b.ToTable("access_review_campaigns");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.AccessReviewItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("ApplicationCode")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("application_code");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecidedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("decided_by_name");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("decision");
+
+                    b.Property<Guid?>("EntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entitlement_id");
+
+                    b.Property<Guid>("IdentityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identity_id");
+
+                    b.Property<Guid?>("IdentityRoleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identity_role_id");
+
+                    b.Property<bool>("IsPrivileged")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_privileged");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("RemediatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("remediated_at");
+
+                    b.Property<Guid?>("ReviewerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewer_id");
+
+                    b.Property<string>("Subtitle")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("subtitle");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("title");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_access_review_items");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_access_review_items_account_id");
+
+                    b.HasIndex("EntitlementId")
+                        .HasDatabaseName("ix_access_review_items_entitlement_id");
+
+                    b.HasIndex("IdentityId")
+                        .HasDatabaseName("ix_access_review_items_identity_id");
+
+                    b.HasIndex("IdentityRoleId")
+                        .HasDatabaseName("ix_access_review_items_identity_role_id");
+
+                    b.HasIndex("CampaignId", "Decision")
+                        .HasDatabaseName("ix_access_review_items_campaign_id_decision");
+
+                    b.HasIndex("Decision", "RemediatedAt")
+                        .HasDatabaseName("ix_access_review_items_decision_remediated_at");
+
+                    b.HasIndex("ReviewerId", "Decision")
+                        .HasDatabaseName("ix_access_review_items_reviewer_id_decision");
+
+                    b.ToTable("access_review_items");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Account", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1139,6 +1342,70 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.AccessReviewCampaign", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_review_campaigns_applications_application_id");
+
+                    b.Navigation("Application");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.AccessReviewItem", b =>
+                {
+                    b.HasOne("Bank.Idm.Domain.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_review_items_accounts_account_id");
+
+                    b.HasOne("Bank.Idm.Domain.AccessReviewCampaign", "Campaign")
+                        .WithMany("Items")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_access_review_items_access_review_campaigns_campaign_id");
+
+                    b.HasOne("Bank.Idm.Domain.Entitlement", "Entitlement")
+                        .WithMany()
+                        .HasForeignKey("EntitlementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_review_items_entitlements_entitlement_id");
+
+                    b.HasOne("Bank.Idm.Domain.Identity", "Identity")
+                        .WithMany()
+                        .HasForeignKey("IdentityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_access_review_items_identities_identity_id");
+
+                    b.HasOne("Bank.Idm.Domain.IdentityRole", "IdentityRole")
+                        .WithMany()
+                        .HasForeignKey("IdentityRoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_review_items_identity_roles_identity_role_id");
+
+                    b.HasOne("Bank.Idm.Domain.Identity", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_review_items_identities_reviewer_id");
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Entitlement");
+
+                    b.Navigation("Identity");
+
+                    b.Navigation("IdentityRole");
+
+                    b.Navigation("Reviewer");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Account", b =>
                 {
                     b.HasOne("Bank.Idm.Domain.Application", "Application")
@@ -1383,6 +1650,11 @@ namespace Bank.Idm.Infrastructure.Migrations
             modelBuilder.Entity("Bank.Idm.Domain.AccessRequest", b =>
                 {
                     b.Navigation("Approvals");
+                });
+
+            modelBuilder.Entity("Bank.Idm.Domain.AccessReviewCampaign", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Bank.Idm.Domain.Account", b =>

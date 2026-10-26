@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number
@@ -109,3 +109,23 @@ export interface ProvisioningApplicationStatus {
 }
 export interface PlanResult { planned: number; created: number; obsoleted: number; held: boolean; skipped: string | null; warnings: string[] }
 export interface ProvisioningActionResult { changed: number; skipped: number; error: string | null }
+
+export type ReviewStatus = 'Active' | 'Completed' | 'Cancelled'
+export type ReviewDecision = 'Pending' | 'Keep' | 'Revoke'
+export type ReviewItemKind = 'Role' | 'Entitlement'
+export interface CampaignBody { name: string; description: string | null; department: string | null; applicationId: string | null; privilegedOnly: boolean; dueDate: string }
+export interface CampaignPreview { items: number; roles: number; entitlements: number; privileged: number; identities: number; reviewers: number; adminPool: number }
+export interface CampaignItem {
+  id: string; name: string; description: string | null; status: ReviewStatus; department: string | null; applicationCode: string | null; privilegedOnly: boolean
+  dueDate: string; createdAt: string; createdBy: string; createdByName: string | null; closedAt: string | null
+  total: number; kept: number; revoked: number; pending: number; revokedOpen: number
+}
+export interface CampaignDetails { campaign: CampaignItem; reviewers: { reviewerId: string | null; reviewerName: string | null; total: number; pending: number }[] }
+export interface ReviewItem {
+  id: string; campaignId: string; campaignName: string; dueDate: string; kind: ReviewItemKind; identityId: string; identityName: string; employeeNumber: string
+  department: string | null; jobTitle: string | null; identityStatus: IdentityStatus; applicationCode: string; title: string; subtitle: string | null
+  isPrivileged: boolean; reviewerId: string | null; reviewerName: string | null; decision: ReviewDecision; comment: string | null; decidedAt: string | null
+  decidedBy: string | null; decidedByName: string | null; remediatedAt: string | null
+}
+export type ReportKey = 'access' | 'privileged' | 'sod' | 'orphans' | 'leavers' | 'campaign'
+export interface ReportTable { key: ReportKey; title: string; subtitle: string | null; columns: string[]; rows: (string | null)[][]; generatedAt: string }

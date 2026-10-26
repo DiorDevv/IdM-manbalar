@@ -20,6 +20,9 @@ import { NewRequestPage } from './pages/NewRequestPage'
 import { RequestDetailPage } from './pages/RequestDetailPage'
 import { HomePage } from './pages/HomePage'
 import { ProvisioningPage } from './pages/ProvisioningPage'
+import { ReviewsPage } from './pages/ReviewsPage'
+import { CampaignPage } from './pages/CampaignPage'
+import { PrintReportPage } from './pages/PrintReportPage'
 import './styles.css'
 import { initTheme } from './theme'
 
@@ -53,6 +56,9 @@ createRoot(document.getElementById('root')!).render(
               <Route path="requests/new" element={<NewRequestPage />} />
               <Route path="requests/:id" element={<RequestDetailPage />} />
               <Route path="provisioning" element={<ProvisioningPage />} />
+              <Route path="reviews" element={<ReviewsPage />} />
+              <Route path="reviews/campaigns/:id" element={<CampaignPage />} />
+              <Route path="reports/print/:key" element={<PrintReportPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="callback" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />

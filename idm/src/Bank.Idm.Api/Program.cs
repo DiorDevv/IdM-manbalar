@@ -29,6 +29,8 @@ builder.Services.AddScoped<Bank.Idm.Infrastructure.Requests.AccessRequestService
 builder.Services.AddScoped<ProvisioningPlanner>();
 builder.Services.AddScoped<ProvisioningExecutor>();
 builder.Services.AddScoped<ProvisioningService>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.AccessReviewService>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Reports.ReportBuilder>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
 builder.Services.AddSingleton<ConnectorSyncCoordinator>();
 builder.Services.AddHostedService<ConnectorSyncWorker>();

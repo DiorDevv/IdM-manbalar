@@ -4,7 +4,7 @@ namespace Bank.Idm.Api.Endpoints;
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
-public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0);
+public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0);
 
 public record DashboardSummary(
     int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,
@@ -139,3 +139,22 @@ public record ProvisioningApplicationStatus(string Code, string Name, Bank.Idm.I
     int MaxAutoOperations, int Proposed, int Queued, int Running, int Failed, int SucceededLast24h);
 
 public record ProvisioningActionBody(IReadOnlyList<Guid> Ids);
+
+public record CampaignBody(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate);
+
+public record CampaignItem(Guid Id, string Name, string? Description, AccessReviewStatus Status, string? Department, string? ApplicationCode, bool PrivilegedOnly,
+    DateOnly DueDate, DateTimeOffset CreatedAt, string CreatedBy, string? CreatedByName, DateTimeOffset? ClosedAt, int Total, int Kept, int Revoked, int Pending,
+    int RevokedOpen);
+
+public record CampaignReviewerProgress(Guid? ReviewerId, string? ReviewerName, int Total, int Pending);
+
+public record CampaignDetails(CampaignItem Campaign, IReadOnlyList<CampaignReviewerProgress> Reviewers);
+
+public record ReviewItemDto(Guid Id, Guid CampaignId, string CampaignName, DateOnly DueDate, AccessReviewItemKind Kind, Guid IdentityId, string IdentityName,
+    string EmployeeNumber, string? Department, string? JobTitle, IdentityStatus IdentityStatus, string ApplicationCode, string Title, string? Subtitle,
+    bool IsPrivileged, Guid? ReviewerId, string? ReviewerName, AccessReviewDecision Decision, string? Comment, DateTimeOffset? DecidedAt, string? DecidedBy,
+    string? DecidedByName, DateTimeOffset? RemediatedAt);
+
+public record ReviewDecisionBody(IReadOnlyList<Guid> Ids, bool Keep, string? Comment);
+
+public record CloseCampaignBody(bool Cancel);

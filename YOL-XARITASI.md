@@ -117,9 +117,16 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
   yoqish va parolni xavfsiz yetkazish (helpdesk jarayoni), akkauntni qayta yoqish (qayta ishga olish), ABS va boshqa tizimlar konnektorlari.
 - **Tayyor:** tasdiqlangan ariza AD'da o'zi bajariladi, ishdan ketgan xodim avtomatik bloklanadi.
 
-### H. Attestatsiya va hisobotlar (1–2 hafta)
-- [ ] Kampaniyalar: rahbar o'z xodimlarining ruxsatlarini tasdiqlaydi yoki olib tashlaydi.
-- [ ] Hisobotlar (PDF/Excel): kim nimaga kirish huquqiga ega, imtiyozli akkauntlar, SoD buzilishlari, egasiz akkauntlar.
+### H. Attestatsiya va hisobotlar (bajarildi, 2026-10-26)
+- [x] Kampaniyalar: rahbar o'z xodimlarining ariza/qo'lda berilgan rollari va asossiz guruhlarini qoldiradi yoki olib tashlaydi;
+  rahbarsiz xodimlar — administratorlar; o'zini tasdiqlash taqiqi; oldindan ko'rish; yakunlash va bekor qilish.
+- [x] Olib tashlash bajariladi: rol darhol tugaydi, guruh tizimga yozish orqali olinadi va "tizimdan olindi" deb kuzatiladi.
+- [x] Hisobotlar (Excel va PDF/chop etish): kim nimaga kirish huquqiga ega, imtiyozli akkauntlar, SoD buzilishlari, egasiz akkauntlar,
+  ishdan ketganlar, kampaniya natijasi. Har bir eksport auditda.
+- [ ] Ochiq: rahbarlarga eslatma (pochta kanali), tekshiruvchini almashtirish, muddati o'tganda ko'rib chiqilmaganini avtomatik olib
+  tashlash siyosati, rol egalari tomonidan rol tarkibini attestatsiya qilish, server tomonida PDF (imzo bilan).
+- **Tayyor:** rahbar portalda xodimlarining ruxsatlarini ko'rib chiqadi, olib tashlangan ruxsat tizimdan o'zi olinadi, auditor
+  hisobotlarni Excel yoki PDF ko'rinishida oladi.
 
 ### I. Ishlab chiqarishga tayyorlash
 - [ ] MFA (adminlar uchun majburiy), sirlar saqlovchisi, haqiqiy TLS sertifikatlari, zaif paketlar.

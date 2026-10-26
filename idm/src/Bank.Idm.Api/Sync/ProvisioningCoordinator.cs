@@ -10,7 +10,7 @@ namespace Bank.Idm.Api.Sync;
 
 /// <summary>
 /// Tizimga yozish aylanishi: har bir yozish yoqilgan tizim uchun (sinxronlash bilan to'qnashmasdan) reja tuziladi va navbatdagi
-/// amallar bajariladi; oxirida tasdiqlangan arizalar "bajarildi" holatiga tekshiriladi.
+/// amallar bajariladi; oxirida tasdiqlangan arizalar "bajarildi" holatiga, attestatsiyada olib tashlangan ruxsatlar bajarilganiga tekshiriladi.
 /// </summary>
 public class ProvisioningCoordinator(ConnectorSyncCoordinator sync, IServiceScopeFactory scopes, IOptionsMonitor<IdmOptions> options,
     ILogger<ProvisioningCoordinator> logger)
@@ -56,10 +56,13 @@ public class ProvisioningCoordinator(ConnectorSyncCoordinator sync, IServiceScop
             var fulfilled = await scope.ServiceProvider.GetRequiredService<ProvisioningPlanner>()
                 .CompleteRequestsAsync(ProvisioningExecutor.SystemActor, ProvisioningExecutor.SystemActorName, ct);
             if (fulfilled > 0) logger.LogInformation("{Count} ta ariza bajarildi", fulfilled);
+            var remediated = await scope.ServiceProvider.GetRequiredService<Bank.Idm.Infrastructure.Reviews.AccessReviewService>()
+                .RemediateAsync(ProvisioningExecutor.SystemActor, ProvisioningExecutor.SystemActorName, ct);
+            if (remediated > 0) logger.LogInformation("Attestatsiyada olib tashlangan {Count} ta ruxsat tizimdan olindi", remediated);
         }
         catch (Exception e) when (!ct.IsCancellationRequested)
         {
-            logger.LogError(e, "Arizalar bajarilishini tekshirib bo'lmadi");
+            logger.LogError(e, "Arizalar va attestatsiya natijalarini tekshirib bo'lmadi");
         }
     }
 

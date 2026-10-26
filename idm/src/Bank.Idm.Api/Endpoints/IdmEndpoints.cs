@@ -23,7 +23,8 @@ public static class IdmEndpoints
             var actor = await RequestEndpoints.ActorAsync(db, user, ct);
             var hasTeam = actor.IdentityId is { } me && await db.Identities.AnyAsync(i => i.ManagerId == me && i.Status != IdentityStatus.Terminated, ct);
             var inbox = await RequestEndpoints.Inbox(db.AccessRequests, actor).CountAsync(ct);
-            return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox);
+            var reviews = await ReviewEndpoints.Inbox(db.AccessReviewItems, actor).CountAsync(ct);
+            return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews);
         });
 
         api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer, CancellationToken ct) =>
@@ -131,6 +132,7 @@ public static class IdmEndpoints
         api.MapAccessEndpoints();
         api.MapRequestEndpoints();
         api.MapProvisioningEndpoints();
+        api.MapReviewEndpoints();
 
         var auditGroup = api.MapGroup("/audit").RequireAuthorization(CanReadAll);
         auditGroup.MapGet("/", async (IdmDbContext db, string? action, string? actor, string? targetId, int skip = 0, int take = 50, CancellationToken ct = default) =>

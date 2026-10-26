@@ -19,7 +19,7 @@ public class ProvisioningOperation
     public Account? Account { get; set; }
     public Guid? EntitlementId { get; set; }
     public Entitlement? Entitlement { get; set; }
-    /// <summary>Nima uchun: "role" (rol bo'yicha kerak), "role-removed", "leaver", "suspended", "joiner".</summary>
+    /// <summary>Nima uchun: "role" (rol bo'yicha kerak), "role-removed", "review-revoked" (attestatsiya), "leaver", "suspended", "joiner".</summary>
     public string Reason { get; set; } = null!;
     /// <summary>Ko'rsatish uchun: login, guruh nomi, rollar (rejalashtirish paytidagi holat).</summary>
     public string? Summary { get; set; }

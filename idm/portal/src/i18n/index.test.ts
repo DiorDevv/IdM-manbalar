@@ -56,3 +56,15 @@ describe('audit amallari', () => {
     expect(isQuietSync('account.disabled', null)).toBe(false)
   })
 })
+
+describe('attestatsiya va eksport', () => {
+  it('attestatsiya qarori va hisobot yuklab olish odam tilida', () => {
+    const revoked = describeAction('review.revoked', '{"application":"AD","name":"abs-operatorlar","login":"a.karimov","comment":"Kerak emas"}')
+    expect([revoked.label, revoked.tone, revoked.summary]).toEqual(['Attestatsiya: ruxsat olib tashlandi', 'bad', "AD · a.karimov · abs-operatorlar · Kerak emas"])
+    expect(describeAction('report.exported', '{"report":"access","rows":120}').label).toBe('Hisobot yuklab olindi')
+  })
+  it('kampaniya oldindan ko\'rish matni administratorlar navbatini aytadi', () => {
+    expect(t.reviews.preview({ items: 3, privileged: 1, identities: 2, reviewers: 1, adminPool: 1 }))
+      .toBe("3 ta ruxsat (1 tasi imtiyozli), 2 xodim, 1 rahbar ko'rib chiqadi; 1 tasi rahbari yo'q — IdM administratorlari navbatiga")
+  })
+})

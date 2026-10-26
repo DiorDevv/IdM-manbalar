@@ -79,7 +79,7 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
   "N ta xodimga mos" ko'rinadi. Faqat avtomatik tayinlashlarga tegadi; olib tashlangan rol o'chirilmaydi (`valid_to`), har o'zgarish auditda.
   Parallel hisoblashdan advisory lock va `identity_roles` dagi noyob indeks himoya qiladi.
 - **"Bo'lishi kerak / haqiqatda bor":** rollardan kelgan ruxsatlar va tizimdan o'qilgan a'zolik solishtiriladi: *Bor*, *Yetishmaydi*
-  (G bosqichida beriladi), *Ortiqcha* (rol bilan asoslanmagan — H bosqichida attestatsiya). Xodim kartochkasi va "Ruxsatlar farqi" hisoboti.
+  (tizimga yozish bilan beriladi), *Ortiqcha* (rol bilan asoslanmagan — attestatsiyada rahbar ko'rib chiqadi). Xodim kartochkasi va "Ruxsatlar farqi" hisoboti.
 - **SoD:** qoida — ikki tomon ruxsatlari (A va B); xodimda haqiqatda ikkala tomondan ruxsat bo'lsa — buzilish. Rolning o'zi
   qoidani buzsa, rol sahifasida ogohlantirish. Buzilishlar bosh sahifa, menyu va xodim kartochkasida ko'rinadi.
 - Ishlatilgan yoki arizada qatnashgan rolni o'chirib bo'lmaydi (tarix uchun).
@@ -124,6 +124,24 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - **Audit:** reja, har bir tasdiq (kim), har bir bajarilgan va xato amal — akkaunt obyekti bilan, xodim tarixida ko'rinadi.
 - Aylanish oralig'i: `Idm:ProvisioningIntervalSeconds` (standart 30, 0 — o'chiq). OpenLDAP uchun: `CreateObjectClasses: ["inetOrgPerson"]`,
   `RdnAttribute: "uid"`, `DisableAttribute: "employeeType"` (`DisabledFilter` bilan mos).
+
+## Attestatsiya va hisobotlar (H bosqichi)
+- **Kampaniya** (administrator boshlaydi, portal: *Attestatsiya → Kampaniyalar*): qamrov — bo'lim, tizim, faqat imtiyozli; muddat ≤ 180 kun.
+  Boshlashdan oldin oldindan ko'rish: nechta ruxsat, xodim, rahbar va administratorlar navbatiga tushadigan yozuv.
+  Ishga tushganda yozuvlar ko'chiriladi (snapshot) — natija keyin ham o'zgarmaydi.
+- **Nima ko'rib chiqiladi:** ishlayotgan va to'xtatilgan xodimlarning ariza yoki qo'lda berilgan **rollari** va hech qaysi rol bilan
+  asoslanmagan **tizim guruhlari**. Avtomatik (tug'ma) rollar ko'rib chiqilmaydi: ular qoida bilan beriladi va olinadi. Ishdan ketganlar —
+  tizimga yozish bilan bloklanadi.
+- **Kim:** bevosita rahbar; rahbar yo'q, ishdan ketgan yoki xodimning o'zi bo'lsa — IdM administratorlari. O'z ruxsatini hech kim
+  tasdiqlay olmaydi; qaror yakuniy (ikkinchi qaror — 409); bir nechta yozuv bo'yicha qaror — hammasi yoki hech biri.
+- **"Olib tashlash":** rol darhol tugaydi (uning IdM qo'shgan guruhlari tizimdan olinadi), asossiz guruh tizimga yozish rejasiga
+  tushadi (`review-revoked`, rejim — tizimning `Provisioning:Mode`). Guruh tizimdan haqiqatda yo'qolgach yozuv "tizimdan olindi"
+  (`review.remediated`); yozish o'chiq tizimda administrator qo'lda oladi, sinxronlash tasdiqlaydi.
+- Yakunlashda ko'rib chiqilmagan yozuvlar shundayligicha qoladi va hisobotda "ko'rib chiqilmagan" deb ko'rinadi.
+- **Hisobotlar** (`/api/reports/export/{key}`, admin va auditor): `access` (kim nimaga kirish huquqiga ega va asosi), `privileged`
+  (imtiyozli akkauntlar va egalari, xavf belgisi), `sod`, `orphans`, `leavers`, `campaign` (`campaignId`). `format=xlsx` — Excel
+  (tashqi kutubxonasiz; barcha qiymatlar matn, "=" bilan boshlangani formula bo'lmaydi), aks holda JSON — portalning chop etish
+  ko'rinishi (brauzerda "PDF sifatida saqlash", A4 albom). Har bir yuklab olish auditda (`report.exported`).
 
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.

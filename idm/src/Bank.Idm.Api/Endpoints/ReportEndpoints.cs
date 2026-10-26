@@ -1,5 +1,8 @@
+using System.Text.Json;
+using Bank.Idm.Api.Security;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure;
+using Bank.Idm.Infrastructure.Reports;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bank.Idm.Api.Endpoints;
@@ -30,6 +33,31 @@ public static class ReportEndpoints
             await Orphans(db).CountAsync(ct), await LeaversWithActiveAccounts(db).CountAsync(ct), await WithoutAccounts(db).CountAsync(ct),
             await NotInHr(db).CountAsync(ct),
             await db.Applications.AnyAsync(a => a.Kind == ApplicationKind.HumanResources && a.IsActive, ct)));
+
+        // Eksport: format=xlsx — Excel fayli, aks holda JSON (portalning chop etish / PDF ko'rinishi). Har bir eksport auditda:
+        // hisobotlarda butun bank xodimlarining ruxsatlari bor
+        reports.MapGet("/export/{key}", async Task<IResult> (string key, string? format, Guid? campaignId, ReportBuilder builder, AuditLog audit,
+            CurrentUser user, CancellationToken ct) =>
+        {
+            if (!ReportBuilder.Keys.Contains(key)) return TypedResults.NotFound();
+            ReportTable? table;
+            try
+            {
+                table = await builder.BuildAsync(key, campaignId, ct);
+            }
+            catch (InvalidOperationException e)
+            {
+                return TypedResults.Problem(e.Message, statusCode: 400);
+            }
+            if (table is null) return TypedResults.NotFound();
+            var xlsx = string.Equals(format, "xlsx", StringComparison.OrdinalIgnoreCase);
+            await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "report.exported", "report", key,
+                JsonSerializer.Serialize(new { report = key, title = table.Title, format = xlsx ? "xlsx" : "print", rows = table.Rows.Count, campaignId }),
+                user.IpAddress, user.CorrelationId), ct);
+            if (!xlsx) return TypedResults.Ok(table);
+            var stamp = TimeZoneInfo.ConvertTime(table.GeneratedAt, TimeZoneInfo.FindSystemTimeZoneById("Asia/Tashkent")).ToString("yyyyMMdd-HHmm");
+            return TypedResults.File(XlsxWriter.Write(table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"idm-{key}-{stamp}.xlsx");
+        });
 
         reports.MapGet("/orphan-accounts", async (IdmDbContext db, int skip = 0, int take = 50, CancellationToken ct = default) =>
         {

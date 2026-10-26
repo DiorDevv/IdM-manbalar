@@ -16,6 +16,7 @@ faol akkaunti, imtiyozli guruh) darhol ko'zga tashlash. Bezak uchun bezak yo'q: 
 | `idm/portal/src/styles.css` | Barcha tokenlar (`:root`, tungi mavzu) va komponent klasslari. Yangi rang yoki o'lcham faqat shu yerda token sifatida |
 | `idm/portal/src/components/ui.tsx` | Umumiy komponentlar: `PageHead`, `Stat` (`tone`), `Empty`, `ErrorBox`, `SkeletonRows`, `StatusBadge`, `RiskBadge`, `RunStatusBadge`, `RunSummary`, `GroupChips`, `Pager`, `Tabs`, `ConfirmDialog`, `Avatar`, `Person`, `ActivityFeed` |
 | `idm/portal/src/i18n/index.ts` | `describeAction` (audit amali → nom, ikonka, rang, xulosa), `isQuietSync`, sana formatlari |
+| `idm/portal/src/components/ExportButtons.tsx` | Hisobotni Excel (token bilan `download`) va chop etish/PDF (`/reports/print/:key`) tugmalari |
 | `idm/portal/src/components/Icon.tsx` | Ichki SVG ikonkalar (chiziqli, 1.75 qalinlik). Tashqi ikonka kutubxonasi yo'q |
 | `idm/portal/src/components/Layout.tsx` | Yon panel, yuqori panel, mavzu tugmasi, mobil menyu |
 | `idm/portal/src/components/CommandPalette.tsx` | ⌘K / Ctrl+K: sahifalarga o'tish va xodim qidirish |
@@ -80,6 +81,12 @@ Oddiy "oq karta + jadval" yetarli emas — har sahifada ierarxiya, rang ma'nosi 
 - **Har bir ma'lumot bloki 4 holatda:** yuklanmoqda (`SkeletonRows`/skeleton), xato (`ErrorBox` + "Qayta urinish"; 403 → "Ruxsat yo'q"),
   bo'sh (`Empty`: nima uchun bo'shligi va keyin nima bo'lishi), ma'lumot.
 - **Ikonkalar:** `Icon` (16–18px matn yonida, 20px menyuda). Yangi ikonka — `Icon.tsx`ga 24×24 chiziqli path; dekorativ ikonka `aria-hidden`.
+
+## Chop etish (PDF)
+
+- PDF serverda yaratilmaydi: `PrintReportPage` jadvalni ko'rsatadi, foydalanuvchi brauzerda "PDF sifatida saqlash"ni tanlaydi.
+  `@media print` menyu, yuqori panel va `.no-print` elementlarni yashiradi, A4 albom, sarlavha har sahifada takrorlanadi.
+- Chop etishda ko'rinmasligi kerak bo'lgan tugmalarga `.no-print` klassi beriladi.
 
 ## Mavzu va moslashuvchanlik
 

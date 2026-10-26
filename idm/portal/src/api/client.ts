@@ -29,4 +29,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Faylni yuklab olish (API token bilan himoyalangan, shuning uchun oddiy havola emas): server bergan nom bilan saqlanadi. */
+export async function download(path: string, fallbackName: string): Promise<void> {
+  const user = await currentUser()
+  if (!user) { await signIn(); throw new ApiError(401, 'Kirish talab qilinadi') }
+  const response = await fetch(path, { headers: { Authorization: `Bearer ${user.access_token}`, 'X-Correlation-Id': crypto.randomUUID() } })
+  if (!response.ok) throw new ApiError(response.status, response.status === 403 ? 'Ruxsat yo\'q' : `HTTP ${response.status}`)
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const name = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName
+  const url = URL.createObjectURL(await response.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = decodeURIComponent(name)
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export { query } from './query'

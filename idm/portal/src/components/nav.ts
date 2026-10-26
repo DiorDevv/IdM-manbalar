@@ -19,7 +19,7 @@ export const NAV: NavSection[] = [
       { to: '/roles', icon: 'role', label: t.nav.roles },
       { to: '/requests', icon: 'request', label: t.nav.requests, everyone: true },
       { to: '/provisioning', icon: 'sync', label: t.nav.provisioning },
-      { to: '/reviews', icon: 'review', label: t.nav.reviews, soon: true },
+      { to: '/reviews', icon: 'review', label: t.nav.reviews, everyone: true },
     ],
   },
   {

@@ -20,7 +20,8 @@ public record PlanResult(int Planned, int Created, int Obsoleted, bool Held, str
 /// <item>vaqtincha to'xtatilgan — bloklanadi (sozlamaga ko'ra);</item>
 /// <item>rol bo'yicha kerak, lekin yo'q guruh — shaxsiy akkauntga qo'shiladi; akkaunt yo'q bo'lsa (sozlamaga ko'ra) yaratiladi;</item>
 /// <item>rol olib tashlangan — faqat IdM o'zi qo'shgan a'zolik olib tashlanadi. Qo'lda berilgan ortiqcha ruxsatlarga tegilmaydi
-/// (ularni attestatsiyada rahbar ko'rib chiqadi): noto'g'ri sozlangan rol butun bankning ruxsatlarini o'chirib yubormasligi uchun.</item>
+/// (ularni attestatsiyada rahbar ko'rib chiqadi): noto'g'ri sozlangan rol butun bankning ruxsatlarini o'chirib yubormasligi uchun;</item>
+/// <item>attestatsiyada rahbar olib tashlagan ortiqcha guruh — olib tashlanadi (rol bo'yicha kerak bo'lib qolmagan bo'lsa).</item>
 /// </list>
 /// Xizmat akkauntlari va himoyalangan loginlar hech qachon o'zgartirilmaydi. Reja faqat oxirgi sinxronlash muvaffaqiyatli bo'lsa tuziladi
 /// (eskirgan ma'lumot bilan yozilmaydi). Keraksiz bo'lib qolgan kutilayotgan amallar bekor qilinadi (Obsolete).
@@ -74,6 +75,13 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
         var granted = history.GroupBy(h => (h.AccountId, h.EntitlementId))
             .Where(g => g.OrderBy(h => h.CompletedAt).Last().Kind == ProvisioningKind.AddMembership).Select(g => g.Key).ToHashSet();
 
+        // Attestatsiyada olib tashlangan ortiqcha guruhlar (hali tizimdan olinmagan)
+        var revoked = (await db.AccessReviewItems.AsNoTracking()
+            .Where(r => r.Kind == AccessReviewItemKind.Entitlement && r.Decision == AccessReviewDecision.Revoke && r.RemediatedAt == null
+                && r.Account!.ApplicationId == app.Id)
+            .Select(r => new { AccountId = r.AccountId!.Value, EntitlementId = r.EntitlementId!.Value }).ToListAsync(ct))
+            .Select(r => (r.AccountId, r.EntitlementId)).ToHashSet();
+
         var protectedLogins = new HashSet<string>(settings.ProtectedLogins ?? [], StringComparer.OrdinalIgnoreCase);
         bool Touchable(AccountRow a) => a.Kind != AccountKind.Service && !protectedLogins.Contains(a.Login);
         var expectedBy = expected.ToLookup(e => e.IdentityId);
@@ -103,8 +111,11 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
                     plan.Add(new(ProvisioningKind.DisableAccount, i.Id, a.Id, null, "suspended", null));
 
             foreach (var a in touchable)
-                foreach (var e in a.Entitlements.Where(e => !want.ContainsKey(e) && granted.Contains((a.Id, e)) && entitlements.ContainsKey(e)))
-                    plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "role-removed", null));
+                foreach (var e in a.Entitlements.Where(e => !want.ContainsKey(e) && entitlements.ContainsKey(e)))
+                {
+                    if (granted.Contains((a.Id, e))) plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "role-removed", null));
+                    else if (revoked.Contains((a.Id, e))) plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "review-revoked", null));
+                }
 
             if (i.Status is not (IdentityStatus.Active or IdentityStatus.Pending) || want.Count == 0) continue;
             if (mine.Count == 0)

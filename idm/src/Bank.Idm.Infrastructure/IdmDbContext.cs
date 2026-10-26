@@ -24,6 +24,8 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<SodRule> SodRules => Set<SodRule>();
     public DbSet<SodRuleEntitlement> SodRuleEntitlements => Set<SodRuleEntitlement>();
     public DbSet<ProvisioningOperation> ProvisioningOperations => Set<ProvisioningOperation>();
+    public DbSet<AccessReviewCampaign> AccessReviewCampaigns => Set<AccessReviewCampaign>();
+    public DbSet<AccessReviewItem> AccessReviewItems => Set<AccessReviewItem>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -159,6 +161,38 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<AccessReviewCampaign>(e =>
+        {
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.Department).HasMaxLength(256);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+            e.Property(x => x.CreatedByName).HasMaxLength(256);
+            e.Property(x => x.ClosedBy).HasMaxLength(256);
+            e.Property(x => x.Version).IsRowVersion();
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AccessReviewItem>(e =>
+        {
+            e.HasIndex(x => new { x.CampaignId, x.Decision });
+            e.HasIndex(x => new { x.ReviewerId, x.Decision });
+            e.HasIndex(x => new { x.Decision, x.RemediatedAt });
+            e.HasIndex(x => x.IdentityId);
+            e.Property(x => x.ApplicationCode).HasMaxLength(128);
+            e.Property(x => x.Title).HasMaxLength(256);
+            e.Property(x => x.Subtitle).HasMaxLength(256);
+            e.Property(x => x.Comment).HasMaxLength(2000);
+            e.Property(x => x.DecidedBy).HasMaxLength(256);
+            e.Property(x => x.DecidedByName).HasMaxLength(256);
+            e.Property(x => x.Version).IsRowVersion();
+            e.HasOne(x => x.Campaign).WithMany(x => x.Items).HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Reviewer).WithMany().HasForeignKey(x => x.ReviewerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.IdentityRole).WithMany().HasForeignKey(x => x.IdentityRoleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<AuditEvent>(e =>
         {

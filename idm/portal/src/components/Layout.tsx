@@ -59,7 +59,7 @@ export function Layout() {
           <div key={section.title}>
             <div className="nav-section">{section.title}</div>
             {section.items.map(item => <NavItem key={item.to} item={item} count={item.to === '/reports' ? risks : item.to === '/sod' ? dashboard.data?.sodViolations
-              : item.to === '/requests' ? me.data?.inboxCount : undefined} />)}
+              : item.to === '/requests' ? me.data?.inboxCount : item.to === '/reviews' ? me.data?.reviewCount : undefined} />)}
           </div>
         ))}
         <div className="sidebar-foot">

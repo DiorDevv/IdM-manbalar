@@ -476,3 +476,28 @@ textarea.input { height: auto; min-height: 72px; padding: 8px 10px; resize: vert
   font-size: 13.5px; color: var(--text); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .decision-card { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-sm); }
 @media (max-width: 1000px) { .request-layout { grid-template-columns: 1fr; } .request-layout .sticky { position: static; } }
+
+/* Attestatsiya */
+.progress { height: 6px; border-radius: 999px; background: var(--neutral-soft); overflow: hidden; min-width: 80px; }
+.progress > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.progress.done > span { background: var(--ok); }
+.review-group + .review-group { border-top: 1px solid var(--border); }
+.review-group-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: var(--panel-2); flex-wrap: wrap; }
+.review-group-head .grow { flex: 1; min-width: 200px; }
+.decision-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+
+/* Chop etish (PDF): faqat hisobot jadvali, menyu va tugmalarsiz */
+.print-only { display: none; }
+@media print {
+  .sidebar, .header, .no-print, .cmd { display: none !important; }
+  .print-only { display: block; }
+  body, .app, .main-col, .content { background: #fff !important; color: #000; }
+  .main-col::before { display: none; }
+  .content { max-width: none; padding: 0; animation: none; }
+  .card { border: 0; box-shadow: none; }
+  table.data { font-size: 9.5px; }
+  table.data th, table.data td { padding: 3px 5px; height: auto; }
+  table.data thead { display: table-header-group; }
+  table.data tr { break-inside: avoid; }
+  @page { size: A4 landscape; margin: 10mm; }
+}

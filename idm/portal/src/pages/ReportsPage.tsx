@@ -5,6 +5,7 @@ import { api, query } from '../api/client'
 import type { CorrelationSummary, DriftItem, IdentityListItem, LeaverItem, OrphanAccountItem, PagedResult } from '../api/types'
 import { formatDate, formatDateTime, t } from '../i18n'
 import { Icon } from '../components/Icon'
+import { ExportButtons } from '../components/ExportButtons'
 import { Empty, ErrorBox, PageHead, Pager, Person, SkeletonRows, StatusBadge, Tabs, type TabDef } from '../components/ui'
 
 const PAGE = 25
@@ -28,6 +29,16 @@ export function ReportsPage() {
     <>
       <PageHead title={r.title} subtitle={r.subtitle} />
       {summary.isError && <div className="card" style={{ marginBottom: 16 }}><ErrorBox error={summary.error} /></div>}
+      <section className="card" style={{ marginBottom: 16 }}>
+        <div className="card-head"><h2>{t.exports.title}</h2></div>
+        <div className="card-body muted" style={{ paddingBottom: 4 }}>{t.exports.subtitle}</div>
+        {(['access', 'privileged', 'sod', 'orphans', 'leavers'] as const).map(key => (
+          <div key={key} className="list-row">
+            <div className="grow"><div className="cell-main">{t.exports.names[key]?.[0]}</div><div className="cell-sub">{t.exports.names[key]?.[1]}</div></div>
+            <ExportButtons report={key} />
+          </div>
+        ))}
+      </section>
       <section className="card">
         <Tabs tabs={tabs} current={tab} onSelect={x => setParams({ tab: x }, { replace: true })} />
         {tab === 'leavers' && <Leavers />}
