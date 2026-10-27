@@ -128,10 +128,18 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - **Tayyor:** rahbar portalda xodimlarining ruxsatlarini ko'rib chiqadi, olib tashlangan ruxsat tizimdan o'zi olinadi, auditor
   hisobotlarni Excel yoki PDF ko'rinishida oladi.
 
-### I. Ishlab chiqarishga tayyorlash
-- [ ] MFA (adminlar uchun majburiy), sirlar saqlovchisi, haqiqiy TLS sertifikatlari, zaif paketlar.
-- [ ] Audit SIEM'ga, zaxira nusxa, monitoring, ikki nusxada ishlash (HA), yuklama testi (10 000+ xodim).
-- [ ] Pentest va bankning axborot xavfsizligi bo'limi tekshiruvi.
+### I. Ishlab chiqarishga tayyorlash (kod qismi bajarildi, 2026-10-27)
+- [x] MFA: admin/auditor vakolati faqat ikkinchi omil bilan (`amr`/`acr`), portal step-up; SimpleIdServer access token'ga acr/amr (patch).
+- [x] Sirlar katalogi (Vault Agent / Kubernetes secrets); production sozlama nazorati — TLS/LDAPS/VerifyFull'siz, fayldagi sir bilan
+  yoki proksisiz ochiq HTTP bilan server ishga tushmaydi; HSTS, ishonchli proksi.
+- [x] Zaif paketlar: vite yangilandi, CI'da NuGet va npm tekshiruvi.
+- [x] Audit SIEM'ga (syslog TLS, xesh bilan, yo'qotishsiz), Prometheus metrikalari, `/health`.
+- [x] HA: yetakchi tanlash, bir tizimda bitta sinxronlash, to'xtagan nusxa ishlarini yopish (jonli sinov: 2 s'da yetakchi almashdi).
+- [x] Yuklama testi: 10 000 va 50 000 xodim; topilgan sekinlik (attestatsiya 60 s) va xotira (Excel 1.7 GB) tuzatildi.
+- [x] Zaxira nusxa va tiklashni tekshirish skriptlari, `verify-audit`, PostgreSQL eng kam huquqli rollar (sinovdan o'tgan).
+- [x] Axborot xavfsizligi bo'limi uchun hujjat: tahdidlar va nazoratlar, pentest va chiqarish ro'yxatlari (`idm/XAVFSIZLIK.md`).
+- [ ] Bank tomonida: haqiqiy TLS sertifikatlari va proksi, Vault, SSO'da MFA (ACR) sozlash, bank AD'sida sinov, pentest,
+  axborot xavfsizligi bo'limi tekshiruvi va tasdig'i, RTO/RPO kelishuvi.
 
 ## 4. Bajarilgan ishlar
 

@@ -24,6 +24,10 @@ if (builder.Configuration["Idm:SecretsDirectory"] is { Length: > 0 } secrets)
 var options = builder.Configuration.GetSection(IdmOptions.Section).Get<IdmOptions>() ?? new IdmOptions();
 builder.Services.Configure<IdmOptions>(builder.Configuration.GetSection(IdmOptions.Section));
 
+// Operatsion buyruq (HTTP server ishga tushmaydi): zaxira nusxadan tiklangan yoki shubhali bazada audit zanjirini tekshirish.
+// Ulanish — ConnectionStrings__Idm muhit o'zgaruvchisi yoki sirlar katalogidan (argumentda parol jarayonlar ro'yxatida ko'rinadi)
+if (args is ["verify-audit", ..]) return await AuditCli.VerifyAsync(builder.Configuration.GetConnectionString("Idm"));
+
 builder.Services.AddDbContext<IdmDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Idm")
     ?? throw new InvalidOperationException("ConnectionStrings:Idm sozlanmagan")));
 builder.Services.AddSingleton(TimeProvider.System);
@@ -130,6 +134,7 @@ app.MapMetrics();
 app.MapIdmEndpoints();
 
 app.Run();
+return 0;
 
 static bool HasScope(ClaimsPrincipal user, string scope) =>
     user.FindAll("scope").SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains(scope);

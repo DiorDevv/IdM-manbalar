@@ -171,6 +171,31 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - Tavsiya etiladigan ogohlantirishlar: `idm_leader` yig'indisi 1 emas; sinxronlash 2 × interval'dan ko'p bo'lmagan;
   `idm_provisioning_operations{status="Failed"} > 0`; `idm_leavers_with_active_accounts > 0` (1 soatdan ko'p); SIEM kechikishi > 5 daqiqa.
 
+## Ekspluatatsiya (`deploy/`)
+- `db-roles.sql` — PostgreSQL rollari: `idm_owner` (migratsiyalar), `idm_app` (API; audit jurnaliga faqat qo'shish), `idm_reader` (o'qish).
+- `backup.sh` — `pg_dump` (izchil snapshot), ixtiyoriy GPG shifrlash, manifest (SHA-256, oxirgi audit yozuvi va xeshi), saqlash muddati.
+- `restore-verify.sh` — nusxani vaqtinchalik bazaga tiklab tekshiradi: nazorat summasi, audit belgisi, butun xesh zanjiri; keyin bazani o'chiradi.
+- `dotnet Bank.Idm.Api.dll verify-audit` — istalgan bazada audit zanjiri (ulanish `ConnectionStrings__Idm` muhitidan); kod 0/2/1.
+- Xavfsizlik nazoratlari, pentest va chiqarish ro'yxatlari: [XAVFSIZLIK.md](XAVFSIZLIK.md).
+
+## Yuklama (bank miqyosi)
+`IDM_LOAD_TEST=10000 dotnet test --filter-class '*LoadTests'` — xodimlar, akkauntlar (o'rtacha 6 guruh), 300 guruh, 40 avtomatik rol,
+20 SoD qoidasi; har bir amal vaqt chegarasi bilan tekshiriladi (CI'da emas). Mahalliy kompyuterda (PostgreSQL 18), soniyada:
+
+| Amal | 10 000 xodim | 50 000 xodim |
+|---|---|---|
+| HR birinchi yuklash | 1.7 | 4.6 |
+| AD birinchi yuklash (akkaunt, guruh, a'zolik) | 3.6 | 13.4 |
+| AD qayta sinxronlash (o'zgarishsiz) | 1.3 | 5.1 |
+| Avtomatik rollar (birinchi / o'zgarishsiz) | 0.9 / 0.1 | 4.4 / 0.3 |
+| Tizimga yozish rejasi (birinchi: 30 ming / 151 ming amal; takror) | 2.8 / 0.4 | 12.6 / 1.4 |
+| "Kirish huquqlari" hisoboti + Excel (60 ming / 300 ming qator) | 0.2 + 0.3 | 1.2 + 1.3 |
+| Butun bank attestatsiya kampaniyasi (58 ming / 289 ming yozuv) | 1.1 | 5.8 |
+
+Yuklama testi topgan va tuzatilgan: kampaniya yozuvlari EF o'rniga PostgreSQL `COPY` bilan (50 ming xodimda 60 s → 6 s — HTTP
+so'rovi proksi vaqt chegarasiga yetmaydi); Excel varag'i oqim bilan yoziladi (ajratilgan xotira 1.7 GB → 240 MB).
+Hisobot chegaralari: Excel — 1 000 000 qator, chop etish (brauzer) — 20 000 qator (undan katta bo'lsa 413 va Excel taklifi).
+
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.
 - **API:** JWT imzosi, issuer, audience (`idm-portal`) va `idm` ruxsat doirasi tekshiriladi.
