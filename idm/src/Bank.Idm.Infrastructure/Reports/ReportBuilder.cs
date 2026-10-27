@@ -15,7 +15,10 @@ public record ReportTable(string Key, string Title, string? Subtitle, IReadOnlyL
 /// </summary>
 public class ReportBuilder(IdmDbContext db, AccessAnalyzer analyzer, TimeProvider time)
 {
-    public const int MaxRows = 200_000;
+    /// <summary>Excel varag'i chegarasi (1 048 576) ichida.</summary>
+    public const int MaxRows = 1_000_000;
+    /// <summary>Chop etish (brauzerda jadval): undan katta hisobot — faqat Excel.</summary>
+    public const int MaxPrintRows = 20_000;
     public static readonly string[] Keys = ["access", "privileged", "sod", "orphans", "leavers", "campaign"];
     private static readonly TimeZoneInfo Tashkent = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tashkent");
 

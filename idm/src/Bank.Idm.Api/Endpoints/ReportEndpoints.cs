@@ -51,6 +51,8 @@ public static class ReportEndpoints
             }
             if (table is null) return TypedResults.NotFound();
             var xlsx = string.Equals(format, "xlsx", StringComparison.OrdinalIgnoreCase);
+            if (!xlsx && table.Rows.Count > ReportBuilder.MaxPrintRows)
+                return TypedResults.Problem($"Hisobotda {table.Rows.Count} qator: chop etish uchun ko'pi bilan {ReportBuilder.MaxPrintRows}. Excel faylini yuklab oling.", statusCode: 413);
             await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "report.exported", "report", key,
                 JsonSerializer.Serialize(new { report = key, title = table.Title, format = xlsx ? "xlsx" : "print", rows = table.Rows.Count, campaignId }),
                 user.IpAddress, user.CorrelationId), ct);

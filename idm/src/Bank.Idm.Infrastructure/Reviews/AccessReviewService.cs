@@ -42,15 +42,55 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         var campaign = new AccessReviewCampaign
         {
             Name = scope.Name!.Trim(), Description = Clean(scope.Description), Department = Clean(scope.Department), ApplicationId = scope.ApplicationId,
-            PrivilegedOnly = scope.PrivilegedOnly, DueDate = scope.DueDate, CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login, CreatedByName = actor.Name,
-            Items = items
+            PrivilegedOnly = scope.PrivilegedOnly, DueDate = scope.DueDate, CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login, CreatedByName = actor.Name
         };
         db.AccessReviewCampaigns.Add(campaign);
         var summary = Summarize(items);
-        await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "review.campaign-created", "review-campaign", campaign.Id.ToString(),
-            JsonSerializer.Serialize(new { name = campaign.Name, campaign.Department, campaign.ApplicationId, campaign.PrivilegedOnly, campaign.DueDate,
-                summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
+        // Kampaniya, audit va yozuvlar bitta tranzaksiyada; yozuvlar COPY bilan (butun bank — yuz minglab yozuv, EF bilan daqiqalar)
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "review.campaign-created", "review-campaign", campaign.Id.ToString(),
+                JsonSerializer.Serialize(new { name = campaign.Name, campaign.Department, campaign.ApplicationId, campaign.PrivilegedOnly, campaign.DueDate,
+                    summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
+            await CopyItemsAsync(campaign.Id, items, ct);
+            await transaction.CommitAsync(ct);
+        }
+        foreach (var item in items) item.CampaignId = campaign.Id;
+        campaign.Items = items;
         return new(campaign, 201);
+    }
+
+    /// <summary>PostgreSQL binary COPY: joriy (EF) tranzaksiyada.</summary>
+    private async Task CopyItemsAsync(Guid campaignId, IReadOnlyList<AccessReviewItem> items, CancellationToken ct)
+    {
+        var connection = (Npgsql.NpgsqlConnection)db.Database.GetDbConnection();
+        await using var importer = await connection.BeginBinaryImportAsync(
+            "COPY access_review_items (id, campaign_id, kind, identity_id, reviewer_id, identity_role_id, account_id, entitlement_id, " +
+            "application_code, title, subtitle, is_privileged, decision) FROM STDIN (FORMAT BINARY)", ct);
+        foreach (var i in items)
+        {
+            await importer.StartRowAsync(ct);
+            await importer.WriteAsync(i.Id, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
+            await importer.WriteAsync(campaignId, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
+            await importer.WriteAsync(i.Kind.ToString(), NpgsqlTypes.NpgsqlDbType.Varchar, ct);
+            await importer.WriteAsync(i.IdentityId, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
+            await WriteNullableAsync(importer, i.ReviewerId, ct);
+            await WriteNullableAsync(importer, i.IdentityRoleId, ct);
+            await WriteNullableAsync(importer, i.AccountId, ct);
+            await WriteNullableAsync(importer, i.EntitlementId, ct);
+            await importer.WriteAsync(i.ApplicationCode, NpgsqlTypes.NpgsqlDbType.Varchar, ct);
+            await importer.WriteAsync(i.Title, NpgsqlTypes.NpgsqlDbType.Varchar, ct);
+            if (i.Subtitle is null) await importer.WriteNullAsync(ct); else await importer.WriteAsync(i.Subtitle, NpgsqlTypes.NpgsqlDbType.Varchar, ct);
+            await importer.WriteAsync(i.IsPrivileged, NpgsqlTypes.NpgsqlDbType.Boolean, ct);
+            await importer.WriteAsync(AccessReviewDecision.Pending.ToString(), NpgsqlTypes.NpgsqlDbType.Varchar, ct);
+        }
+        await importer.CompleteAsync(ct);
+    }
+
+    private static async Task WriteNullableAsync(Npgsql.NpgsqlBinaryImporter importer, Guid? value, CancellationToken ct)
+    {
+        if (value is { } v) await importer.WriteAsync(v, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
+        else await importer.WriteNullAsync(ct);
     }
 
     /// <summary>Bir nechta yozuv bo'yicha bitta qaror. Hammasi yoki hech biri: birortasini hal qila olmasa — xato, hech narsa o'zgarmaydi.</summary>

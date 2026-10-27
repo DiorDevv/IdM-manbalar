@@ -57,41 +57,48 @@ public static class XlsxWriter
                 <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
                 </styleSheet>
                 """);
-            Entry(zip, "xl/worksheets/sheet1.xml", Sheet(table));
+            // Varaq oqim bilan: yuz minglab qator xotirada bitta satrga yig'ilmaydi
+            using var sheet = new StreamWriter(zip.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal).Open(), new UTF8Encoding(false));
+            Sheet(table, sheet);
         }
         return stream.ToArray();
     }
 
-    private static string Sheet(ReportTable table)
+    private static void Sheet(ReportTable table, TextWriter sb)
     {
-        var sb = new StringBuilder();
-        sb.Append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
-        sb.Append("""<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>""");
-        sb.Append("<cols>");
+        sb.Write("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
+        sb.Write("""<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>""");
+        sb.Write("<cols>");
         for (var c = 0; c < table.Columns.Count; c++)
         {
             var width = Math.Clamp(table.Rows.Select(r => c < r.Count ? r[c]?.Length ?? 0 : 0).Append(table.Columns[c].Length).Max() + 2, 8, 60);
-            sb.Append($"""<col min="{c + 1}" max="{c + 1}" width="{width}" customWidth="1"/>""");
+            sb.Write($"""<col min="{c + 1}" max="{c + 1}" width="{width}" customWidth="1"/>""");
         }
-        sb.Append("</cols><sheetData>");
+        sb.Write("</cols><sheetData>");
         Row(sb, 1, table.Columns, style: 1);
         for (var r = 0; r < table.Rows.Count; r++) Row(sb, r + 2, table.Rows[r], style: 0);
-        sb.Append("</sheetData>");
-        sb.Append($"""<autoFilter ref="A1:{Column(table.Columns.Count - 1)}{table.Rows.Count + 1}"/>""");
-        sb.Append("</worksheet>");
-        return sb.ToString();
+        sb.Write("</sheetData>");
+        sb.Write($"""<autoFilter ref="A1:{Column(table.Columns.Count - 1)}{table.Rows.Count + 1}"/>""");
+        sb.Write("</worksheet>");
     }
 
-    private static void Row(StringBuilder sb, int index, IReadOnlyList<string?> values, int style)
+    private static void Row(TextWriter sb, int index, IReadOnlyList<string?> values, int style)
     {
-        sb.Append($"""<row r="{index}">""");
+        sb.Write($"""<row r="{index}">""");
         for (var c = 0; c < values.Count; c++)
         {
             var value = values[c];
             if (string.IsNullOrEmpty(value)) continue;
-            sb.Append($"""<c r="{Column(c)}{index}" t="inlineStr"{(style > 0 ? $" s=\"{style}\"" : "")}><is><t xml:space="preserve">{Escape(value)}</t></is></c>""");
+            sb.Write("<c r=\"");
+            sb.Write(Column(c));
+            sb.Write(index);
+            sb.Write("\" t=\"inlineStr\"");
+            if (style > 0) { sb.Write(" s=\""); sb.Write(style); sb.Write('"'); }
+            sb.Write("><is><t xml:space=\"preserve\">");
+            WriteEscaped(sb, value);
+            sb.Write("</t></is></c>");
         }
-        sb.Append("</row>");
+        sb.Write("</row>");
     }
 
     /// <summary>0 → A, 25 → Z, 26 → AA.</summary>
@@ -105,19 +112,33 @@ public static class XlsxWriter
     /// <summary>XML'ga mos bo'lmagan boshqaruv belgilari tashlanadi, maxsus belgilar ekranlanadi.</summary>
     internal static string Escape(string value)
     {
-        var sb = new StringBuilder(value.Length);
+        using var writer = new StringWriter();
+        WriteEscaped(writer, value);
+        return writer.ToString();
+    }
+
+    /// <summary>To'g'ridan-to'g'ri oqimga (har belgi uchun satr yaratilmaydi: katta hisobotda xotira).</summary>
+    private static void WriteEscaped(TextWriter writer, string value)
+    {
         for (var i = 0; i < value.Length; i++)
         {
             var ch = value[i];
             if (char.IsHighSurrogate(ch) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
             {
-                sb.Append(ch).Append(value[++i]);
+                writer.Write(ch);
+                writer.Write(value[++i]);
                 continue;
             }
             if (!XmlConvert.IsXmlChar(ch)) continue;   // boshqaruv belgilari va juftsiz surrogatlar
-            sb.Append(ch switch { '&' => "&amp;", '<' => "&lt;", '>' => "&gt;", '"' => "&quot;", _ => ch.ToString() });
+            switch (ch)
+            {
+                case '&': writer.Write("&amp;"); break;
+                case '<': writer.Write("&lt;"); break;
+                case '>': writer.Write("&gt;"); break;
+                case '"': writer.Write("&quot;"); break;
+                default: writer.Write(ch); break;
+            }
         }
-        return sb.ToString();
     }
 
     /// <summary>Excel varaq nomi: ko'pi bilan 31 belgi, \ / ? * [ ] : taqiqlangan.</summary>
