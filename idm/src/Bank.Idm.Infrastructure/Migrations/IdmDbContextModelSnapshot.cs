@@ -1278,6 +1278,36 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("role_rules");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.SiemCheckpoint", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("LastErrorAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_error_at");
+
+                    b.Property<long>("LastEventId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_event_id");
+
+                    b.Property<DateTimeOffset?>("LastSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sent_at");
+
+                    b.HasKey("Name")
+                        .HasName("pk_siem_checkpoints");
+
+                    b.ToTable("siem_checkpoints");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.SodRule", b =>
                 {
                     b.Property<Guid>("Id")

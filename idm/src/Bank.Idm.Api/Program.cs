@@ -46,6 +46,8 @@ builder.Services.AddSingleton<ConnectorSyncCoordinator>();
 builder.Services.AddHostedService<ConnectorSyncWorker>();
 builder.Services.AddSingleton<ProvisioningCoordinator>();
 builder.Services.AddHostedService<ProvisioningWorker>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Siem.SiemForwarder>();
+builder.Services.AddHostedService<SiemWorker>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();
@@ -124,6 +126,7 @@ if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.MapGet("/health", async (IdmDbContext db, ILeadership leadership, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", node = leadership.NodeId, leader = leadership.IsLeader })
         : Results.Problem("Bazaga ulanib bo'lmadi", statusCode: 503));
+app.MapMetrics();
 app.MapIdmEndpoints();
 
 app.Run();

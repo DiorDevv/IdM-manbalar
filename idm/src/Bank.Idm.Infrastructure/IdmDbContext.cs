@@ -27,6 +27,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<AccessReviewCampaign> AccessReviewCampaigns => Set<AccessReviewCampaign>();
     public DbSet<AccessReviewItem> AccessReviewItems => Set<AccessReviewItem>();
     public DbSet<ClusterNode> ClusterNodes => Set<ClusterNode>();
+    public DbSet<SiemCheckpoint> SiemCheckpoints => Set<SiemCheckpoint>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -219,6 +220,12 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.Login, x.Role }).IsUnique();
             e.Property(x => x.Login).HasMaxLength(256);
             e.Property(x => x.CreatedBy).HasMaxLength(256);
+        });
+        b.Entity<SiemCheckpoint>(e =>
+        {
+            e.HasKey(x => x.Name);
+            e.Property(x => x.Name).HasMaxLength(64);
+            e.Property(x => x.LastError).HasMaxLength(2000);
         });
         b.Entity<ClusterNode>(e =>
         {

@@ -154,6 +154,23 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - Qo'lda rejalash, tasdiqlash va API so'rovlari istalgan nusxada: tizim bo'yicha advisory lock va `xmin` qulflari bilan.
 - `/health` — baza aloqasi, nusxa identifikatori va yetakchimi (yuk taqsimlagich va monitoring uchun).
 
+## SIEM va monitoring
+- **SIEM:** `Idm:Siem` — audit jurnali syslog RFC 5424 ko'rinishida, TCP + TLS (RFC 5425, port 6514), RFC 6587 octet-counting ramka.
+  Xabar — JSON: kim, nima, qachon, obyekt, tafsilot, IP, korrelyatsiya, `hash` va `previousHash` (SIEM tomonda zanjirni tekshirish mumkin).
+  ```json
+  "Siem": { "Enabled": true, "Host": "siem.bank.uz", "Port": 6514, "CaCertificatePath": "/etc/idm/bank-ca.pem" }
+  ```
+  `CaCertificatePath` berilsa, SIEM sertifikati faqat shu (bankning ichki) CA'ga tekshiriladi; host nomi ham tekshiriladi.
+  Yetkazish — kamida bir marta: to'plam yuborilgach `siem_checkpoints` yangilanadi, uzilishda shu joydan davom etadi (takrorni SIEM
+  `id` bo'yicha tashlaydi). Faqat yetakchi nusxa yuboradi. Ishlab chiqarishda shifrlanmagan `tcp` taqiqlangan, SIEM o'chiq — ogohlantirish.
+- **Metrikalar:** `GET /metrics` (Prometheus matn formati), `Authorization: Bearer <Idm:MetricsToken>` (≥ 32 belgi, sirlar orqali;
+  bo'sh — endpoint yo'q). `idm_up`, `idm_leader`, `idm_cluster_nodes`, `idm_connector_last_success_age_seconds`,
+  `idm_connector_last_run_failed`, `idm_provisioning_operations{status}`, `idm_access_requests_pending`, `idm_review_items_pending`,
+  `idm_leavers_with_active_accounts`, `idm_orphan_accounts`, `idm_audit_last_event_id`, `idm_siem_lag_events`,
+  `idm_siem_last_success_age_seconds`. Shaxsiy ma'lumot yo'q.
+- Tavsiya etiladigan ogohlantirishlar: `idm_leader` yig'indisi 1 emas; sinxronlash 2 × interval'dan ko'p bo'lmagan;
+  `idm_provisioning_operations{status="Failed"} > 0`; `idm_leavers_with_active_accounts > 0` (1 soatdan ko'p); SIEM kechikishi > 5 daqiqa.
+
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.
 - **API:** JWT imzosi, issuer, audience (`idm-portal`) va `idm` ruxsat doirasi tekshiriladi.

@@ -24,6 +24,8 @@ public class ProductionGuardTests
         ["urls"] = "https://0.0.0.0:7100",
         ["Idm:Connectors:AD:Ldap:UseSsl"] = "true",
         ["Idm:Connectors:AD:Ldap:BindPassword"] = "sir",
+        ["Idm:Siem:Enabled"] = "true",
+        ["Idm:Siem:Host"] = "siem.bank.uz",
     };
 
     private static ProductionGuard.Result Check(Dictionary<string, string?> values, string? jsonFile = null)

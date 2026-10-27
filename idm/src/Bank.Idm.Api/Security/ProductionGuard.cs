@@ -11,7 +11,7 @@ namespace Bank.Idm.Api.Security;
 public static class ProductionGuard
 {
     /// <summary>Sir hisoblanadigan kalitlar (oxiri bo'yicha): faqat muhit o'zgaruvchisi yoki sirlar katalogidan (Vault, Kubernetes secrets).</summary>
-    private static readonly string[] SecretSuffixes = ["BindPassword", "WriteBindPassword", "Password", "Secret", "Token"];
+    private static readonly string[] SecretSuffixes = ["BindPassword", "WriteBindPassword", "Password", "Secret", "Token", "MetricsToken"];
 
     public record Result(IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);
 
@@ -50,6 +50,10 @@ public static class ProductionGuard
         if ((urls.Count == 0 || urls.Any(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase))) && options.TrustedProxies.Length == 0)
             errors.Add("HTTP manzil ochiq, lekin Idm:TrustedProxies bo'sh: HTTPS'ni Kestrel'da yoqing yoki TLS'ni tugatuvchi proksi manzilini ko'rsating");
 
+        if (!options.Siem.Enabled) warnings.Add("Idm:Siem o'chiq: audit faqat IdM bazasida (bank talabi — markaziy SIEM)");
+        else if (options.Siem.Protocol != Bank.Idm.Infrastructure.Siem.SiemProtocols.TcpTls)
+            errors.Add($"Idm:Siem:Protocol={options.Siem.Protocol}: audit faqat TLS orqali yuboriladi (tcp-tls)");
+        if (options.MetricsToken is { Length: > 0 and < 32 }) errors.Add("Idm:MetricsToken kamida 32 belgi bo'lishi kerak");
         if (options.MigrateOnStartup) warnings.Add("Idm:MigrateOnStartup yoqilgan: ishlab chiqarishda migratsiya alohida, nazorat ostida qo'llanadi");
         if (options.BootstrapAdmins.Length > 0) warnings.Add("Idm:BootstrapAdmins berilgan: birinchi ishga tushishdan keyin olib tashlang");
         if (!options.Sso.AdminMfa.Required) warnings.Add("Idm:Sso:AdminMfa:Required o'chiq: administratorlar ikki bosqichli kirishsiz ishlaydi");
