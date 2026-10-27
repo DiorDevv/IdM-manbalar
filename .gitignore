@@ -6,3 +6,5 @@ manbalar/
 .backups/
 idm/**/bin/
 idm/**/obj/
+.local/
+.logs-setup.out
