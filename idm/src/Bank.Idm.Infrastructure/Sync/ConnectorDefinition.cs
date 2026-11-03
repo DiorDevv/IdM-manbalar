@@ -40,7 +40,8 @@ public class ConnectorDefinition
     public HrSettings ToHrSettings() => new(MaxDeletePercent, TerminateMissing, TimeZone);
     public bool CanProvision => !IsHr && Provisioning.Mode != ProvisioningMode.Off;
     public Provisioning.ProvisioningSettings ToProvisioningSettings() => new(Provisioning.Mode, Provisioning.CreateAccounts,
-        Provisioning.MaxAutoOperations, Provisioning.ProtectedLogins, Provisioning.DisableSuspended, Provisioning.MaxAttempts, Ldap.LoginMaxLength);
+        Provisioning.MaxAutoOperations, Provisioning.ProtectedLogins, Provisioning.DisableSuspended, Provisioning.MaxAttempts, Ldap.LoginMaxLength,
+        Provisioning.EnableReturning, Provisioning.EnableNewAccounts);
 }
 
 public enum ProvisioningMode
@@ -55,7 +56,7 @@ public enum ProvisioningMode
 public class ProvisioningDefinition
 {
     public ProvisioningMode Mode { get; set; } = ProvisioningMode.Off;
-    /// <summary>Rol kerak, lekin tizimda akkaunti yo'q xodimga akkaunt yaratish (bloklangan, parolsiz).</summary>
+    /// <summary>Rol kerak, lekin tizimda akkaunti yo'q xodimga akkaunt yaratish (bloklangan, tasodifiy noma'lum parol bilan).</summary>
     public bool CreateAccounts { get; set; }
     public int MaxAutoOperations { get; set; } = 20;
     /// <summary>Hech qachon o'zgartirilmaydigan akkauntlar (masalan administrator, xizmat akkauntlari).</summary>
@@ -63,6 +64,16 @@ public class ProvisioningDefinition
     /// <summary>Vaqtincha to'xtatilgan xodim akkauntini bloklash.</summary>
     public bool DisableSuspended { get; set; } = true;
     public int MaxAttempts { get; set; } = 5;
+    /// <summary>
+    /// Qayta ishga olingan yoki to'xtatilishi tugagan xodim akkauntini qayta yoqish — faqat IdM o'zi bloklagan bo'lsa
+    /// (administrator qo'lda bloklagan akkauntga tegilmaydi).
+    /// </summary>
+    public bool EnableReturning { get; set; } = true;
+    /// <summary>
+    /// IdM yaratgan (bloklangan) akkauntni ishga kirish kuni yoqish. Standart — yo'q: parol tasodifiy va noma'lum, odatda helpdesk
+    /// parol berib o'zi yoqadi. Yoqilsa, helpdesk parol bermaguncha hech kim kira olmaydi; katalog rad etsa — tushunarli xato.
+    /// </summary>
+    public bool EnableNewAccounts { get; set; }
 }
 
 public static class ConnectorTypes

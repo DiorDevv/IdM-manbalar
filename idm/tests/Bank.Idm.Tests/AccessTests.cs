@@ -1,3 +1,5 @@
+using Bank.Idm.Infrastructure.Requests;
+using Bank.Idm.Infrastructure.Reviews;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure;
 using Bank.Idm.Infrastructure.Access;
@@ -141,5 +143,74 @@ public class AccessTests : IAsyncLifetime
         Assert.Equal((_karimov.Id, "KREDIT-SOD"), (violation.IdentityId, violation.RuleCode));
         Assert.Equal(["KREDIT-SOD"], await analyzer.RoleConflictsAsync([_credit.Id, _approve.Id], Ct));
         Assert.Empty(await analyzer.RoleConflictsAsync([_credit.Id, _admins.Id], Ct));
+    }
+
+    [Fact]
+    public async Task Sod_exception_marks_the_violation_accepted_until_it_expires_or_is_revoked()
+    {
+        Guid ruleId;
+        await using (var db = pg.CreateContext())
+        {
+            var rule = new SodRule { Code = "KREDIT-SOD", Name = "Kredit berish va tasdiqlash", CreatedBy = "test" };
+            rule.Entitlements.Add(new SodRuleEntitlement { EntitlementId = _credit.Id, Side = SodSide.Left });
+            rule.Entitlements.Add(new SodRuleEntitlement { EntitlementId = _approve.Id, Side = SodSide.Right });
+            db.SodRules.Add(rule);
+            await db.SaveChangesAsync(Ct);
+            ruleId = rule.Id;
+        }
+        await GiveAsync(_karimov, _credit, _approve);
+        // 2026-11-03 12:00 Toshkent
+        var time = new MutableTime(new DateTimeOffset(2026, 11, 3, 7, 0, 0, TimeSpan.Zero));
+        var admin = new RequestActor("boss", "Boss", _rahimova.Id, IsAdmin: true);
+        var today = new DateOnly(2026, 11, 3);
+        NewSodException Input(DateOnly until, string reason = "Filialda ikkinchi mutaxassis yo'q", Guid? who = null) =>
+            new(ruleId, who ?? _karimov.Id, reason, "Har kuni bo'lim boshlig'i barcha kreditlarni tekshiradi", until);
+        async Task<ReviewResult<SodException>> CreateAsync(RequestActor actor, NewSodException input)
+        {
+            await using var db = pg.CreateContext();
+            return await new SodExceptionService(db, new AuditLog(db, time), time).CreateAsync(actor, input, Ct);
+        }
+        async Task<SodViolation> ViolationAsync()
+        {
+            await using var db = pg.CreateContext();
+            return Assert.Single(await new AccessAnalyzer(db, time).SodViolationsAsync(null, Ct));
+        }
+
+        // Tekshiruvlar: faqat admin, asos, muddat, o'ziga emas
+        Assert.Equal(403, (await CreateAsync(admin with { IsAdmin = false }, Input(today.AddDays(30)))).Status);
+        Assert.Equal(400, (await CreateAsync(admin, Input(today.AddDays(30), reason: "qisqa"))).Status);
+        Assert.Equal(400, (await CreateAsync(admin, Input(today))).Status);
+        Assert.Equal(400, (await CreateAsync(admin, Input(today.AddDays(367)))).Status);
+        Assert.Equal(403, (await CreateAsync(admin with { IdentityId = _karimov.Id }, Input(today.AddDays(30)))).Status);
+        Assert.Null((await ViolationAsync()).Exception);
+
+        var granted = await CreateAsync(admin, Input(today.AddDays(30)));
+        Assert.NotNull(granted.Value);
+        Assert.Equal(409, (await CreateAsync(admin, Input(today.AddDays(60)))).Status);
+        var accepted = await ViolationAsync();
+        Assert.Equal((granted.Value.Id, "Boss"), (accepted.Exception!.Id, accepted.Exception.ApprovedBy));
+        // Oxirgi kun to'liq kiradi: 2026-12-03 23:59 (Toshkent) gacha
+        Assert.Equal(new DateTimeOffset(2026, 12, 3, 19, 0, 0, TimeSpan.Zero), granted.Value.ValidTo);
+
+        // Muddat tugadi — buzilish yana ochiq
+        time.Now = granted.Value.ValidTo;
+        Assert.Null((await ViolationAsync()).Exception);
+
+        // Yangi istisno va bekor qilish
+        time.Now = new DateTimeOffset(2026, 12, 10, 7, 0, 0, TimeSpan.Zero);
+        var second = await CreateAsync(admin, Input(new DateOnly(2027, 1, 10)));
+        Assert.NotNull((await ViolationAsync()).Exception);
+        await using (var db = pg.CreateContext())
+        {
+            var service = new SodExceptionService(db, new AuditLog(db, time), time);
+            Assert.NotNull((await service.RevokeAsync(admin, second.Value!.Id, "Ikkinchi mutaxassis ishga olindi", Ct)).Value);
+            Assert.Equal(409, (await service.RevokeAsync(admin, second.Value.Id, null, Ct)).Status);
+        }
+        Assert.Null((await ViolationAsync()).Exception);
+        await using (var db = pg.CreateContext())
+        {
+            Assert.Equal(2, await db.AuditEvents.CountAsync(e => e.Action == "sod.exception-granted", Ct));
+            Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.Action == "sod.exception-revoked", Ct));
+        }
     }
 }

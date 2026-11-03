@@ -41,8 +41,17 @@ Standart qiymatlar Active Directory uchun, shuning uchun AD'da faqat ulanish va 
   }
 }
 ```
+- **Bir nechta DC:** `"Servers": ["dc1.bank.uz", "dc2.bank.uz:636"]` — tartib bo'yicha; server javob bermasa (tarmoq, o'chgan) keyingisi,
+  noto'g'ri parolda (LDAP 49) darhol to'xtaydi — xizmat akkaunti barcha DC'larda bloklanib qolmasligi uchun. Bo'sh — `Server`.
+  Bitta sinxronlash yoki yozish to'plami bitta DC bilan ishlaydi (replikatsiya kechikishi bir to'plam ichida ta'sir qilmaydi).
 - **O'qish:** sahifalab (AD MaxPageSize), katta guruhlar `member;range=` bilan, `objectGUID` o'zgarmas kalit, bloklanganlar
   `DisabledFilter` bilan. LDAPS sertifikati Linux'da `LDAPTLS_CACERT` orqali tekshiriladi; `libldap.so.2` kerak.
+- **Ichma-ich guruhlar** (`NestedGroups`, standart — ha; faqat `GroupMemberIsDn`): guruh boshqa guruhning a'zosi bo'lsa, xodim
+  tashqi guruh huquqini ham oladi — bu **meros** a'zolik (`account_entitlements.via_entitlement_id` — qaysi bevosita guruh orqali,
+  eng yaqini). Ko'p darajali va halqali ichma-ichlik xavfsiz. Meros a'zolik "haqiqatda bor", SoD, hisobotlar va arizaning
+  "bajarildi" tekshiruvida hisobga olinadi (masalan Domain Admins'ga ichki guruh orqali kirgan xodim imtiyozli ko'rinadi), lekin
+  tizimga yozish uni bevosita olib tashlamaydi (ishdan ketganda bevosita guruhlardan chiqarilsa, meros o'zi yo'qoladi) va
+  attestatsiyada alohida ko'rib chiqilmaydi — uni bergan bevosita guruh ko'rib chiqiladi. Portalda meros guruh "↳ guruh" bilan.
 - **Solishtirish:** akkaunt, guruh va a'zolikdagi har bir o'zgarish auditda (birinchi yuklash — bitta umumiy yozuv).
   Yo'qolgan akkaunt "o'chirilgan" deb belgilanadi, guruh esa `deleted_at` bilan saqlanadi (rollar unga bog'langan bo'lishi mumkin).
 - **Korrelyatsiya:** `employeeNumber` = xodimning tabel raqami. Tabel raqamisiz akkaunt — "egasiz". HR ulanguncha (D) xodim
@@ -82,6 +91,12 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
   (tizimga yozish bilan beriladi), *Ortiqcha* (rol bilan asoslanmagan — attestatsiyada rahbar ko'rib chiqadi). Xodim kartochkasi va "Ruxsatlar farqi" hisoboti.
 - **SoD:** qoida — ikki tomon ruxsatlari (A va B); xodimda haqiqatda ikkala tomondan ruxsat bo'lsa — buzilish. Rolning o'zi
   qoidani buzsa, rol sahifasida ogohlantirish. Buzilishlar bosh sahifa, menyu va xodim kartochkasida ko'rinadi.
+- **SoD istisnosi** (*SoD → Buzilishlar → Istisno berish*, faqat administrator): aniq xodim va qoida uchun, asos va kompensatsion nazorat
+  majburiy (10–2000 belgi), oxirgi kun — ertadan bir yilgacha (Toshkent vaqti, oxirgi kun to'liq kiradi). O'ziga istisno berib
+  bo'lmaydi; bir xodim va qoida uchun bitta amaldagi istisno; o'zgartirilmaydi (yangi muddat — yangi istisno). Istisnoli buzilish
+  ro'yxatlarda "Istisno · sana gacha" bilan ko'rinadi, lekin ochiq buzilishlar soniga (bosh sahifa, qoida) kirmaydi; muddat tugasa
+  yoki bekor qilinsa — yana ochiq. Hisobotda istisno va nazorat ustunlari. Audit: `sod.exception-granted`, `sod.exception-revoked`.
+  API: `GET /api/sod/exceptions[?all=true]` (admin, auditor), `POST /api/sod/exceptions`, `POST /api/sod/exceptions/{id}/revoke` (admin).
 - Ishlatilgan yoki arizada qatnashgan rolni o'chirib bo'lmaydi (tarix uchun).
 
 ## Arizalar (F bosqichi)
@@ -95,6 +110,15 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
   ikkinchisi 409 (PostgreSQL `xmin` optimistik qulfi). Begona xodim arizaning borligini ham ko'rmaydi (404).
 - Oxirgi tasdiqdan keyin rol beriladi (`Source = Request`) — "bo'lishi kerak"; rolning guruhlari xodimda haqiqatda paydo bo'lgach
   (IdM yozgan yoki administrator qo'lda bergan) ariza "Bajarildi" holatiga o'tadi (`request.fulfilled`).
+- **Rol egasi** — rol formasida (*Rollar → Tahrirlash*) xodim qidirib belgilanadi (ishdan ketgan bo'lmasligi kerak); bo'sh — rol egasi
+  bosqichi administratorlar navbatiga tushadi. O'zgarish `role.updated` auditida (oldingi va yangi egasi tabel raqami bilan).
+- **O'rinbosar** (*Arizalar → O'rinbosar*): xodim o'zi (administrator — istalgan xodim uchun, `delegatorId`) muddatli o'rinbosar
+  tayinlaydi — bugundan, ko'pi bilan 180 kun, kunlar to'liq (Toshkent vaqti). Muddat davomida o'rinbosar shu xodimga tushgan ariza
+  bosqichlari va attestatsiya yozuvlarini ko'radi va hal qiladi. Zanjir yo'q (o'rinbosarning o'rinbosari ishlamaydi), ishdan ketgan
+  xodim o'rniga qaror qilinmaydi, o'z arizasi va o'z ruxsatini o'rinbosar ham tasdiqlay olmaydi. Bir xodimda bir davrda bitta
+  o'rinbosarlik. Auditda qaror o'rinbosar nomidan, `onBehalfOf` (kimning o'rniga) bilan; `delegation.created`, `delegation.revoked`.
+  Hamkasb tanlash — `GET /api/directory?search=` (faqat ishlayotganlar, ism/tabel/bo'lim, eng ko'pi 10 ta).
+  API: `GET/POST /api/me/delegations`, `POST /api/delegations/{id}/revoke` (tayinlagan yoki admin), `GET /api/delegations` (admin, auditor).
 - **Ishdan ketganda** barcha rollar (ariza va qo'lda berilganlar ham) tugaydi, kutilayotgan arizalar bekor qilinadi.
 
 ## Tizimga yozish (G bosqichi)
@@ -102,7 +126,7 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 (`provisioning_operations`), ishlovchi ularni tizimda bajaradi. Standart — o'chiq; har tizim uchun alohida yoqiladi:
 ```json
 "AD": { "Provisioning": { "Mode": "Approval", "CreateAccounts": false, "MaxAutoOperations": 20, "ProtectedLogins": [ "administrator" ],
-                          "DisableSuspended": true, "MaxAttempts": 5 },
+                          "DisableSuspended": true, "MaxAttempts": 5, "EnableReturning": true, "EnableNewAccounts": false },
         "Ldap": { "WriteBindDn": "CN=svc-idm-write,...", "WriteBindPassword": "<sir>", "CreateDn": "OU=Yangi,OU=Xodimlar,DC=bank,DC=uz",
                   "UpnSuffix": "bank.uz" } }
 ```
@@ -110,9 +134,20 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
   `Automatic` — darhol navbatga, lekin bitta rejada `MaxAutoOperations`dan ko'p yangi amal chiqsa hammasi tasdiqqa to'xtatiladi
   (`provisioning.held`) — noto'g'ri HR fayli yoki rol butun bankni bloklab yubormasligi uchun.
 - **Nima qilinadi:** ishdan ketgan xodim — barcha akkauntlari bloklanadi va barcha guruhlardan chiqariladi; to'xtatilgan — bloklanadi;
-  rol bo'yicha kerak guruh — shaxsiy akkauntga qo'shiladi; akkaunt yo'q bo'lsa (`CreateAccounts`) — **bloklangan va parolsiz** yaratiladi
-  (login `i.familiya`, band bo'lsa raqam bilan; parolni helpdesk beradi, IdM'da parol hech qachon bo'lmaydi); rol olib tashlansa —
+  rol bo'yicha kerak guruh — shaxsiy akkauntga qo'shiladi; akkaunt yo'q bo'lsa (`CreateAccounts`) — **bloklangan** yaratiladi
+  (login `i.familiya`, band bo'lsa raqam bilan). AD'da yaratishda **tasodifiy 40 belgili parol** qo'yiladi: u hech qayerda saqlanmaydi,
+  logga yozilmaydi va hech kimga ma'lum emas (IdM'da parol yo'q), xodimga parolni helpdesk beradi. Sabab — jonli sinovda Samba AD
+  parolsiz akkauntni yoqishga ruxsat berdi (`pwdLastSet: 0`, `userAccountControl: 512`): katalog sozlamasiga qarab akkaunt bo'sh parol
+  bilan faol bo'lib qolishi mumkin edi. Rol olib tashlansa —
   **faqat IdM o'zi qo'shgan** a'zolik olinadi. Qo'lda berilgan ortiqcha ruxsatlarga tegilmaydi (H bosqichida attestatsiya).
+- **Qayta yoqish:** qayta ishga olingan (HR'da yana ishlayapti) yoki to'xtatilishi tugagan xodimning akkaunti yoqiladi
+  (`EnableReturning`, standart — ha), lekin **faqat IdM o'zi bloklagan bo'lsa**: akkaunt bo'yicha IdM'ning oxirgi muvaffaqiyatli
+  holat amali "ishdan ketgani/to'xtatilgani uchun bloklash" bo'lishi kerak. Administrator qo'lda bloklagan akkauntga tegilmaydi.
+  Tartib: avval guruhlar qo'shiladi, keyin akkaunt yoqiladi; tasdiqdan keyin xodim yana ketsa yoki to'xtatilsa — amal "Keraksiz".
+  IdM yaratgan (bloklangan) akkauntni ishga kirish kuni yoqish — `EnableNewAccounts` (standart — yo'q): akkauntning paroli tasodifiy
+  va noma'lum, shuning uchun yoqilgan akkauntga helpdesk parol bermaguncha hech kim kira olmaydi. Katalog yoqishni rad etsa (parol
+  siyosati), amal "Xato" bo'ladi va xabarda "avval helpdesk parol o'rnatsin" deyiladi. Cheklov: IdM bloklagandan keyin akkauntni kimdir qo'lda yoqib,
+  keyin yana qo'lda bloklagan bo'lsa, buni IdM ajrata olmaydi (Approval rejimida administrator ko'radi).
 - **Tegilmaydi:** xizmat akkauntlari (`Kind = Service`) va `ProtectedLogins`. Yozish faqat `UsersDn`/`GroupsDn` ichida, obyektlar
   o'zgarmas identifikator (`objectGUID`/`entryUUID`) bo'yicha topiladi. Alohida yozish akkaunti (`WriteBindDn`) — eng kam huquq.
 - **Ishonchlilik:** oxirgi sinxronlash muvaffaqiyatsiz bo'lsa reja tuzilmaydi; keraksiz bo'lib qolgan amal bekor qilinadi (`Obsolete`);
@@ -124,6 +159,19 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - **Audit:** reja, har bir tasdiq (kim), har bir bajarilgan va xato amal — akkaunt obyekti bilan, xodim tarixida ko'rinadi.
 - Aylanish oralig'i: `Idm:ProvisioningIntervalSeconds` (standart 30, 0 — o'chiq). OpenLDAP uchun: `CreateObjectClasses: ["inetOrgPerson"]`,
   `RdnAttribute: "uid"`, `DisableAttribute: "employeeType"` (`DisabledFilter` bilan mos).
+
+### Bank AD'sida yozish akkaunti huquqlari (sinovda tekshirilgan)
+Samba AD DC'da (`AdLiveTests`) `svc-idm-write` faqat quyidagi topshirilgan huquqlar bilan barcha IdM amallarini bajardi
+(yaratish, bloklash, yoqish, guruh a'zoligi), boshqa xodimning parolini almashtira olmadi:
+| Obyekt | ACE (SDDL) | Ma'nosi |
+|---|---|---|
+| `OU=Xodimlar` (`UsersDn`/`CreateDn`) | `(OA;CI;CC;bf967aba-0de6-11d0-a285-00aa003049e2;;<SID>)` | faqat `user` obyekti yaratish |
+| `OU=Xodimlar` | `(OA;CIIO;RPWP;;bf967aba-0de6-11d0-a285-00aa003049e2;<SID>)` | `user` obyektlari atributlarini o'qish/yozish (`userAccountControl`) |
+| `OU=Guruhlar` (`GroupsDn`) | `(OA;CIIO;RPWP;bf9679c0-0de6-11d0-a285-00aa003049e2;bf967a9c-0de6-11d0-a285-00aa003049e2;<SID>)` | faqat guruhlarning `member` atributi |
+O'chirish, parolni almashtirish (Reset Password), boshqa OU — berilmaydi. Windows'da: *Delegate Control* bilan shu uchtasi.
+O'qish akkaunti (`svc-idm`) — oddiy domen foydalanuvchisi. Jonli testlar: `IDM_TEST_AD=ldaps://dc:636 IDM_TEST_AD_PASSWORD=...
+IDM_TEST_AD_WRITE_DN=... IDM_TEST_AD_WRITE_PASSWORD=... IDM_TEST_AD_ADMIN_DN=... IDM_TEST_AD_ADMIN_PASSWORD=... LDAPTLS_CACERT=ca.pem
+dotnet test --filter-class '*AdLiveTests'` (helpdesk va tozalash — admin akkaunti; bank AD'sida alohida sinov OU'sida bajaring).
 
 ## Attestatsiya va hisobotlar (H bosqichi)
 - **Kampaniya** (administrator boshlaydi, portal: *Attestatsiya → Kampaniyalar*): qamrov — bo'lim, tizim, faqat imtiyozli; muddat ≤ 180 kun.
@@ -137,7 +185,16 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - **"Olib tashlash":** rol darhol tugaydi (uning IdM qo'shgan guruhlari tizimdan olinadi), asossiz guruh tizimga yozish rejasiga
   tushadi (`review-revoked`, rejim — tizimning `Provisioning:Mode`). Guruh tizimdan haqiqatda yo'qolgach yozuv "tizimdan olindi"
   (`review.remediated`); yozish o'chiq tizimda administrator qo'lda oladi, sinxronlash tasdiqlaydi.
-- Yakunlashda ko'rib chiqilmagan yozuvlar shundayligicha qoladi va hisobotda "ko'rib chiqilmagan" deb ko'rinadi.
+- Yakunlashda ko'rib chiqilmagan yozuvlar shundayligicha qoladi va hisobotda "ko'rib chiqilmagan" deb ko'rinadi — agar kampaniya
+  **"Muddatida ko'rib chiqilmaganlarni olib tashlash"** siyosati bilan yaratilmagan bo'lsa (`revokeUnreviewed`, standart — yo'q).
+  Siyosat bilan: oxirgi kun (Toshkent) tugagach yetakchi server kampaniyani o'zi yakunlaydi (yoki administrator yakunlaganda),
+  ko'rib chiqilmagan yozuvlar tizim nomidan "olib tashlandi" (`review.revoked`, `automatic: true`) — rol darhol tugaydi, guruh tizimga
+  yozish orqali olinadi. Bekor qilingan kampaniyaga siyosat qo'llanmaydi. Rahbar ta'tilda bo'lsa — o'rinbosar ko'rib chiqadi (F bosqichi).
+- **Rol tarkibi attestatsiyasi** (*Attestatsiya → Rol tarkibi*, faqat rol egalari va ularning o'rinbosarlari; egasiz rollar —
+  administratorlar): egasi har bir ruxsat hamon kerakligini tasdiqlaydi, keraksizini belgidan chiqaradi (sabab majburiy) — ruxsat roldan
+  olinadi va rolning barcha xodimlaridan tizimga yozish orqali olinadi (IdM qo'shgan a'zoliklar). Ega faqat olib tashlay oladi, qo'shish —
+  administrator. Muddat: `Idm:RoleCertificationDays` (standart 365; hech qachon tasdiqlanmagan yoki muddati o'tgan rol menyuda hisoblanadi).
+  Audit: `role.certified` (olib tashlanganlar, izoh, `onBehalfOf`). API: `GET /api/me/owned-roles`, `POST /api/roles/{id}/certify`.
 - **Hisobotlar** (`/api/reports/export/{key}`, admin va auditor): `access` (kim nimaga kirish huquqiga ega va asosi), `privileged`
   (imtiyozli akkauntlar va egalari, xavf belgisi), `sod`, `orphans`, `leavers`, `campaign` (`campaignId`). `format=xlsx` — Excel
   (tashqi kutubxonasiz; barcha qiymatlar matn, "=" bilan boshlangani formula bo'lmaydi), aks holda JSON — portalning chop etish
@@ -195,6 +252,28 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 Yuklama testi topgan va tuzatilgan: kampaniya yozuvlari EF o'rniga PostgreSQL `COPY` bilan (50 ming xodimda 60 s → 6 s — HTTP
 so'rovi proksi vaqt chegarasiga yetmaydi); Excel varag'i oqim bilan yoziladi (ajratilgan xotira 1.7 GB → 240 MB).
 Hisobot chegaralari: Excel — 1 000 000 qator, chop etish (brauzer) — 20 000 qator (undan katta bo'lsa 413 va Excel taklifi).
+
+## Xabarnomalar (pochta)
+`Idm:Notifications` (standart — o'chiq). Faqat yetakchi server rejalashtiradi va yuboradi; har bir hodisa uchun bitta xat (navbat
+`notifications`, noyob kalit — server qayta ishga tushsa ham takrorlanmaydi). Xat o'zbekcha va ruscha, portal havolasi bilan;
+asos, izoh va ruxsatlar ro'yxati xatga kirmaydi (faqat portalda). Emaili yo'q yoki ishdan ketgan xodimga yozilmaydi.
+```json
+"Notifications": { "Enabled": true, "PortalUrl": "https://idm.bank.uz", "ReminderAfterHours": 24, "MaxReminders": 3, "ReviewDueReminderDays": 3,
+                   "Smtp": { "Host": "smtp.bank.uz", "Port": 587, "UseTls": true, "User": "svc-idm-mail", "Password": "<sir>", "From": "idm@bank.uz" } }
+```
+- **Ariza:** navbatdagi bosqich egasiga (va uning amaldagi o'rinbosariga) — yangi bosqich; hal qilinmasa har `ReminderAfterHours`da eslatma
+  (`MaxReminders` martagacha); tasdiqlansa yoki rad etilsa — so'ragan va kim uchun so'ralgan xodimga natija. Administratorlar navbati — portalda.
+- **Attestatsiya:** kampaniya boshlanganda ko'rib chiqilmagan yozuvlari bor har bir tekshiruvchiga (va o'rinbosariga) bitta xat;
+  muddatdan `ReviewDueReminderDays` kun oldin — eslatma.
+- **Yetkazish:** SMTP STARTTLS (587; ishlab chiqarishda `UseTls=false` va HTTP `PortalUrl` taqiqlangan, parol — sirlar orqali).
+  Xatoda 1, 5, 15, 60 daqiqadan keyin qayta urinish, `MaxAttempts` (5) dan keyin "yuborilmadi". Metrika: `idm_notifications{status}`.
+  Birinchi yoqilganda faqat kutilayotgan bosqichlar va so'nggi 2 kunda yopilgan arizalar haqida yoziladi.
+
+## Portal tillari
+O'zbekcha (standart) va ruscha: shapkadagi **RU / UZ** tugmasi, tanlov brauzerda (`localStorage`, `idm.lang`) saqlanadi va sahifa
+qayta yuklanadi. Matnlar `portal/src/i18n/uz.ts` (asosiy) va `ru.ts` — kalitlar va funksiya imzolari bir xil ekanini TypeScript va
+test tekshiradi; audit amallari nomlari — `i18n/index.ts` (`actionsRu`, test yangi amalning tarjimasi unutilmasligini tekshiradi).
+API xato xabarlari (validatsiya, 403/409 matnlari) hozircha o'zbekcha.
 
 ## Xavfsizlik
 - **Kirish:** SSO (OIDC avtorizatsiya kodi + PKCE), portal ochiq ilova, maxfiy kalit yo'q. Token `sessionStorage`da.

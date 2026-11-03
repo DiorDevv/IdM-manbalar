@@ -24,8 +24,9 @@ public static class IdmEndpoints
             var hasTeam = actor.IdentityId is { } me && await db.Identities.AnyAsync(i => i.ManagerId == me && i.Status != IdentityStatus.Terminated, ct);
             var inbox = await RequestEndpoints.Inbox(db.AccessRequests, actor).CountAsync(ct);
             var reviews = await ReviewEndpoints.Inbox(db.AccessReviewItems, actor).CountAsync(ct);
+            var owned = await AccessEndpoints.OwnedRolesAsync(db, actor, DateTimeOffset.UtcNow, options.Value.RoleCertificationDays, ct);
             return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews, user.MfaRequiredFor,
-                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null);
+                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due));
         });
 
         api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer, CancellationToken ct) =>
@@ -46,7 +47,7 @@ public static class IdmEndpoints
                 await db.Accounts.CountAsync(a => a.Status == AccountStatus.Disabled, ct),
                 await db.Accounts.CountAsync(a => a.IdentityId == null && a.Status != AccountStatus.Deleted && a.Kind == AccountKind.Personal, ct),
                 await ReportEndpoints.LeaversWithActiveAccounts(db).CountAsync(ct),
-                (await analyzer.SodViolationsAsync(null, ct)).Count,
+                (await analyzer.SodViolationsAsync(null, ct)).Count(v => v.Exception is null),
                 await db.AccessRequests.CountAsync(r => r.Status == AccessRequestStatus.Pending, ct),
                 await db.AuditEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, ct),
                 connectors);
@@ -84,8 +85,9 @@ public static class IdmEndpoints
                 i.CreatedAt, i.UpdatedAt,
                 i.Accounts.OrderBy(a => a.Status).ThenBy(a => a.Application.Code).Select(a => new AccountItem(a.Id, a.Application.Code, a.Application.Name,
                     a.Login, a.Status, a.Kind, a.LastSyncedAt,
-                    a.Entitlements.Select(ae => ae.Entitlement).OrderByDescending(e => e.IsPrivileged).ThenBy(e => e.Name)
-                        .Select(e => new EntitlementRef(e.Id, e.Name, e.IsPrivileged)).ToList())).ToList()));
+                    a.Entitlements.OrderBy(ae => ae.IsInherited).ThenByDescending(ae => ae.Entitlement.IsPrivileged).ThenBy(ae => ae.Entitlement.Name)
+                        .Select(ae => new EntitlementRef(ae.Entitlement.Id, ae.Entitlement.Name, ae.Entitlement.IsPrivileged,
+                            ae.ViaEntitlementId == null ? null : a.Entitlements.FirstOrDefault(v => v.EntitlementId == ae.ViaEntitlementId)?.Entitlement.Name)).ToList())).ToList()));
         });
 
         // Xodim tarixi: xodimning o'zi va uning akkauntlari bo'yicha audit yozuvlari (eng yangisi birinchi)

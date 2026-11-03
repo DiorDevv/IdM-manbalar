@@ -180,4 +180,35 @@ public class ConnectorSyncTests(PostgresFixture pg) : IClassFixture<PostgresFixt
             Assert.Null(karimov.Identity.ManagerId);
         }
     }
+
+    [Fact]
+    public async Task Inherited_membership_is_stored_with_its_source_group_and_follows_nesting_changes()
+    {
+        // Karimov bevosita kredit guruhida; kredit guruhi Domain Admins a'zosi (ichma-ich)
+        var nested = TestDirectory.Karimov with { InheritedGroupIds = new Dictionary<string, string> { [TestDirectory.Admins] = TestDirectory.Credit } };
+        SetDirectory(nested, TestDirectory.Rahimova);
+        await SyncAsync();
+
+        await using (var db = pg.CreateContext())
+        {
+            var karimov = (await AccountsAsync(db)).Single(a => a.Login == "a.karimov");
+            var credit = karimov.Entitlements.Single(e => e.Entitlement.Name == "kredit-bolimi");
+            var admins = karimov.Entitlements.Single(e => e.Entitlement.Name == "Domain Admins");
+            Assert.Null(credit.ViaEntitlementId);
+            Assert.Equal(credit.EntitlementId, admins.ViaEntitlementId);
+        }
+
+        // Endi bevosita ham a'zo — bevosita bo'ladi; keyin ichma-ichlik va bevosita a'zolik olinadi — yo'qoladi
+        SetDirectory(nested with { GroupIds = [TestDirectory.Credit, TestDirectory.Admins] }, TestDirectory.Rahimova);
+        var run = await SyncAsync();
+        await using (var db = pg.CreateContext())
+        {
+            Assert.All((await AccountsAsync(db)).Single(a => a.Login == "a.karimov").Entitlements, e => Assert.Null(e.ViaEntitlementId));
+            Assert.Contains(await RunEventsAsync(db, run), e => e.Action == "account.entitlement-changed");
+        }
+        SetDirectory(TestDirectory.Karimov, TestDirectory.Rahimova);
+        await SyncAsync();
+        await using (var db = pg.CreateContext())
+            Assert.Equal(["kredit-bolimi"], (await AccountsAsync(db)).Single(a => a.Login == "a.karimov").Entitlements.Select(e => e.Entitlement.Name));
+    }
 }

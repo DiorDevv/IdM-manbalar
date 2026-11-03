@@ -89,9 +89,10 @@ public class ReportBuilder(IdmDbContext db, AccessAnalyzer analyzer, TimeProvide
         var people = await db.Identities.AsNoTracking().Where(i => ids.Contains(i.Id))
             .ToDictionaryAsync(i => i.Id, i => new { i.EmployeeNumber, Name = i.LastName + " " + i.FirstName, i.Department, i.Status }, ct);
         return Table("sod", "SoD buzilishlari", "Bir xodimda bir vaqtda bo'lishi mumkin bo'lmagan ruxsatlar (tizimdagi haqiqiy holat)",
-            ["Qoida", "Qoida nomi", "Xavf", "Tabel raqami", "Xodim", "Bo'lim", "Xodim holati", "A tomon", "B tomon"],
+            ["Qoida", "Qoida nomi", "Xavf", "Tabel raqami", "Xodim", "Bo'lim", "Xodim holati", "A tomon", "B tomon", "Istisno", "Kompensatsion nazorat"],
             violations.Select(v => Row(v.RuleCode, v.RuleName, Risk(v.Risk), people[v.IdentityId].EmployeeNumber, people[v.IdentityId].Name,
-                people[v.IdentityId].Department, Status(people[v.IdentityId].Status), string.Join(", ", v.LeftEntitlements), string.Join(", ", v.RightEntitlements))));
+                people[v.IdentityId].Department, Status(people[v.IdentityId].Status), string.Join(", ", v.LeftEntitlements), string.Join(", ", v.RightEntitlements),
+                v.Exception is null ? "yo'q (ochiq)" : $"{Date(v.Exception.ValidTo)} gacha, {v.Exception.ApprovedBy}", v.Exception?.CompensatingControl)));
     }
 
     private async Task<ReportTable> OrphansAsync(CancellationToken ct)

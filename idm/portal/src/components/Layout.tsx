@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import type { DashboardSummary } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
 import { useMe } from '../api/me'
-import { t } from '../i18n'
+import { language, setLanguage, t } from '../i18n'
 import { nextTheme, setTheme, useTheme } from '../theme'
 import { CommandPalette } from './CommandPalette'
 import { BrandMark, Icon } from './Icon'
@@ -60,7 +60,7 @@ export function Layout() {
           <div key={section.title}>
             <div className="nav-section">{section.title}</div>
             {section.items.map(item => <NavItem key={item.to} item={item} count={item.to === '/reports' ? risks : item.to === '/sod' ? dashboard.data?.sodViolations
-              : item.to === '/requests' ? me.data?.inboxCount : item.to === '/reviews' ? me.data?.reviewCount : undefined} />)}
+              : item.to === '/requests' ? me.data?.inboxCount : item.to === '/reviews' ? (me.data?.reviewCount ?? 0) + (me.data?.ownedRolesDue ?? 0) : undefined} />)}
           </div>
         ))}
         <div className="sidebar-foot">
@@ -86,6 +86,10 @@ export function Layout() {
               <Icon name="bell" size={17} />
             </Link>
           )}
+          <button className="icon-btn lang-btn" onClick={() => setLanguage(language === 'uz' ? 'ru' : 'uz')}
+            aria-label={`${t.language.label}: ${t.language[language]}`} title={`${t.language.label}: ${t.language[language]} → ${t.language[language === 'uz' ? 'ru' : 'uz']}`}>
+            {language === 'uz' ? 'RU' : 'UZ'}
+          </button>
           <button className="icon-btn" onClick={() => setTheme(nextTheme(theme))} aria-label={t.theme.label} title={`${t.theme.label}: ${t.theme[theme]}`}>
             <Icon name={themeIcon[theme]} size={17} />
           </button>

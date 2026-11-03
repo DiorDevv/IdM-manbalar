@@ -1,6 +1,6 @@
 # Bank IdM: reja
 
-Yangilangan: 2026-10-26.
+Yangilangan: 2026-11-03.
 
 ## 1. IdM tizimi nimalar qila olishi kerak
 
@@ -64,7 +64,9 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
   Vakolatlar IdM bazasida (admin, auditor, kadrlar); oddiy xodim "Ruxsat yo'q" ko'radi.
 - [x] Audit jurnali: trigger bilan o'zgartirib/o'chirib bo'lmaydi, SHA-256 xesh zanjiri, portalda "Yaxlitlikni tekshirish".
 - [x] Testlar: 14 ta backend (haqiqiy PostgreSQL, Testcontainers) + 3 ta portal; CI (GitHub Actions) har push'da.
-- [ ] Ochiq: ilova uchun alohida, faqat INSERT/SELECT huquqli baza roli (I bosqichi); portalda til tanlash (hozir faqat o'zbekcha).
+- [x] Ilova uchun alohida, faqat INSERT/SELECT huquqli baza roli — I bosqichida (`deploy/db-roles.sql`).
+- [x] Portalda til tanlash (2026-11-03): o'zbekcha (standart) va ruscha, shapkadagi tugma, tanlov brauzerda saqlanadi.
+  Server xato xabarlari hozircha o'zbekcha.
 
 ### C. AD konnektori va xodimlar ro'yxati (bajarildi, 2026-10-26)
 - [x] Konnektor interfeysi (`Bank.Idm.Connectors`, `IConnector.ReadAsync`); yozish G bosqichida qo'shiladi.
@@ -74,8 +76,14 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Portal: bosh sahifada sinxronlash holati va bloklangan akkauntlar; **tizim kartochkasi** (akkauntlar, egasizlar filtri,
   guruhlar, sinxronlash tarixi, "Sinxronlash" tugmasi); xodim kartochkasida guruhlar va **tarix**.
 - [x] Testlar: 29 ta backend (sinxronlash, API, LDAP xaritalash, haqiqiy OpenLDAP'ga qarshi) + 6 ta portal.
-- [ ] Ochiq: sinov AD (Samba) bilan jonli tekshiruv (bu mashinada Docker yo'q, OpenLDAP bilan tekshirildi); ichma-ich guruhlar;
-  delta sinxronlash (`whenChanged`, 10 000+ xodimda kerak bo'lsa); bir nechta DC.
+- [x] Ichma-ich guruhlar (2026-11-03): meros a'zolik qaysi guruh orqali ekani bilan saqlanadi; SoD va hisobotlarda hisobga olinadi,
+  tizimga yozish va attestatsiya faqat bevosita a'zolikni o'zgartiradi.
+- [x] Bir nechta DC (2026-11-03): tartibli ro'yxat, ishlamayotganidan keyingisiga o'tish, noto'g'ri parolda to'xtash.
+- [x] Sinov AD (Samba AD DC 4.25) bilan jonli tekshiruv (2026-11-03, `AdLiveTests`, 5 ta): LDAPS, objectGUID, userAccountControl,
+  ichma-ich guruh, 1600 akkaunt va 1600 a'zoli guruh, noto'g'ri parol, 389'da simple bind rad etilishi; eng kam huquqli
+  `svc-idm-write` bilan yaratish/bloklash/yoqish/a'zolik va to'liq zanjir (sinxronlash → ishdan ketish → AD'da bloklash → tasdiq).
+  Topilma va tuzatish: Samba parolsiz akkauntni yoqishga ruxsat beradi — endi yaratishda tasodifiy noma'lum parol qo'yiladi.
+- [x] Delta sinxronlash (`whenChanged`) — kerak emas deb qaror qilindi: yuklama testiga ko'ra 50 000 xodimda to'liq qayta sinxronlash 5 s.
 - **Tayyor:** portalda AD xodimlari va guruhlari ko'rinadi, kartochkada barcha ma'lumot bor.
 
 ### D. HR manbai va korrelyatsiya (bajarildi, 2026-10-26)
@@ -92,7 +100,9 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] "Bo'lishi kerak" va "haqiqatda bor" farqi: xodim kartochkasida va "Ruxsatlar farqi" hisobotida.
 - [x] SoD qoidalari (ruxsat darajasida, ikki tomon) va buzilishlar hisoboti; rolning o'zi qoidani buzsa ogohlantirish.
 - [x] Portal: Rollar, rol kartochkasi (ruxsatlar, qoidalar, xodimlar), SoD sahifasi; dizayn tizimi (`.claude/skills/idm-portal-ui`).
-- [ ] Ochiq: SoD istisnolari (vaqtinchalik ruxsat, kompensatsion nazorat), rol egasi (F bosqichida tasdiqlovchi sifatida).
+- [x] SoD istisnolari (2026-11-03): muddatli (≤ 1 yil), asos va kompensatsion nazorat bilan, o'ziga berish taqiqlangan; muddat
+  tugasa buzilish yana ochiq; portal, hisobot va auditda.
+- [x] Rol egasi portalda belgilanadi (2026-11-03) — F bosqichida tasdiqlovchi.
 - **Tayyor:** har bir xodim uchun "bo'lishi kerak" va "haqiqatda bor" ruxsatlar farqi ko'rinadi.
 
 ### F. Ariza va tasdiqlash (bajarildi, 2026-10-26)
@@ -101,11 +111,14 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Portal: arizalar (tasdiqlash navbati, mening arizalarim, hammasi), yangi ariza (katalog, jonli zanjir), ariza kartochkasi.
   Oddiy xodim portalda faqat arizalar bo'limini ko'radi.
 - [x] Ishdan ketganda barcha rollar tugaydi va kutilayotgan arizalar bekor qilinadi.
-- [ ] Ochiq: eslatmalar va muddati o'tgan arizalar (pochta/xabarnoma kanali kerak), tasdiqlovchini almashtirish (ta'til), rol egasini portalda belgilash.
+- [x] Tasdiqlovchini almashtirish (2026-11-03): muddatli o'rinbosar (ta'til), arizalar va attestatsiya uchun, auditda "kimning o'rniga".
+- [x] Rol egasini portalda belgilash (2026-11-03).
+- [x] Eslatmalar (2026-11-03): pochta orqali yangi bosqich, kechikkan bosqich eslatmasi, ariza natijasi (o'rinbosarga ham).
+- [ ] Bank tomonida: SMTP server va xizmat akkaunti, xodimlar emaili HR'da to'liq bo'lishi.
 - **Tayyor:** ariza boshidan oxirigacha portalda o'tadi, har qadam auditda.
 
 ### G. AD'ga yozish (bajarildi, 2026-10-26)
-- [x] AD/LDAP konnektori: akkaunt yaratish (bloklangan, parolsiz), bloklash, guruhga qo'shish va olib tashlash — idempotent,
+- [x] AD/LDAP konnektori: akkaunt yaratish (bloklangan, AD'da tasodifiy noma'lum parol bilan), bloklash, guruhga qo'shish va olib tashlash — idempotent,
   o'zgarmas identifikator bo'yicha, faqat ruxsat etilgan OU ichida, alohida yozish akkaunti bilan.
 - [x] Dry-run (`Approval`): reja portalda, administrator tanlab tasdiqlaydi; `Automatic` rejimda ham ko'p amal chiqsa — tasdiqqa.
   Navbat, kechikishli qayta urinish, doimiy xatoda to'xtash, keraksiz bo'lib qolgan amallarni bekor qilish.
@@ -113,8 +126,10 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Rol olib tashlansa faqat IdM qo'shgan a'zolik olinadi; tasdiqlangan ariza guruh haqiqatda paydo bo'lgach "Bajarildi".
 - [x] Portal: "Tizimga yozish" sahifasi (tizimlar rejimi, reja, tasdiq / qayta urinish / yopish, holatlar).
 - [x] Jonli sinov (OpenLDAP + HR fayli): ishdan ketgan xodim bloklandi, yangi xodimga akkaunt yaratilib rol guruhiga qo'shildi.
-- [ ] Ochiq: bankning haqiqiy AD'sida sinov (LDAPS, alohida yozish akkaunti va huquqlari), yangi akkauntni ishga kirish kunida
-  yoqish va parolni xavfsiz yetkazish (helpdesk jarayoni), akkauntni qayta yoqish (qayta ishga olish), ABS va boshqa tizimlar konnektorlari.
+- [x] Qayta yoqish (2026-11-03): qayta ishga olingan yoki to'xtatilishi tugagan xodim akkaunti — faqat IdM o'zi bloklagan bo'lsa;
+  IdM yaratgan akkaunt — ishga kirish kuni (`EnableNewAccounts`, AD'da avval parol kerak). Portal va auditda "Akkauntni yoqish".
+- [ ] Ochiq: bankning haqiqiy AD'sida sinov (LDAPS, alohida yozish akkaunti va huquqlari), parolni xavfsiz yetkazish
+  (helpdesk jarayoni), ABS va boshqa tizimlar konnektorlari.
 - **Tayyor:** tasdiqlangan ariza AD'da o'zi bajariladi, ishdan ketgan xodim avtomatik bloklanadi.
 
 ### H. Attestatsiya va hisobotlar (bajarildi, 2026-10-26)
@@ -123,8 +138,11 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Olib tashlash bajariladi: rol darhol tugaydi, guruh tizimga yozish orqali olinadi va "tizimdan olindi" deb kuzatiladi.
 - [x] Hisobotlar (Excel va PDF/chop etish): kim nimaga kirish huquqiga ega, imtiyozli akkauntlar, SoD buzilishlari, egasiz akkauntlar,
   ishdan ketganlar, kampaniya natijasi. Har bir eksport auditda.
-- [ ] Ochiq: rahbarlarga eslatma (pochta kanali), tekshiruvchini almashtirish, muddati o'tganda ko'rib chiqilmaganini avtomatik olib
-  tashlash siyosati, rol egalari tomonidan rol tarkibini attestatsiya qilish, server tomonida PDF (imzo bilan).
+- [x] Muddati o'tganda ko'rib chiqilmaganini avtomatik olib tashlash siyosati (2026-11-03, kampaniya bo'yicha tanlanadi).
+- [x] Tekshiruvchini almashtirish — o'rinbosarlik orqali (F bosqichi, 2026-11-03).
+- [x] Rahbarlarga eslatma (2026-11-03): kampaniya boshlanganda va muddat yaqinlashganda, pochta orqali.
+- [x] Rol tarkibi attestatsiyasi (2026-11-03): rol egasi ruxsatlarni tasdiqlaydi yoki olib tashlaydi, muddat — 365 kun.
+- [ ] Bank tomonida qaror: server tomonida imzolangan hisobot — imzo turi (E-IMZO yoki bank PKI), format (PDF/PAdES yoki alohida CMS) va sertifikat.
 - **Tayyor:** rahbar portalda xodimlarining ruxsatlarini ko'rib chiqadi, olib tashlangan ruxsat tizimdan o'zi olinadi, auditor
   hisobotlarni Excel yoki PDF ko'rinishida oladi.
 

@@ -56,6 +56,7 @@ public static class LdapSnapshotBuilder
 
         var result = new List<ExternalGroup>();
         var groupIds = new HashSet<string>(StringComparer.Ordinal);
+        var valid = new List<(LdapRecord Record, string Id)>();
         foreach (var g in groups)
         {
             var id = ReadId(g, o.GroupIdAttribute);
@@ -66,14 +67,43 @@ public static class LdapSnapshotBuilder
                 continue;
             }
             result.Add(new ExternalGroup(id, name, ReadString(g, o.GroupDescriptionAttribute), g.Dn));
-            // Ichma-ich guruhlar va qamrovdan tashqaridagi a'zolar (boshqa OU) hisobga olinmaydi
-            foreach (var member in ReadStrings(g, o.GroupMemberAttribute))
-                if ((o.GroupMemberIsDn ? byDn : byLogin).TryGetValue(member, out var index))
-                    accounts[index].Groups.Add(id);
+            valid.Add((g, id));
         }
 
-        return new ConnectorSnapshot(
-            accounts.Select(a => a.Account with { GroupIds = a.Groups.Distinct().ToList() }).ToList(), result) { Warnings = warnings };
+        // Qamrovdan tashqaridagi a'zolar (boshqa OU) hisobga olinmaydi
+        var groupByDn = valid.ToDictionary(v => v.Record.Dn, v => v.Id, StringComparer.OrdinalIgnoreCase);
+        var nested = o.NestedGroups && o.GroupMemberIsDn;
+        var parents = new Dictionary<string, List<string>>(StringComparer.Ordinal);   // ichki guruh → u a'zo bo'lgan guruhlar
+        foreach (var (g, id) in valid)
+            foreach (var member in ReadStrings(g, o.GroupMemberAttribute))
+            {
+                if ((o.GroupMemberIsDn ? byDn : byLogin).TryGetValue(member, out var index)) accounts[index].Groups.Add(id);
+                else if (nested && groupByDn.TryGetValue(member, out var child) && child != id)
+                    (parents.TryGetValue(child, out var list) ? list : parents[child] = []).Add(id);
+            }
+
+        return new ConnectorSnapshot(accounts.Select(a =>
+        {
+            var direct = a.Groups.Distinct().ToList();
+            return a.Account with { GroupIds = direct, InheritedGroupIds = Inherited(direct, parents) };
+        }).ToList(), result) { Warnings = warnings };
+    }
+
+    /// <summary>Bevosita guruhlardan yuqoriga (kenglik bo'yicha): har meros guruh uchun eng yaqin bevosita guruh. Halqalar xavfsiz.</summary>
+    private static Dictionary<string, string> Inherited(List<string> direct, Dictionary<string, List<string>> parents)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (parents.Count == 0) return result;
+        var seen = new HashSet<string>(direct, StringComparer.Ordinal);
+        var queue = new Queue<(string Group, string Via)>(direct.Select(d => (d, d)));
+        while (queue.TryDequeue(out var current))
+            foreach (var parent in parents.GetValueOrDefault(current.Group) ?? [])
+                if (seen.Add(parent))
+                {
+                    result[parent] = current.Via;
+                    queue.Enqueue((parent, current.Via));
+                }
+        return result;
     }
 
     /// <summary>Serverdan bayt sifatida o'qiladigan atributlar.</summary>

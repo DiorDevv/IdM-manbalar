@@ -54,7 +54,7 @@ export function RoleDetailPage() {
     <>
       <PageHead crumbs={<>{crumbs}{d.name}</>} title={d.name}
         subtitle={<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="mono">{d.code}</span> · <RiskBadge risk={d.risk} />{d.isRequestable && <> · {r.requestable}</>}{d.description && <> · {d.description}</>}
+          <span className="mono">{d.code}</span> · <RiskBadge risk={d.risk} />{d.isRequestable && <> · {r.requestable}</>} · {d.ownerName ? r.owner(d.ownerName) : r.noOwner} · {d.certifiedAt ? t.reviews.certified(formatDate(d.certifiedAt), d.certifiedBy ?? '') : t.reviews.neverCertified}{d.description && <> · {d.description}</>}
         </span>}
         actions={isAdmin && <>
           <button className="btn ghost" onClick={() => setConfirmDelete(true)}><Icon name="x" size={16} />{r.delete}</button>

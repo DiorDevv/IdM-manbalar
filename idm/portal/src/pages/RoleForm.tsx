@@ -3,16 +3,19 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { RiskLevel, RoleDetails, SaveRole } from '../api/types'
 import { t } from '../i18n'
-import { Field, Modal, fieldError, formError, risks } from '../components/forms'
+import { Field, IdentityPicker, Modal, fieldError, formError, risks } from '../components/forms'
 
 const r = t.roles
-const empty: SaveRole = { code: '', name: '', description: '', risk: 'Medium', isRequestable: true }
+const empty: SaveRole = { code: '', name: '', description: '', risk: 'Medium', isRequestable: true, ownerId: null }
 
 /** Rol yaratish yoki tahrirlash oynasi. Xatolar server validatsiyasidan maydon yonida ko'rsatiladi. */
 export function RoleForm({ open, role, onClose, onSaved }: { open: boolean; role?: RoleDetails; onClose: () => void; onSaved: (role: RoleDetails) => void }) {
   const [form, setForm] = useState<SaveRole>(empty)
+  const [ownerName, setOwnerName] = useState<string | null>(null)
   useEffect(() => {
-    if (open) setForm(role ? { code: role.code, name: role.name, description: role.description ?? '', risk: role.risk, isRequestable: role.isRequestable } : empty)
+    if (!open) return
+    setForm(role ? { code: role.code, name: role.name, description: role.description ?? '', risk: role.risk, isRequestable: role.isRequestable, ownerId: role.ownerId ?? null } : empty)
+    setOwnerName(role?.ownerName ?? null)
   }, [open, role])
   const save = useMutation({
     mutationFn: (body: SaveRole) => api<RoleDetails>(role ? `/api/roles/${role.id}` : '/api/roles', { method: role ? 'PUT' : 'POST', body: JSON.stringify(body) }),
@@ -21,7 +24,7 @@ export function RoleForm({ open, role, onClose, onSaved }: { open: boolean; role
   // Oyna qayta ochilganda oldingi xato ko'rinmasin
   useEffect(() => { if (open) save.reset() }, [open])
   const set = <K extends keyof SaveRole>(key: K, value: SaveRole[K]) => setForm(f => ({ ...f, [key]: value }))
-  const general = formError(save.error, ['code', 'name', 'description'])
+  const general = formError(save.error, ['code', 'name', 'description', 'ownerId'])
 
   return (
     <Modal open={open} title={role ? r.edit : r.create} onClose={onClose} footer={<>
@@ -48,6 +51,9 @@ export function RoleForm({ open, role, onClose, onSaved }: { open: boolean; role
         </Field>
         <Field label={r.fields.description} error={fieldError(save.error, 'description')}>
           <textarea className="input" value={form.description ?? ''} maxLength={2000} onChange={e => set('description', e.target.value)} />
+        </Field>
+        <Field label={r.fields.owner} error={fieldError(save.error, 'ownerId')} help={r.ownerHelp}>
+          <IdentityPicker value={form.ownerId ?? null} valueName={ownerName} onChange={(id, name) => { set('ownerId', id); setOwnerName(name) }} />
         </Field>
         <label className="switch"><input type="checkbox" checked={form.isRequestable} onChange={e => set('isRequestable', e.target.checked)} />{r.requestable}</label>
         <button type="submit" hidden />

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { describeAction, describeChanges, formatDate, isQuietSync, t } from './index'
+import { describeAction, describeChanges, formatDate, isQuietSync, t, untranslatedActions } from './index'
+import { ru } from './ru'
+import { uz } from './uz'
 import { query } from '../api/query'
 
 describe('formatlash', () => {
@@ -66,5 +68,21 @@ describe('attestatsiya va eksport', () => {
   it('kampaniya oldindan ko\'rish matni administratorlar navbatini aytadi', () => {
     expect(t.reviews.preview({ items: 3, privileged: 1, identities: 2, reviewers: 1, adminPool: 1 }))
       .toBe("3 ta ruxsat (1 tasi imtiyozli), 2 xodim, 1 rahbar ko'rib chiqadi; 1 tasi rahbari yo'q — IdM administratorlari navbatiga")
+  })
+})
+
+describe('tillar', () => {
+  // Kalitlar va qiymat turlari (matn, funksiya, ro'yxat) har ikki tilda bir xil
+  const shape = (v: unknown): unknown => typeof v === 'function' ? 'fn' : Array.isArray(v) ? v.map(shape)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shape(x)]).sort()) : typeof v
+  it('ruscha lug\'at o\'zbekcha bilan bir xil tuzilishda', () => {
+    expect(shape(ru)).toEqual(shape(uz))
+  })
+  it('barcha audit amallarining ruscha nomi bor', () => {
+    expect(untranslatedActions()).toEqual([])
+  })
+  it('ruscha funksiyalar ishlaydi', () => {
+    expect(ru.identities.shown(1, 25, 40)).toBe('1–25 из 40')
+    expect(ru.applications.runChanges({ accountsCreated: 0, accountsUpdated: 0, accountsDisabled: 0, accountsDeleted: 0, membershipsAdded: 0, membershipsRemoved: 0, identitiesCreated: 0 })).toBe('без изменений')
   })
 })

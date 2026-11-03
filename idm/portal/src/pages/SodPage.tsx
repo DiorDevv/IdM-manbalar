@@ -29,15 +29,25 @@ export function SodPage() {
           { id: 'violations', label: s.tabViolations, count: violationTotal, bad: true },
           { id: 'rules', label: s.tabRules, count: rules.data?.length },
         ]} />
-        {tab === 'violations' ? <Violations /> : <Rules rules={rules.data} error={rules.error} pending={rules.isPending} isAdmin={isAdmin} />}
+        {tab === 'violations' ? <Violations isAdmin={isAdmin} /> : <Rules rules={rules.data} error={rules.error} pending={rules.isPending} isAdmin={isAdmin} />}
       </section>
       <CreateRule open={creating} onClose={() => setCreating(false)} />
     </>
   )
 }
 
-function Violations() {
+// Istisno keyingi kun 00:00 da tugaydi: oxirgi kun ko'rsatiladi
+const lastDay = (validTo: string) => formatDate(new Date(Date.parse(validTo) - 60_000).toISOString())
+
+function Violations({ isAdmin }: { isAdmin: boolean }) {
+  const client = useQueryClient()
   const [skip, setSkip] = useState(0)
+  const [granting, setGranting] = useState<SodViolationItem | null>(null)
+  const [revoking, setRevoking] = useState<SodViolationItem | null>(null)
+  const revoke = useMutation({
+    mutationFn: (id: string) => api<void>(`/api/sod/exceptions/${id}/revoke`, { method: 'POST', body: JSON.stringify({ comment: null }) }),
+    onSuccess: () => client.invalidateQueries(),
+  })
   const list = useQuery({
     queryKey: ['sod-violations', skip],
     queryFn: () => api<PagedResult<SodViolationItem>>(`/api/sod/violations${query({ skip, take: PAGE })}`),
@@ -46,15 +56,24 @@ function Violations() {
   if (list.isError) return <ErrorBox error={list.error} onRetry={() => { void list.refetch() }} />
   return (
     <>
+      {revoke.isError && <ErrorBox error={revoke.error} />}
       <table className="data">
-        <thead><tr><th>{t.identities.colName}</th><th>{s.colRule}</th><th>{s.colConflict}</th></tr></thead>
-        {list.isPending ? <SkeletonRows cols={3} /> : (
+        <thead><tr><th>{t.identities.colName}</th><th>{s.colRule}</th><th>{s.colConflict}</th><th>{s.colState}</th></tr></thead>
+        {list.isPending ? <SkeletonRows cols={4} /> : (
           <tbody>
             {list.data?.items.map(v => (
               <tr key={`${v.ruleId}-${v.identityId}`}>
                 <td><Person name={v.identityName} sub={<><span className="mono">{v.employeeNumber}</span>{v.department ? ` · ${v.department}` : ''}</>} to={`/identities/${v.identityId}`} /></td>
                 <td><div className="cell-main">{v.ruleName}</div><div className="cell-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className="mono">{v.ruleCode}</span><RiskBadge risk={v.risk} /></div></td>
                 <td><Conflict left={v.left} right={v.right} /></td>
+                <td>
+                  {v.exception
+                    ? <span className="badge warn" title={s.exceptedBy(v.exception.approvedBy, v.exception.compensatingControl)}>{s.excepted(lastDay(v.exception.validTo))}</span>
+                    : <span className="badge bad">{s.open}</span>}
+                  {isAdmin && (v.exception
+                    ? <div><button className="btn ghost small" onClick={() => setRevoking(v)}>{s.revoke}</button></div>
+                    : <div><button className="btn ghost small" onClick={() => setGranting(v)}>{s.grant}</button></div>)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -62,7 +81,48 @@ function Violations() {
       </table>
       {list.data?.total === 0 && <Empty icon="shield" title={s.noViolations} text={s.noViolationsText} />}
       {list.data && <Pager skip={skip} page={PAGE} total={list.data.total} onChange={setSkip} />}
+      {granting && <GrantException violation={granting} onClose={() => setGranting(null)} />}
+      <ConfirmDialog open={!!revoking} title={s.revoke} text={s.revokeText} confirmLabel={s.revoke} danger
+        onCancel={() => setRevoking(null)} onConfirm={() => { if (revoking?.exception) revoke.mutate(revoking.exception.id); setRevoking(null) }} />
     </>
+  )
+}
+
+function GrantException({ violation: v, onClose }: { violation: SodViolationItem; onClose: () => void }) {
+  const client = useQueryClient()
+  const minDate = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+  const maxDate = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10)
+  const [reason, setReason] = useState('')
+  const [control, setControl] = useState('')
+  const [until, setUntil] = useState(new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10))
+  const save = useMutation({
+    mutationFn: () => api<string>('/api/sod/exceptions', { method: 'POST', body: JSON.stringify({
+      ruleId: v.ruleId, identityId: v.identityId, reason, compensatingControl: control, validUntil: until,
+    }) }),
+    onSuccess: () => { void client.invalidateQueries(); onClose() },
+  })
+  const general = formError(save.error, [])
+  const valid = reason.trim().length >= 10 && control.trim().length >= 10 && until >= minDate && until <= maxDate
+  return (
+    <Modal open title={`${s.grantTitle}: ${v.identityName}`} onClose={onClose} footer={<>
+      <button className="btn secondary" onClick={onClose}>{t.cancel}</button>
+      <button className="btn primary" disabled={save.isPending || !valid} onClick={() => save.mutate()}>{s.grant}</button>
+    </>}>
+      <div className="form">
+        {general && <div className="alert bad">{general}</div>}
+        <div className="alert info">{s.grantText}</div>
+        <div><div className="cell-main">{v.ruleName} <span className="mono muted">{v.ruleCode}</span></div><Conflict left={v.left} right={v.right} /></div>
+        <Field label={s.reason} help={s.reasonHelp}>
+          <textarea className="input" value={reason} maxLength={2000} onChange={e => setReason(e.target.value)} />
+        </Field>
+        <Field label={s.control} help={s.controlHelp}>
+          <textarea className="input" value={control} maxLength={2000} onChange={e => setControl(e.target.value)} />
+        </Field>
+        <Field label={s.until} help={s.untilHelp}>
+          <input className="input" type="date" min={minDate} max={maxDate} value={until} onChange={e => setUntil(e.target.value)} style={{ maxWidth: 220 }} />
+        </Field>
+      </div>
+    </Modal>
   )
 }
 

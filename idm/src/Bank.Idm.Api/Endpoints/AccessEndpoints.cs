@@ -65,13 +65,15 @@ public static partial class AccessEndpoints
             if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
             var code = request.Code.Trim();
             if (await db.Roles.AnyAsync(r => r.Code == code, ct)) return TypedResults.Conflict($"{code} kodli rol allaqachon bor");
+            var owner = await OwnerAsync(db, request.OwnerId, ct);
+            if (owner.Error is not null) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["ownerId"] = [owner.Error] });
             var role = new Role
             {
                 Code = code, Name = request.Name.Trim(), Description = Clean(request.Description), Risk = request.Risk,
-                IsRequestable = request.IsRequestable, CreatedAt = time.GetUtcNow()
+                IsRequestable = request.IsRequestable, CreatedAt = time.GetUtcNow(), OwnerId = request.OwnerId
             };
             db.Roles.Add(role);
-            await audit.SaveChangesAsync(Entry(user, "role.created", role.Id, new { role.Code, role.Name, risk = role.Risk.ToString(), role.IsRequestable }), ct);
+            await audit.SaveChangesAsync(Entry(user, "role.created", role.Id, new { role.Code, role.Name, risk = role.Risk.ToString(), role.IsRequestable, owner = owner.EmployeeNumber }), ct);
             return TypedResults.Created($"/api/roles/{role.Id}", (await LoadRoleAsync(db, analyzer, time, role.Id, ct))!);
         });
 
@@ -84,11 +86,15 @@ public static partial class AccessEndpoints
             if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
             var code = request.Code.Trim();
             if (code != role.Code && await db.Roles.AnyAsync(r => r.Code == code, ct)) return TypedResults.Conflict($"{code} kodli rol allaqachon bor");
-            var before = new { role.Code, role.Name, role.Description, risk = role.Risk.ToString(), role.IsRequestable };
-            (role.Code, role.Name, role.Description, role.Risk, role.IsRequestable) = (code, request.Name.Trim(), Clean(request.Description), request.Risk, request.IsRequestable);
+            var owner = await OwnerAsync(db, request.OwnerId, ct);
+            if (owner.Error is not null) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["ownerId"] = [owner.Error] });
+            var previousOwner = role.OwnerId is { } p ? await db.Identities.Where(i => i.Id == p).Select(i => i.EmployeeNumber).FirstOrDefaultAsync(ct) : null;
+            var before = new { role.Code, role.Name, role.Description, risk = role.Risk.ToString(), role.IsRequestable, owner = previousOwner };
+            (role.Code, role.Name, role.Description, role.Risk, role.IsRequestable, role.OwnerId) =
+                (code, request.Name.Trim(), Clean(request.Description), request.Risk, request.IsRequestable, request.OwnerId);
             await audit.SaveChangesAsync(Entry(user, "role.updated", role.Id, new
             {
-                before, after = new { role.Code, role.Name, role.Description, risk = role.Risk.ToString(), role.IsRequestable }
+                before, after = new { role.Code, role.Name, role.Description, risk = role.Risk.ToString(), role.IsRequestable, owner = owner.EmployeeNumber }
             }), ct);
             return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
         });
@@ -187,10 +193,26 @@ public static partial class AccessEndpoints
             return new PagedResult<DriftItem>(items.Skip(skip).Take(take).ToList(), items.Count, skip, take);
         });
 
+        // ---------- Rol tarkibi attestatsiyasi (rol egalari) ----------
+        api.MapGet("/me/owned-roles", async (IdmDbContext db, CurrentUser user, TimeProvider time, Microsoft.Extensions.Options.IOptions<IdmOptions> options,
+            CancellationToken ct) =>
+        {
+            var actor = await RequestEndpoints.ActorAsync(db, user, ct);
+            return await OwnedRolesAsync(db, actor, time.GetUtcNow(), options.Value.RoleCertificationDays, ct);
+        });
+
+        api.MapPost("/roles/{id:guid}/certify", async Task<Results<NoContent, ProblemHttpResult>> (Guid id, CertifyRoleBody body, IdmDbContext db,
+            RoleCertificationService service, CurrentUser user, CancellationToken ct) =>
+        {
+            var result = await service.CertifyAsync(await RequestEndpoints.ActorAsync(db, user, ct), id, body.Keep ?? [], body.Comment, ct);
+            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.NoContent();
+        });
+
         // ---------- SoD ----------
         read.MapGet("/sod/rules", async (IdmDbContext db, AccessAnalyzer analyzer, CancellationToken ct) =>
         {
-            var counts = (await analyzer.SodViolationsAsync(null, ct)).GroupBy(v => v.RuleId).ToDictionary(g => g.Key, g => g.Count());
+            // Ochiq buzilishlar (istisnosi borlari kirmaydi)
+            var counts = (await analyzer.SodViolationsAsync(null, ct)).Where(v => v.Exception is null).GroupBy(v => v.RuleId).ToDictionary(g => g.Key, g => g.Count());
             var rules = await db.SodRules.AsNoTracking().Include(r => r.Entitlements).ThenInclude(e => e.Entitlement).ThenInclude(e => e.Application)
                 .OrderByDescending(r => r.Risk).ThenBy(r => r.Code).ToListAsync(ct);
             return rules.Select(r => new SodRuleItem(r.Id, r.Code, r.Name, r.Description, r.Risk,
@@ -204,6 +226,34 @@ public static partial class AccessEndpoints
             (skip, take) = (Math.Max(skip, 0), Math.Clamp(take, 1, MaxTake));
             var all = await ToItemsAsync(db, await analyzer.SodViolationsAsync(null, ct), ct);
             return new PagedResult<SodViolationItem>(all.Skip(skip).Take(take).ToList(), all.Count, skip, take);
+        });
+
+        read.MapGet("/sod/exceptions", async (IdmDbContext db, TimeProvider time, bool all = false, CancellationToken ct = default) =>
+        {
+            var now = time.GetUtcNow();
+            var query = db.SodExceptions.AsNoTracking();
+            if (!all) query = query.Where(x => x.RevokedAt == null && x.ValidTo > now);
+            var items = await query.OrderByDescending(x => x.CreatedAt).Take(500)
+                .Select(x => new { x, x.SodRule.Code, RuleName = x.SodRule.Name, Name = x.Identity.LastName + " " + x.Identity.FirstName, x.Identity.EmployeeNumber })
+                .ToListAsync(ct);
+            return items.Select(i => new SodExceptionItem(i.x.Id, i.x.SodRuleId, i.Code, i.RuleName, i.x.IdentityId, i.Name, i.EmployeeNumber, i.x.Reason,
+                i.x.CompensatingControl, i.x.ValidFrom, i.x.ValidTo, i.x.RevokedAt is not null ? "Revoked" : i.x.ValidTo <= now ? "Expired" : "Active",
+                i.x.CreatedAt, i.x.CreatedByName ?? i.x.CreatedBy, i.x.RevokedAt, i.x.RevokedByName ?? i.x.RevokedBy)).ToList();
+        });
+
+        admin.MapPost("/sod/exceptions", async Task<Results<Ok<Guid>, ProblemHttpResult>> (SodExceptionBody body, IdmDbContext db, SodExceptionService service,
+            CurrentUser user, CancellationToken ct) =>
+        {
+            var result = await service.CreateAsync(await RequestEndpoints.ActorAsync(db, user, ct),
+                new NewSodException(body.RuleId, body.IdentityId, body.Reason, body.CompensatingControl, body.ValidUntil), ct);
+            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.Ok(result.Value.Id);
+        });
+
+        admin.MapPost("/sod/exceptions/{id:guid}/revoke", async Task<Results<NoContent, ProblemHttpResult>> (Guid id, SodExceptionRevokeBody body, IdmDbContext db,
+            SodExceptionService service, CurrentUser user, CancellationToken ct) =>
+        {
+            var result = await service.RevokeAsync(await RequestEndpoints.ActorAsync(db, user, ct), id, body.Comment, ct);
+            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.NoContent();
         });
 
         admin.MapPost("/sod/rules", async Task<Results<Created<SodRuleItem>, ValidationProblem, Conflict<string>>> (SaveSodRuleRequest request, IdmDbContext db,
@@ -246,6 +296,34 @@ public static partial class AccessEndpoints
         });
     }
 
+    /// <summary>Men (yoki o'rinbosarim bo'lgan xodim) egasi bo'lgan rollar; administratorga — egasiz rollar ham.</summary>
+    internal static async Task<List<OwnedRoleItem>> OwnedRolesAsync(IdmDbContext db, Bank.Idm.Infrastructure.Requests.RequestActor actor, DateTimeOffset now,
+        int certificationDays, CancellationToken ct)
+    {
+        var owners = actor.Approvers.ToList();
+        var admin = actor.IsAdmin;
+        var roles = await db.Roles.AsNoTracking().Where(r => r.OwnerId != null && owners.Contains(r.OwnerId.Value) || r.OwnerId == null && admin)
+            .Include(r => r.Entitlements).ThenInclude(e => e.Entitlement).ThenInclude(e => e.Application).Include(r => r.Rules).Include(r => r.Owner)
+            .OrderBy(r => r.Code).AsSplitQuery().ToListAsync(ct);
+        var ids = roles.Select(r => r.Id).ToList();
+        var members = await db.IdentityRoles.Where(r => ids.Contains(r.RoleId) && r.ValidFrom <= now && (r.ValidTo == null || r.ValidTo > now))
+            .GroupBy(r => r.RoleId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+        bool Due(Role r) => certificationDays > 0 && (r.CertifiedAt is null || r.CertifiedAt < now.AddDays(-certificationDays));
+        return roles.Select(r => new OwnedRoleItem(r.Id, r.Code, r.Name, r.Description, r.Risk, r.Owner == null ? null : r.Owner.LastName + " " + r.Owner.FirstName,
+                members.GetValueOrDefault(r.Id), r.Entitlements.Select(e => e.Entitlement).OrderBy(e => e.Application.Code).ThenBy(e => e.Name).Select(Pick).ToList(),
+                r.Rules.Select(x => $"{x.Department ?? "*"} / {x.JobTitle ?? "*"}").ToList(), r.CertifiedAt, r.CertifiedByName ?? r.CertifiedBy, Due(r)))
+            .OrderByDescending(r => r.Due).ThenBy(r => r.Code).ToList();
+    }
+
+    /// <summary>Rol egasi: mavjud va ishdan ketmagan xodim (bo'sh — egasiz).</summary>
+    private static async Task<(string? EmployeeNumber, string? Error)> OwnerAsync(IdmDbContext db, Guid? ownerId, CancellationToken ct)
+    {
+        if (ownerId is null) return (null, null);
+        var owner = await db.Identities.AsNoTracking().Where(i => i.Id == ownerId).Select(i => new { i.EmployeeNumber, i.Status }).FirstOrDefaultAsync(ct);
+        if (owner is null) return (null, "Rol egasi topilmadi");
+        return owner.Status == IdentityStatus.Terminated ? (null, "Ishdan ketgan xodim rol egasi bo'la olmaydi") : (owner.EmployeeNumber, null);
+    }
+
     private static async Task<RoleDetails?> LoadRoleAsync(IdmDbContext db, AccessAnalyzer analyzer, TimeProvider time, Guid id, CancellationToken ct)
     {
         var role = await db.Roles.AsNoTracking().Include(r => r.Entitlements).ThenInclude(e => e.Entitlement).ThenInclude(e => e.Application)
@@ -263,7 +341,11 @@ public static partial class AccessEndpoints
             .ToList();
         var entitlements = role.Entitlements.Select(e => e.Entitlement).OrderBy(e => e.Application.Code).ThenBy(e => e.Name).Select(Pick).ToList();
         var conflicts = await analyzer.RoleConflictsAsync(entitlements.Select(e => e.Id).ToList(), ct);
-        return new RoleDetails(role.Id, role.Code, role.Name, role.Description, role.Risk, role.IsRequestable, role.CreatedAt, entitlements, rules, members, conflicts);
+        var owner = role.OwnerId is { } o
+            ? await db.Identities.AsNoTracking().Where(i => i.Id == o).Select(i => new { Name = i.LastName + " " + i.FirstName, i.Status }).FirstOrDefaultAsync(ct)
+            : null;
+        return new RoleDetails(role.Id, role.Code, role.Name, role.Description, role.Risk, role.IsRequestable, role.CreatedAt, entitlements, rules, members, conflicts,
+            role.OwnerId, owner?.Name, owner?.Status, role.CertifiedAt, role.CertifiedByName ?? role.CertifiedBy);
     }
 
     private static async Task<List<SodViolationItem>> ToItemsAsync(IdmDbContext db, IReadOnlyList<SodViolation> violations, CancellationToken ct)
@@ -274,7 +356,8 @@ public static partial class AccessEndpoints
         return violations.Where(v => people.ContainsKey(v.IdentityId)).Select(v =>
         {
             var p = people[v.IdentityId];
-            return new SodViolationItem(v.RuleId, v.RuleCode, v.RuleName, v.Risk, v.IdentityId, p.Name, p.EmployeeNumber, p.Department, v.LeftEntitlements, v.RightEntitlements);
+            return new SodViolationItem(v.RuleId, v.RuleCode, v.RuleName, v.Risk, v.IdentityId, p.Name, p.EmployeeNumber, p.Department, v.LeftEntitlements, v.RightEntitlements,
+                v.Exception);
         }).ToList();
     }
 

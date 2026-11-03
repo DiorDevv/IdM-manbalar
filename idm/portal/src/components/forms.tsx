@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, query } from '../api/client'
-import type { EntitlementPick, RiskLevel } from '../api/types'
+import type { EntitlementPick, IdentityListItem, PagedResult, RiskLevel } from '../api/types'
 import { t } from '../i18n'
 import { Icon } from './Icon'
 
@@ -79,6 +79,46 @@ export function EntitlementPicker({ selected, onChange, exclude = [] }: { select
           </label>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** Bitta xodimni qidirib tanlash (ishdan ketganlar ko'rsatilmaydi). */
+export function IdentityPicker({ value, valueName, onChange }: {
+  value: string | null; valueName?: string | null; onChange: (id: string | null, name: string | null) => void
+}) {
+  const [search, setSearch] = useState('')
+  const deferred = useDeferredValue(search.trim())
+  const list = useQuery({
+    queryKey: ['identity-pick', deferred],
+    queryFn: () => api<PagedResult<IdentityListItem>>(`/api/identities${query({ search: deferred, take: 20 })}`),
+    enabled: deferred.length >= 2,
+    staleTime: 30_000,
+  })
+  const items = (list.data?.items ?? []).filter(i => i.status !== 'Terminated')
+  return (
+    <div className="picker">
+      {value && (
+        <div className="picker-item" style={{ justifyContent: 'space-between' }}>
+          <span className="name"><Icon name="user" size={13} /> {valueName ?? value}</span>
+          <button type="button" className="btn ghost small" onClick={() => onChange(null, null)}>{t.roles.ownerClear}</button>
+        </div>
+      )}
+      <label className="search"><Icon name="search" size={15} />
+        <input className="input" placeholder={t.roles.ownerSearch} value={search} onChange={e => setSearch(e.target.value)} aria-label={t.roles.ownerSearch} />
+      </label>
+      {deferred.length >= 2 && (
+        <div className="picker-list" role="listbox">
+          {list.isPending && <div className="muted" style={{ padding: 10, fontSize: 13 }}>{t.loading}</div>}
+          {list.data && items.length === 0 && <div className="muted" style={{ padding: 10, fontSize: 13 }}>{t.cmd.nothing}</div>}
+          {items.map(i => (
+            <button type="button" key={i.id} className="picker-item" role="option" aria-selected={i.id === value}
+              onClick={() => { onChange(i.id, i.displayName); setSearch('') }} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}>
+              <span className="name">{i.displayName}</span><span className="app-code">{i.employeeNumber}{i.department ? ` · ${i.department}` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

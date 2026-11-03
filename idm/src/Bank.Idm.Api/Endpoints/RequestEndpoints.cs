@@ -41,6 +41,43 @@ public static class RequestEndpoints
                 .Select(i => new PersonBrief(i.Id, i.LastName + " " + i.FirstName, i.EmployeeNumber, i.Department, i.JobTitle)).ToListAsync(ct);
         });
 
+        // Hamkasbni tanlash (o'rinbosar): faqat ishlayotganlar, kamida 2 belgi, eng ko'pi 10 ta, minimal ma'lumot
+        api.MapGet("/directory", async (IdmDbContext db, string? search, CancellationToken ct) =>
+        {
+            var s = search?.Trim();
+            if (s is null || s.Length < 2) return [];
+            var like = $"%{s}%";
+            return await db.Identities.AsNoTracking().Where(i => i.Status == IdentityStatus.Active
+                    && (EF.Functions.ILike(i.LastName + " " + i.FirstName, like) || EF.Functions.ILike(i.FirstName + " " + i.LastName, like) || i.EmployeeNumber == s))
+                .OrderBy(i => i.LastName).ThenBy(i => i.FirstName).Take(10)
+                .Select(i => new PersonBrief(i.Id, i.LastName + " " + i.FirstName, i.EmployeeNumber, i.Department, i.JobTitle)).ToListAsync(ct);
+        });
+
+        api.MapGet("/me/delegations", async (IdmDbContext db, CurrentUser user, TimeProvider time, CancellationToken ct) =>
+        {
+            var me = await ResolveIdentityAsync(db, user.Login, ct);
+            if (me is null) return new MyDelegations([], []);
+            var items = await Delegations(db.ApproverDelegations.Where(d => d.DelegatorId == me || d.DelegateId == me), time.GetUtcNow(), ct);
+            return new MyDelegations(items.Where(d => d.DelegatorId == me).ToList(), items.Where(d => d.DelegateId == me).ToList());
+        });
+
+        api.MapGet("/delegations", async (IdmDbContext db, TimeProvider time, CancellationToken ct) =>
+            await Delegations(db.ApproverDelegations, time.GetUtcNow(), ct)).RequireAuthorization(IdmEndpoints.CanReadAll);
+
+        api.MapPost("/me/delegations", async Task<Results<Ok<Guid>, ProblemHttpResult>> (DelegationBody body, IdmDbContext db, DelegationService service,
+            CurrentUser user, CancellationToken ct) =>
+        {
+            var result = await service.CreateAsync(await ActorAsync(db, user, ct), new NewDelegation(body.DelegatorId, body.DelegateId, body.From, body.Until, body.Reason), ct);
+            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.Ok(result.Value.Id);
+        });
+
+        api.MapPost("/delegations/{id:guid}/revoke", async Task<Results<NoContent, ProblemHttpResult>> (Guid id, IdmDbContext db, DelegationService service,
+            CurrentUser user, CancellationToken ct) =>
+        {
+            var result = await service.RevokeAsync(await ActorAsync(db, user, ct), id, ct);
+            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.NoContent();
+        });
+
         api.MapPost("/requests/preview", async (PreviewRequestBody body, IdmDbContext db, AccessRequestService service, CurrentUser user, CancellationToken ct) =>
         {
             var (plan, _, error) = await service.PlanAsync(await ActorAsync(db, user, ct), body.BeneficiaryId, body.RoleId, ct);
@@ -103,7 +140,7 @@ public static class RequestEndpoints
             var details = await LoadAsync(db, actor, id, ct);
             // Ko'rinmaydigan arizaning borligi ham oshkor qilinmaydi
             if (details is null || !(user.IsAdmin || user.IsAuditor || actor.IdentityId is { } me
-                    && (details.Beneficiary.Id == me || details.Requester.Id == me || details.Approvals.Any(a => a.ApproverId == me))))
+                    && (details.Beneficiary.Id == me || details.Requester.Id == me || details.Approvals.Any(a => a.ApproverId is { } x && actor.ActsFor(x)))))
                 return TypedResults.NotFound();
             return TypedResults.Ok(details);
         });
@@ -125,13 +162,22 @@ public static class RequestEndpoints
         });
     }
 
+    /// <summary>Tugamagan (amaldagi va kelajakdagi) o'rinbosarliklar.</summary>
+    private static async Task<List<DelegationItem>> Delegations(IQueryable<ApproverDelegation> source, DateTimeOffset now, CancellationToken ct) =>
+        await source.AsNoTracking().Where(d => d.RevokedAt == null && d.ValidTo > now).OrderBy(d => d.ValidFrom).Take(500)
+            .Select(d => new DelegationItem(d.Id, d.DelegatorId, d.Delegator.LastName + " " + d.Delegator.FirstName, d.DelegateId,
+                d.Delegate.LastName + " " + d.Delegate.FirstName, d.ValidFrom, d.ValidTo, d.Reason, d.CreatedByName ?? d.CreatedBy, d.ValidFrom <= now))
+            .ToListAsync(ct);
+
     /// <summary>Tasdiqlash navbati: navbatdagi (eng kichik kutilayotgan) bosqich menga tegishli; o'z arizalarim kirmaydi.</summary>
     internal static IQueryable<AccessRequest> Inbox(IQueryable<AccessRequest> query, RequestActor actor)
     {
         var me = actor.IdentityId;
         var admin = actor.IsAdmin;
+        var approvers = actor.Approvers.ToList();
         return query.Where(r => r.Status == AccessRequestStatus.Pending && r.BeneficiaryId != me && r.RequesterId != me
-            && r.Approvals.Any(a => a.Decision == ApprovalDecision.Pending && (a.ApproverId == me && me != null || a.ApproverId == null && admin)
+            && r.Approvals.Any(a => a.Decision == ApprovalDecision.Pending
+                && (a.ApproverId != null && approvers.Contains(a.ApproverId.Value) || a.ApproverId == null && admin)
                 && !r.Approvals.Any(b => b.Decision == ApprovalDecision.Pending && b.Step < a.Step)));
     }
 
@@ -140,8 +186,12 @@ public static class RequestEndpoints
         await db.Accounts.Where(a => a.Login == login && a.IdentityId != null && a.Status != AccountStatus.Deleted && a.Application.Kind == ApplicationKind.Directory)
             .OrderBy(a => a.Status).Select(a => a.IdentityId).FirstOrDefaultAsync(ct);
 
-    internal static async Task<RequestActor> ActorAsync(IdmDbContext db, CurrentUser user, CancellationToken ct) =>
-        new(user.Login, user.Name, await ResolveIdentityAsync(db, user.Login, ct), user.IsAdmin, user.IpAddress, user.CorrelationId);
+    internal static async Task<RequestActor> ActorAsync(IdmDbContext db, CurrentUser user, CancellationToken ct)
+    {
+        var me = await ResolveIdentityAsync(db, user.Login, ct);
+        var actingFor = me is null ? [] : await Bank.Idm.Infrastructure.Requests.DelegationService.ActingForAsync(db, me.Value, DateTimeOffset.UtcNow, ct);
+        return new(user.Login, user.Name, me, user.IsAdmin, user.IpAddress, user.CorrelationId, actingFor);
+    }
 
     private static async Task<RequestDetails?> LoadAsync(IdmDbContext db, RequestActor actor, Guid id, CancellationToken ct)
     {

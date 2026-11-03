@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useIsAdmin, useMe } from '../api/me'
+import { RoleCertification } from './RoleCertification'
 import type { ApplicationItem, CampaignBody, CampaignItem, CampaignPreview, ReviewItem } from '../api/types'
 import { formatDate, t } from '../i18n'
 import { Icon } from '../components/Icon'
@@ -10,7 +11,7 @@ import { Field, Modal, formError } from '../components/forms'
 import { Empty, ErrorBox, PageHead, Person, SkeletonRows, Tabs, type TabDef } from '../components/ui'
 
 const v = t.reviews
-type Tab = 'inbox' | 'campaigns'
+type Tab = 'inbox' | 'roles' | 'campaigns'
 
 export function ReviewsPage() {
   const me = useMe()
@@ -18,6 +19,7 @@ export function ReviewsPage() {
   const reader = !!me.data?.roles.some(r => r === 'idm.admin' || r === 'idm.auditor')
   const tabs: TabDef<Tab>[] = [
     { id: 'inbox', label: v.tabInbox, count: me.data?.reviewCount, bad: true },
+    ...((me.data?.ownedRoles ?? 0) > 0 ? [{ id: 'roles' as const, label: v.tabRoles, count: me.data?.ownedRolesDue, bad: true }] : []),
     ...(reader ? [{ id: 'campaigns' as const, label: v.tabCampaigns }] : []),
   ]
   const tab: Tab = tabs.some(x => x.id === params.get('tab')) ? params.get('tab') as Tab : 'inbox'
@@ -26,7 +28,7 @@ export function ReviewsPage() {
       <PageHead title={v.title} subtitle={v.subtitle} />
       <section className="card">
         {tabs.length > 1 && <Tabs tabs={tabs} current={tab} onSelect={x => setParams({ tab: x }, { replace: true })} />}
-        {tab === 'inbox' ? <Inbox /> : <Campaigns />}
+        {tab === 'inbox' ? <Inbox /> : tab === 'roles' ? <RoleCertification /> : <Campaigns />}
       </section>
     </>
   )
@@ -169,7 +171,7 @@ function Campaigns() {
                         <Link to={`/reviews/campaigns/${c.id}`} className="cell-main" onClick={e => e.stopPropagation()}>{c.name}</Link>
                         <div className="cell-sub">{c.createdByName ?? c.createdBy} · {formatDate(c.createdAt)}</div>
                       </td>
-                      <td>{[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null].filter(Boolean).join(' · ')}</td>
+                      <td>{[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(' · ')}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {formatDate(c.dueDate)}
                         {c.status === 'Active' && isOverdue(c.dueDate) && <div className="cell-sub" style={{ color: 'var(--bad)' }}>{v.overdue}</div>}
@@ -197,7 +199,7 @@ function Campaigns() {
 function NewCampaign({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const client = useQueryClient()
   const inTwoWeeks = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10)
-  const [form, setForm] = useState<CampaignBody>({ name: '', description: null, department: null, applicationId: null, privilegedOnly: false, dueDate: inTwoWeeks })
+  const [form, setForm] = useState<CampaignBody>({ name: '', description: null, department: null, applicationId: null, privilegedOnly: false, dueDate: inTwoWeeks, revokeUnreviewed: false })
   const set = <K extends keyof CampaignBody>(k: K, value: CampaignBody[K]) => setForm(f => ({ ...f, [k]: value }))
   const apps = useQuery({ queryKey: ['applications'], queryFn: () => api<ApplicationItem[]>('/api/applications') })
   // Jonli oldindan ko'rish: qamrov o'zgarganda (nomsiz ham) — nechta ruxsat, xodim va rahbar
@@ -236,6 +238,8 @@ function NewCampaign({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <Field label={v.dueDate}><input className="input" type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} /></Field>
         </div>
         <label className="switch"><input type="checkbox" checked={form.privilegedOnly} onChange={e => set('privilegedOnly', e.target.checked)} />{v.privileged}</label>
+        <label className="switch"><input type="checkbox" checked={!!form.revokeUnreviewed} onChange={e => set('revokeUnreviewed', e.target.checked)} />{v.revokeUnreviewed}</label>
+        {form.revokeUnreviewed && <div className="cell-sub">{v.revokeUnreviewedHelp}</div>}
         <div className={`alert ${preview.isError || p?.items === 0 ? 'warn' : 'info'}`}>
           <Icon name={preview.isError || p?.items === 0 ? 'warning' : 'review'} size={16} />
           <span>{preview.isError ? formError(preview.error, []) : !p ? t.loading : p.items === 0 ? v.previewEmpty : v.preview(p)}</span>

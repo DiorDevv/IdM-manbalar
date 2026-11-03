@@ -18,6 +18,11 @@ public class AccessReviewCampaign
     /// <summary>Faqat imtiyozli ruxsatlar va yuqori xavfli rollar.</summary>
     public bool PrivilegedOnly { get; set; }
     public DateOnly DueDate { get; set; }
+    /// <summary>
+    /// Siyosat: muddat o'tgach (yoki yakunlanganda) ko'rib chiqilmagan yozuvlar avtomatik "olib tashlandi" — tasdiqlanmagan ruxsat
+    /// qolmaydi. Standart — yo'q (ko'rib chiqilmaganlar shundayligicha qoladi va hisobotda ko'rinadi).
+    /// </summary>
+    public bool RevokeUnreviewed { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public string CreatedBy { get; set; } = null!;
     public string? CreatedByName { get; set; }

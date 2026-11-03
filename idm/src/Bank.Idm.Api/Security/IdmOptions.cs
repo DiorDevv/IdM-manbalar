@@ -18,10 +18,14 @@ public class IdmOptions
     public Sync.ClusterOptions Cluster { get; set; } = new();
     /// <summary>Audit jurnalini SIEM'ga yuborish.</summary>
     public Bank.Idm.Infrastructure.Siem.SiemOptions Siem { get; set; } = new();
+    /// <summary>Pochta orqali xabarnomalar (yangi ariza, eslatma, natija, attestatsiya). Standart — o'chiq.</summary>
+    public Bank.Idm.Infrastructure.Notifications.NotificationOptions Notifications { get; set; } = new();
     /// <summary>/metrics uchun token (Prometheus: Authorization: Bearer ...). Bo'sh — endpoint o'chiq. Faqat sirlar orqali.</summary>
     public string? MetricsToken { get; set; }
     /// <summary>Tizimga yozish aylanishi oralig'i (reja + navbat); 0 — fon ishlovchisi o'chiq.</summary>
     public int ProvisioningIntervalSeconds { get; set; } = 30;
+    /// <summary>Rol tarkibi shuncha kunda bir egasi tomonidan tasdiqlanishi kerak (0 — talab yo'q).</summary>
+    public int RoleCertificationDays { get; set; } = 365;
 }
 
 public class SsoOptions

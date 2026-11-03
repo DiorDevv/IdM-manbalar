@@ -205,4 +205,79 @@ public class RequestTests : IAsyncLifetime
         Assert.Equal(AccessRequestStatus.Cancelled, (await check.AccessRequests.SingleAsync(r => r.Id == pending.Id, Ct)).Status);
         Assert.False(await check.IdentityRoles.AnyAsync(r => r.IdentityId == _karimov && r.ValidTo == null, Ct));
     }
+
+    [Fact]
+    public async Task Delegate_decides_for_the_manager_on_leave_but_not_beyond_the_period_or_own_requests()
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Tashkent")).DateTime);
+        var request = await CreateAsync("a.karimov", _kredit);
+        var rahimova = As("d.rahimova");
+
+        // Tekshiruvlar: o'zini, uzoq muddat, boshqa xodim uchun (admin emas)
+        Assert.Equal(HttpStatusCode.BadRequest, (await rahimova.PostAsJsonAsync("/api/me/delegations",
+            new DelegationBody(null, _rahimova, today, today.AddDays(5), null), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await rahimova.PostAsJsonAsync("/api/me/delegations",
+            new DelegationBody(null, _yusupova, today, today.AddDays(200), null), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await As("n.yusupova").PostAsJsonAsync("/api/me/delegations",
+            new DelegationBody(_rahimova, _yusupova, today, today.AddDays(5), null), Ct)).StatusCode);
+        // Kelajakdagi o'rinbosarlik hali ishlamaydi
+        var future = await rahimova.PostAsJsonAsync("/api/me/delegations", new DelegationBody(null, _yusupova, today.AddDays(10), today.AddDays(12), null), Ct);
+        Assert.Equal(HttpStatusCode.OK, future.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await DecideAsync(As("n.yusupova"), request.Id, true)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await rahimova.PostAsJsonAsync("/api/me/delegations",
+            new DelegationBody(null, _yusupova, today.AddDays(11), today.AddDays(20), null), Ct)).StatusCode);
+
+        // Bugundan ta'til: Yusupova rahbar bosqichini ko'radi va tasdiqlaydi
+        var now = await rahimova.PostAsJsonAsync("/api/me/delegations", new DelegationBody(null, _yusupova, today, today.AddDays(5), "Ta'til"), Ct);
+        Assert.Equal(HttpStatusCode.OK, now.StatusCode);
+        var mine = (await rahimova.GetFromJsonAsync<MyDelegations>("/api/me/delegations", Json, Ct))!;
+        Assert.Equal(2, mine.Given.Count);
+        var inbox = (await As("n.yusupova").GetFromJsonAsync<PagedResult<RequestListItem>>("/api/requests?scope=inbox", Json, Ct))!;
+        Assert.Equal(request.Id, Assert.Single(inbox.Items).Id);
+        Assert.Equal(HttpStatusCode.OK, (await As("n.yusupova").GetAsync($"/api/requests/{request.Id}", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await DecideAsync(As("n.yusupova"), request.Id, true)).StatusCode);
+        await using (var db = pg.CreateContext())
+        {
+            var approved = await db.AuditEvents.SingleAsync(e => e.Action == "request.step-approved" && e.TargetId == request.Id.ToString(), Ct);
+            Assert.Equal("n.yusupova", approved.ActorId);
+            Assert.Contains(_rahimova.ToString(), approved.Details);
+        }
+
+        // Bekor qilingach — yana yo'q; boshqa xodim bekor qila olmaydi
+        var id = await now.Content.ReadFromJsonAsync<Guid>(Json, Ct);
+        Assert.Equal(HttpStatusCode.NotFound, (await As("a.karimov").PostAsync($"/api/delegations/{id}/revoke", null, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await rahimova.PostAsync($"/api/delegations/{id}/revoke", null, Ct)).StatusCode);
+        Assert.DoesNotContain((await rahimova.GetFromJsonAsync<MyDelegations>("/api/me/delegations", Json, Ct))!.Given, d => d.Active);
+        Assert.Equal(HttpStatusCode.NotFound, (await As("n.yusupova").GetAsync($"/api/requests/{request.Id}", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Role_owner_certifies_the_role_and_may_only_take_entitlements_away()
+    {
+        // KREDIT egasi — Aliyev; boshqa xodim rolni ko'rmaydi
+        var owner = As("j.aliyev");
+        var me = (await owner.GetFromJsonAsync<MeResponse>("/api/me", Json, Ct))!;
+        Assert.Equal((1, 1), (me.OwnedRoles, me.OwnedRolesDue));
+        var role = Assert.Single((await owner.GetFromJsonAsync<List<OwnedRoleItem>>("/api/me/owned-roles", Json, Ct))!);
+        Assert.True(role.Due);
+        var credit = Assert.Single(role.Entitlements).Id;
+        Assert.Empty((await As("a.karimov").GetFromJsonAsync<List<OwnedRoleItem>>("/api/me/owned-roles", Json, Ct))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await As("a.karimov").PostAsJsonAsync($"/api/roles/{role.Id}/certify", new CertifyRoleBody([credit], null), Ct)).StatusCode);
+
+        // Qo'shib bo'lmaydi; olib tashlashda sabab majburiy
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/roles/{role.Id}/certify", new CertifyRoleBody([credit, Guid.NewGuid()], null), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/roles/{role.Id}/certify", new CertifyRoleBody([], null), Ct)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync($"/api/roles/{role.Id}/certify", new CertifyRoleBody([credit], null), Ct)).StatusCode);
+        var after = Assert.Single((await owner.GetFromJsonAsync<List<OwnedRoleItem>>("/api/me/owned-roles", Json, Ct))!);
+        Assert.False(after.Due);
+        Assert.NotNull(after.CertifiedAt);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync($"/api/roles/{role.Id}/certify", new CertifyRoleBody([], "Kredit guruhi endi kerak emas"), Ct)).StatusCode);
+        await using var db = pg.CreateContext();
+        Assert.False(await db.RoleEntitlements.AnyAsync(e => e.RoleId == role.Id, Ct));
+        var audit = await db.AuditEvents.Where(e => e.Action == "role.certified").OrderBy(e => e.Id).ToListAsync(Ct);
+        Assert.Equal(2, audit.Count);
+        Assert.Contains("kredit-berish", audit[1].Details);
+    }
 }

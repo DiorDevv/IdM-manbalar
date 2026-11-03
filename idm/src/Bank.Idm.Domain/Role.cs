@@ -12,6 +12,10 @@ public class Role
     public RiskLevel Risk { get; set; } = RiskLevel.Medium;
     public bool IsRequestable { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>Rol tarkibi oxirgi marta egasi tomonidan tasdiqlangan (attestatsiya); bo'sh — hech qachon.</summary>
+    public DateTimeOffset? CertifiedAt { get; set; }
+    public string? CertifiedBy { get; set; }
+    public string? CertifiedByName { get; set; }
 
     public List<RoleEntitlement> Entitlements { get; set; } = [];
     public List<RoleRule> Rules { get; set; } = [];

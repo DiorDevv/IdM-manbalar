@@ -116,4 +116,38 @@ public class AccessApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await employee.PostAsJsonAsync("/api/sod/rules",
             new SaveSodRuleRequest("S", "S", null, RiskLevel.Low, [_credit], [_approve]), Ct)).StatusCode);
     }
+
+    [Fact]
+    public async Task Admin_sets_a_role_owner_and_manages_sod_exceptions_others_cannot()
+    {
+        var admin = Client("boss");
+        var employee = Client("a.karimov");
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/roles",
+            new SaveRoleRequest("KREDIT", "Kredit", null, RiskLevel.Medium, true, Guid.NewGuid()), Ct)).StatusCode);
+        var role = (await (await admin.PostAsJsonAsync("/api/roles", new SaveRoleRequest("KREDIT", "Kredit", null, RiskLevel.Medium, true, _karimov), Ct))
+            .Content.ReadFromJsonAsync<RoleDetails>(Json, Ct))!;
+        Assert.Equal((_karimov, "Karimov Aziz"), (role.OwnerId!.Value, role.OwnerName));
+        var cleared = (await (await admin.PutAsJsonAsync($"/api/roles/{role.Id}", new SaveRoleRequest("KREDIT", "Kredit", null, RiskLevel.Medium, true), Ct))
+            .Content.ReadFromJsonAsync<RoleDetails>(Json, Ct))!;
+        Assert.Null(cleared.OwnerId);
+
+        var rule = (await (await admin.PostAsJsonAsync("/api/sod/rules", new SaveSodRuleRequest("KREDIT-SOD", "Kredit", null, RiskLevel.High, [_credit], [_approve]), Ct))
+            .Content.ReadFromJsonAsync<SodRuleItem>(Json, Ct))!;
+        var body = new SodExceptionBody(rule.Id, _karimov, "Filialda ikkinchi mutaxassis yo'q", "Bo'lim boshlig'i har kuni tekshiradi",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)));
+        Assert.Equal(HttpStatusCode.Forbidden, (await employee.PostAsJsonAsync("/api/sod/exceptions", body, Ct)).StatusCode);
+        var granted = await admin.PostAsJsonAsync("/api/sod/exceptions", body, Ct);
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+        var id = await granted.Content.ReadFromJsonAsync<Guid>(Json, Ct);
+
+        var violations = (await admin.GetFromJsonAsync<PagedResult<SodViolationItem>>("/api/sod/violations", Json, Ct))!;
+        Assert.Equal(id, Assert.Single(violations.Items).Exception!.Id);
+        Assert.Equal(0, Assert.Single((await admin.GetFromJsonAsync<List<SodRuleItem>>("/api/sod/rules", Json, Ct))!).ViolationCount);
+        Assert.Equal("Active", Assert.Single((await admin.GetFromJsonAsync<List<SodExceptionItem>>("/api/sod/exceptions", Json, Ct))!).State);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/sod/exceptions/{id}/revoke", new SodExceptionRevokeBody(null), Ct)).StatusCode);
+        Assert.Empty((await admin.GetFromJsonAsync<List<SodExceptionItem>>("/api/sod/exceptions", Json, Ct))!);
+        Assert.Equal("Revoked", Assert.Single((await admin.GetFromJsonAsync<List<SodExceptionItem>>("/api/sod/exceptions?all=true", Json, Ct))!).State);
+        Assert.Equal(1, Assert.Single((await admin.GetFromJsonAsync<List<SodRuleItem>>("/api/sod/rules", Json, Ct))!).ViolationCount);
+    }
 }

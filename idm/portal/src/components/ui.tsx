@@ -89,8 +89,9 @@ export function GroupChips({ groups, max = 6 }: { groups: EntitlementRef[]; max?
   return (
     <div className="chips">
       {shown.map(g => (
-        <span key={g.id} className={`chip${g.isPrivileged ? ' privileged' : ''}`} title={g.isPrivileged ? t.applications.privileged : undefined}>
-          {g.isPrivileged && <Icon name="lock" size={12} />}{g.name}
+        <span key={g.id} className={`chip${g.isPrivileged ? ' privileged' : ''}${g.via ? ' inherited' : ''}`}
+          title={[g.isPrivileged ? t.applications.privileged : null, g.via ? t.identities.inheritedVia(g.via) : null].filter(Boolean).join(' · ') || undefined}>
+          {g.isPrivileged && <Icon name="lock" size={12} />}{g.name}{g.via && <span className="chip-via">↳ {g.via}</span>}
         </span>
       ))}
       {groups.length > max && <span className="chip">+{groups.length - max}</span>}

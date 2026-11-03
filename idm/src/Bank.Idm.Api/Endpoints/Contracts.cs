@@ -5,7 +5,13 @@ namespace Bank.Idm.Api.Endpoints;
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
 public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0,
-    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null);
+    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null, int OwnedRoles = 0, int OwnedRolesDue = 0);
+
+public record CertifyRoleBody(IReadOnlyList<Guid> Keep, string? Comment);
+
+/// <param name="Due">Tasdiqlash muddati kelgan (hech qachon tasdiqlanmagan yoki RoleCertificationDays o'tgan).</param>
+public record OwnedRoleItem(Guid Id, string Code, string Name, string? Description, RiskLevel Risk, string? OwnerName, int Members,
+    IReadOnlyList<EntitlementPick> Entitlements, IReadOnlyList<string> Rules, DateTimeOffset? CertifiedAt, string? CertifiedBy, bool Due);
 
 public record DashboardSummary(
     int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,
@@ -26,7 +32,8 @@ public record IdentityDetails(Guid Id, string EmployeeNumber, string FirstName, 
 public record AccountItem(Guid Id, string ApplicationCode, string ApplicationName, string Login, AccountStatus Status, AccountKind Kind,
     DateTimeOffset? LastSyncedAt, IReadOnlyList<EntitlementRef> Entitlements);
 
-public record EntitlementRef(Guid Id, string Name, bool IsPrivileged);
+/// <param name="Via">Meros a'zolik: qaysi bevosita guruh orqali (bevosita bo'lsa — null).</param>
+public record EntitlementRef(Guid Id, string Name, bool IsPrivileged, string? Via = null);
 
 public record CreateIdentityRequest(string EmployeeNumber, string FirstName, string LastName, string? MiddleName,
     string? Email, string? Department, string? JobTitle, DateOnly? HireDate);
@@ -78,9 +85,11 @@ public record RoleMemberItem(Guid IdentityId, string Name, string EmployeeNumber
 
 public record RoleDetails(Guid Id, string Code, string Name, string? Description, RiskLevel Risk, bool IsRequestable, DateTimeOffset CreatedAt,
     IReadOnlyList<EntitlementPick> Entitlements, IReadOnlyList<RoleRuleItem> Rules, IReadOnlyList<RoleMemberItem> Members,
-    IReadOnlyList<string> SodConflicts);
+    IReadOnlyList<string> SodConflicts, Guid? OwnerId = null, string? OwnerName = null, IdentityStatus? OwnerStatus = null,
+    DateTimeOffset? CertifiedAt = null, string? CertifiedBy = null);
 
-public record SaveRoleRequest(string Code, string Name, string? Description, RiskLevel Risk, bool IsRequestable);
+/// <param name="OwnerId">Rol egasi: arizalarda rahbardan keyingi tasdiqlovchi (bo'sh — IdM administratorlari).</param>
+public record SaveRoleRequest(string Code, string Name, string? Description, RiskLevel Risk, bool IsRequestable, Guid? OwnerId = null);
 
 public record SetRoleEntitlementsRequest(IReadOnlyList<Guid> EntitlementIds);
 
@@ -99,7 +108,16 @@ public record SodRuleItem(Guid Id, string Code, string Name, string? Description
 public record SaveSodRuleRequest(string Code, string Name, string? Description, RiskLevel Risk, IReadOnlyList<Guid> Left, IReadOnlyList<Guid> Right);
 
 public record SodViolationItem(Guid RuleId, string RuleCode, string RuleName, RiskLevel Risk, Guid IdentityId, string IdentityName,
-    string EmployeeNumber, string? Department, IReadOnlyList<string> Left, IReadOnlyList<string> Right);
+    string EmployeeNumber, string? Department, IReadOnlyList<string> Left, IReadOnlyList<string> Right,
+    Bank.Idm.Infrastructure.Access.SodExceptionInfo? Exception = null);
+
+public record SodExceptionBody(Guid RuleId, Guid IdentityId, string Reason, string CompensatingControl, DateOnly ValidUntil);
+public record SodExceptionRevokeBody(string? Comment);
+
+/// <param name="State">Active, Expired, Revoked.</param>
+public record SodExceptionItem(Guid Id, Guid RuleId, string RuleCode, string RuleName, Guid IdentityId, string IdentityName, string EmployeeNumber,
+    string Reason, string CompensatingControl, DateTimeOffset ValidFrom, DateTimeOffset ValidTo, string State, DateTimeOffset CreatedAt, string CreatedBy,
+    DateTimeOffset? RevokedAt, string? RevokedBy);
 
 public record DriftItem(Guid IdentityId, string Name, string EmployeeNumber, string? Department, IdentityStatus Status, int Missing, int Excess);
 
@@ -107,6 +125,14 @@ public record DriftItem(Guid IdentityId, string Name, string EmployeeNumber, str
 public record CatalogRole(Guid Id, string Code, string Name, string? Description, RiskLevel Risk, IReadOnlyList<string> Entitlements);
 
 public record PersonBrief(Guid Id, string Name, string EmployeeNumber, string? Department, string? JobTitle);
+
+public record DelegationBody(Guid? DelegatorId, Guid DelegateId, DateOnly From, DateOnly Until, string? Reason);
+
+/// <param name="Active">Hozir amalda (boshlangan va tugamagan).</param>
+public record DelegationItem(Guid Id, Guid DelegatorId, string DelegatorName, Guid DelegateId, string DelegateName, DateTimeOffset ValidFrom,
+    DateTimeOffset ValidTo, string? Reason, string CreatedBy, bool Active);
+
+public record MyDelegations(IReadOnlyList<DelegationItem> Given, IReadOnlyList<DelegationItem> Received);
 
 public record PreviewRequestBody(Guid? BeneficiaryId, Guid RoleId);
 
@@ -137,15 +163,17 @@ public record ProvisioningOperationItem(Guid Id, string ApplicationCode, Provisi
 
 /// <summary>Tizim bo'yicha yozish holati: rejim va amallar soni.</summary>
 public record ProvisioningApplicationStatus(string Code, string Name, Bank.Idm.Infrastructure.Sync.ProvisioningMode Mode, bool CreateAccounts,
-    int MaxAutoOperations, int Proposed, int Queued, int Running, int Failed, int SucceededLast24h);
+    int MaxAutoOperations, int Proposed, int Queued, int Running, int Failed, int SucceededLast24h,
+    bool EnableReturning = false, bool EnableNewAccounts = false);
 
 public record ProvisioningActionBody(IReadOnlyList<Guid> Ids);
 
-public record CampaignBody(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate);
+public record CampaignBody(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate,
+    bool RevokeUnreviewed = false);
 
 public record CampaignItem(Guid Id, string Name, string? Description, AccessReviewStatus Status, string? Department, string? ApplicationCode, bool PrivilegedOnly,
     DateOnly DueDate, DateTimeOffset CreatedAt, string CreatedBy, string? CreatedByName, DateTimeOffset? ClosedAt, int Total, int Kept, int Revoked, int Pending,
-    int RevokedOpen);
+    int RevokedOpen, bool RevokeUnreviewed = false);
 
 public record CampaignReviewerProgress(Guid? ReviewerId, string? ReviewerName, int Total, int Pending);
 

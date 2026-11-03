@@ -17,7 +17,7 @@ const tabStatuses: Record<Tab, ProvisioningStatus[]> = {
 const statusTone: Record<ProvisioningStatus, string> = {
   Proposed: 'warn', Queued: 'info', Running: 'info live', Succeeded: 'ok', Failed: 'bad', Obsolete: 'neutral', Cancelled: 'neutral',
 }
-const kindIcon: Record<ProvisioningKind, string> = { CreateAccount: 'user', DisableAccount: 'lock', AddMembership: 'people', RemoveMembership: 'x' }
+const kindIcon: Record<ProvisioningKind, string> = { CreateAccount: 'user', DisableAccount: 'lock', EnableAccount: 'unlock', AddMembership: 'people', RemoveMembership: 'x' }
 /** Xavfli amallar (kirishni olib qo'yadi) tasdiqlash oynasida qizil tugma bilan. */
 const dangerous: ProvisioningKind[] = ['DisableAccount', 'RemoveMembership']
 
@@ -107,6 +107,8 @@ export function ProvisioningPage() {
                     {p.modeHelp[a.mode]}
                     {a.mode === 'Automatic' && <> · {p.limit(a.maxAutoOperations)}</>}
                     {a.createAccounts && <> · {p.createAccounts}</>}
+                    {a.enableReturning && <> · {p.enableReturning}</>}
+                    {a.enableNewAccounts && <> · {p.enableNewAccounts}</>}
                   </div>
                   {result && (
                     <div className={`alert ${result.skipped || result.held ? 'warn' : 'info'}`} style={{ marginTop: 10 }}>

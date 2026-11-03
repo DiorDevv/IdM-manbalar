@@ -53,6 +53,12 @@ public static class ProductionGuard
         if (!options.Siem.Enabled) warnings.Add("Idm:Siem o'chiq: audit faqat IdM bazasida (bank talabi — markaziy SIEM)");
         else if (options.Siem.Protocol != Bank.Idm.Infrastructure.Siem.SiemProtocols.TcpTls)
             errors.Add($"Idm:Siem:Protocol={options.Siem.Protocol}: audit faqat TLS orqali yuboriladi (tcp-tls)");
+        if (options.Notifications.Enabled)
+        {
+            if (!options.Notifications.Smtp.UseTls) errors.Add("Idm:Notifications:Smtp:UseTls o'chiq: pochta faqat STARTTLS bilan yuboriladi");
+            if (!options.Notifications.PortalUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                errors.Add($"Idm:Notifications:PortalUrl HTTPS bo'lishi kerak (hozir: {options.Notifications.PortalUrl})");
+        }
         if (options.MetricsToken is { Length: > 0 and < 32 }) errors.Add("Idm:MetricsToken kamida 32 belgi bo'lishi kerak");
         if (options.MigrateOnStartup) warnings.Add("Idm:MigrateOnStartup yoqilgan: ishlab chiqarishda migratsiya alohida, nazorat ostida qo'llanadi");
         if (options.BootstrapAdmins.Length > 0) warnings.Add("Idm:BootstrapAdmins berilgan: birinchi ishga tushishdan keyin olib tashlang");

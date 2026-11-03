@@ -52,11 +52,15 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
         Set(options.DepartmentAttribute, a.Department);
         Set(options.JobTitleAttribute, a.JobTitle);
         if (!string.IsNullOrWhiteSpace(options.UpnSuffix)) Set("userPrincipalName", $"{a.Login}@{options.UpnSuffix}");
-        // Bloklangan va parolsiz: kirish faqat helpdesk parol bergandan keyin (parol IdM'da hech qachon bo'lmaydi)
+        // Bloklangan: kirish faqat helpdesk parol bergandan keyin (AD'da pastda tasodifiy noma'lum parol qo'yiladi, IdM'da saqlanmaydi)
         if (options.DisableAttribute is { } disable) Set(disable, options.DisableValue);
         else Set("userAccountControl", (0x200 | AccountDisable).ToString());   // NORMAL_ACCOUNT | ACCOUNTDISABLE
 
         var request = new AddRequest(dn, attributes.Select(x => new DirectoryAttribute(x.Key, x.Value.Cast<object>().ToArray())).ToArray());
+        // AD: tasodifiy, hech qayerda saqlanmaydigan parol. Aks holda katalog sozlamasiga qarab akkaunt keyin bo'sh parol bilan yoqilib
+        // qolishi mumkin (Samba buni ruxsat beradi). Helpdesk parolni almashtirib beradi. AD unicodePwd'ni faqat shifrlangan ulanishda qabul qiladi.
+        if (options.DisableAttribute is null && options.UseSsl)
+            request.Attributes.Add(new DirectoryAttribute("unicodePwd", System.Text.Encoding.Unicode.GetBytes($"\"{RandomPassword()}\"")));
         await LdapSession.SendAsync<AddResponse>(Connection, request, $"yaratish {dn}");
         ct.ThrowIfCancellationRequested();
         return await ReadAccountAsync(dn, ct) ?? throw new ConnectorException($"{dn} yaratildi, lekin qayta o'qib bo'lmadi", transient: true);
@@ -81,6 +85,39 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
         }
         await LdapSession.SendAsync<ModifyResponse>(Connection,
             new ModifyRequest(user.DistinguishedName, DirectoryAttributeOperation.Replace, attribute, value), $"bloklash {user.DistinguishedName}");
+        return true;
+    }
+
+    public async Task<bool> EnableAccountAsync(string accountId, CancellationToken ct = default)
+    {
+        var attribute = options.DisableAttribute ?? "userAccountControl";
+        var user = await FindByIdAsync(options.UsersDn, options.UserIdAttribute, accountId, [attribute], "akkaunt", ct);
+        var current = Read(user, attribute);
+        DirectoryAttributeModification change;
+        if (options.DisableAttribute is null)
+        {
+            if (!int.TryParse(current, out var uac)) throw new ConnectorException($"{user.DistinguishedName}: userAccountControl o'qilmadi");
+            if ((uac & AccountDisable) == 0) return false;
+            change = new DirectoryAttributeModification { Name = attribute, Operation = DirectoryAttributeOperation.Replace };
+            change.Add((uac & ~AccountDisable).ToString());
+        }
+        else
+        {
+            if (!string.Equals(current, options.DisableValue, StringComparison.OrdinalIgnoreCase)) return false;
+            // Faqat bloklash qiymati olinadi (atributdagi boshqa qiymatlarga tegilmaydi)
+            change = new DirectoryAttributeModification { Name = attribute, Operation = DirectoryAttributeOperation.Delete };
+            change.Add(current!);
+        }
+        try
+        {
+            await LdapSession.SendAsync<ModifyResponse>(Connection, new ModifyRequest(user.DistinguishedName, change), $"yoqish {user.DistinguishedName}");
+        }
+        // Katalog parol siyosati sababli yoqishni rad etishi mumkin: avval helpdesk parol o'rnatadi
+        catch (ConnectorException e) when (e.ResultCode is (int)ResultCode.UnwillingToPerform or (int)ResultCode.ConstraintViolation)
+        {
+            throw new ConnectorException($"{user.DistinguishedName}: katalog akkauntni yoqishni rad etdi — parol o'rnatilmagan yoki parol siyosatiga " +
+                $"mos emas. Avval helpdesk parol o'rnatsin, keyin \"Qayta urinish\". ({e.Message})", e) { ResultCode = e.ResultCode };
+        }
         return true;
     }
 
@@ -169,6 +206,21 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
             Department: LdapSnapshotBuilder.ReadString(record, options.DepartmentAttribute),
             JobTitle: LdapSnapshotBuilder.ReadString(record, options.JobTitleAttribute),
             DistinguishedName: entry.DistinguishedName);
+    }
+
+    /// <summary>40 belgi, katta-kichik harf, raqam va belgi (AD murakkablik siyosatiga mos), kriptografik tasodifiy.</summary>
+    internal static string RandomPassword()
+    {
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ", lower = "abcdefghijkmnopqrstuvwxyz", digits = "23456789", symbols = "!#%+-=?@_";
+        const string all = upper + lower + digits + symbols;
+        var chars = new char[40];
+        for (var i = 0; i < chars.Length; i++) chars[i] = all[System.Security.Cryptography.RandomNumberGenerator.GetInt32(all.Length)];
+        // Har bir toifadan kamida bittasi (tasodifiy joyda emas, lekin parol baribir hech kimga ko'rsatilmaydi)
+        (chars[0], chars[1], chars[2], chars[3]) = (upper[System.Security.Cryptography.RandomNumberGenerator.GetInt32(upper.Length)],
+            lower[System.Security.Cryptography.RandomNumberGenerator.GetInt32(lower.Length)],
+            digits[System.Security.Cryptography.RandomNumberGenerator.GetInt32(digits.Length)],
+            symbols[System.Security.Cryptography.RandomNumberGenerator.GetInt32(symbols.Length)]);
+        return new string(chars);
     }
 
     /// <summary>objectGUID ikkilik qiymat sifatida qidiriladi (o'qishdagi GUID matnining teskari aylantirilishi), boshqalari matn.</summary>

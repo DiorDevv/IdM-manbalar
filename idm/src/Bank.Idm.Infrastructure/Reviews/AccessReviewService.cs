@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bank.Idm.Infrastructure.Reviews;
 
-public record CampaignScope(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate);
+public record CampaignScope(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate,
+    bool RevokeUnreviewed = false);
 
 /// <summary>Kampaniya ishga tushsa nima bo'lishi: yozuvlar, xodimlar, tekshiruvchilar va administratorlar navbatiga tushadiganlar.</summary>
 public record CampaignPreview(int Items, int Roles, int Entitlements, int Privileged, int Identities, int Reviewers, int AdminPool);
@@ -42,7 +43,8 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         var campaign = new AccessReviewCampaign
         {
             Name = scope.Name!.Trim(), Description = Clean(scope.Description), Department = Clean(scope.Department), ApplicationId = scope.ApplicationId,
-            PrivilegedOnly = scope.PrivilegedOnly, DueDate = scope.DueDate, CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login, CreatedByName = actor.Name
+            PrivilegedOnly = scope.PrivilegedOnly, DueDate = scope.DueDate, RevokeUnreviewed = scope.RevokeUnreviewed,
+            CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login, CreatedByName = actor.Name
         };
         db.AccessReviewCampaigns.Add(campaign);
         var summary = Summarize(items);
@@ -51,7 +53,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         {
             await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "review.campaign-created", "review-campaign", campaign.Id.ToString(),
                 JsonSerializer.Serialize(new { name = campaign.Name, campaign.Department, campaign.ApplicationId, campaign.PrivilegedOnly, campaign.DueDate,
-                    summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
+                    campaign.RevokeUnreviewed, summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
             await CopyItemsAsync(campaign.Id, items, ct);
             await transaction.CommitAsync(ct);
         }
@@ -111,29 +113,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
 
         var now = time.GetUtcNow();
         var entries = new List<AuditEntry>();
-        foreach (var item in items)
-        {
-            (item.Decision, item.Comment, item.DecidedAt, item.DecidedBy, item.DecidedByName) =
-                (keep ? AccessReviewDecision.Keep : AccessReviewDecision.Revoke, text, now, actor.Login, actor.Name);
-            entries.Add(new AuditEntry(actor.Login, actor.Name, keep ? "review.kept" : "review.revoked", "identity", item.IdentityId.ToString(),
-                JsonSerializer.Serialize(new
-                {
-                    campaign = item.Campaign.Name, campaignId = item.CampaignId, itemId = item.Id, kind = item.Kind.ToString(), application = item.ApplicationCode,
-                    name = item.Title, login = item.Kind == AccessReviewItemKind.Entitlement ? item.Subtitle : null,
-                    role = item.Kind == AccessReviewItemKind.Role ? item.Subtitle : null, employeeNumber = item.Identity.EmployeeNumber, comment = text
-                }, Json), actor.IpAddress, actor.CorrelationId));
-            if (keep || item.Kind != AccessReviewItemKind.Role) continue;
-            // Rol darhol tugaydi; uning guruhlarini rejalashtiruvchi (IdM qo'shganlarini) olib tashlaydi
-            var assignment = item.IdentityRole!;
-            if (assignment.ValidTo is null || assignment.ValidTo > now)
-            {
-                assignment.ValidTo = now;
-                entries.Add(new AuditEntry(actor.Login, actor.Name, "identity.role-removed", "identity", item.IdentityId.ToString(),
-                    JsonSerializer.Serialize(new { role = assignment.Role.Code, employeeNumber = item.Identity.EmployeeNumber, source = "review",
-                        campaignId = item.CampaignId, comment = text }, Json), actor.IpAddress, actor.CorrelationId));
-            }
-            item.RemediatedAt = now;
-        }
+        foreach (var item in items) Apply(item, keep, text, now, actor, actor.OnBehalfOf(item.ReviewerId), automatic: false, entries);
         try
         {
             await audit.SaveChangesAsync(entries, ct);
@@ -145,19 +125,83 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         return new(items.Count);
     }
 
+    /// <summary>Bitta yozuv bo'yicha qaror va uning oqibatlari (rol darhol tugaydi; guruhni rejalashtiruvchi oladi).</summary>
+    private void Apply(AccessReviewItem item, bool keep, string? text, DateTimeOffset now, RequestActor actor, Guid? onBehalfOf, bool automatic, List<AuditEntry> entries)
+    {
+        (item.Decision, item.Comment, item.DecidedAt, item.DecidedBy, item.DecidedByName) =
+            (keep ? AccessReviewDecision.Keep : AccessReviewDecision.Revoke, text, now, actor.Login, actor.Name);
+        entries.Add(new AuditEntry(actor.Login, actor.Name, keep ? "review.kept" : "review.revoked", "identity", item.IdentityId.ToString(),
+            JsonSerializer.Serialize(new
+            {
+                campaign = item.Campaign.Name, campaignId = item.CampaignId, itemId = item.Id, kind = item.Kind.ToString(), application = item.ApplicationCode,
+                name = item.Title, login = item.Kind == AccessReviewItemKind.Entitlement ? item.Subtitle : null,
+                role = item.Kind == AccessReviewItemKind.Role ? item.Subtitle : null, employeeNumber = item.Identity.EmployeeNumber, comment = text,
+                onBehalfOf, automatic = automatic ? true : (bool?)null
+            }, Json), actor.IpAddress, actor.CorrelationId));
+        if (keep || item.Kind != AccessReviewItemKind.Role) return;
+        // Rol darhol tugaydi; uning guruhlarini rejalashtiruvchi (IdM qo'shganlarini) olib tashlaydi
+        var assignment = item.IdentityRole!;
+        if (assignment.ValidTo is null || assignment.ValidTo > now)
+        {
+            assignment.ValidTo = now;
+            entries.Add(new AuditEntry(actor.Login, actor.Name, "identity.role-removed", "identity", item.IdentityId.ToString(),
+                JsonSerializer.Serialize(new { role = assignment.Role.Code, employeeNumber = item.Identity.EmployeeNumber, source = "review",
+                    campaignId = item.CampaignId, comment = text }, Json), actor.IpAddress, actor.CorrelationId));
+        }
+        item.RemediatedAt = now;
+    }
+
+    private static readonly TimeZoneInfo Tashkent = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tashkent");
+    public const string UnreviewedComment = "Attestatsiya muddatida ko'rib chiqilmadi (kampaniya siyosati)";
+
+    /// <summary>
+    /// "Ko'rib chiqilmaganlarni olib tashlash" siyosatli, muddati o'tgan (Toshkent bo'yicha oxirgi kun tugagan) faol kampaniyalarni yakunlaydi.
+    /// Fon ishi (yetakchi serverda) chaqiradi.
+    /// </summary>
+    public async Task<int> ExpireDueAsync(string actorId, string? actorName, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(time.GetUtcNow(), Tashkent).DateTime);
+        var due = await db.AccessReviewCampaigns.Where(c => c.Status == AccessReviewStatus.Active && c.RevokeUnreviewed && c.DueDate < today)
+            .Select(c => c.Id).ToListAsync(ct);
+        var closed = 0;
+        foreach (var id in due)
+        {
+            db.ChangeTracker.Clear();
+            if ((await CloseAsync(new RequestActor(actorId, actorName, null, IsAdmin: true), id, cancel: false, ct)).Value is not null) closed++;
+        }
+        return closed;
+    }
+
     public async Task<ReviewResult<AccessReviewCampaign>> CloseAsync(RequestActor actor, Guid campaignId, bool cancel, CancellationToken ct = default)
     {
         var campaign = await db.AccessReviewCampaigns.FirstOrDefaultAsync(c => c.Id == campaignId, ct);
         if (campaign is null) return ReviewResult<AccessReviewCampaign>.Fail(404, "Kampaniya topilmadi");
         if (campaign.Status != AccessReviewStatus.Active) return ReviewResult<AccessReviewCampaign>.Fail(409, "Kampaniya allaqachon yopilgan");
-        (campaign.Status, campaign.ClosedAt, campaign.ClosedBy) = (cancel ? AccessReviewStatus.Cancelled : AccessReviewStatus.Completed, time.GetUtcNow(), actor.Login);
+        var now = time.GetUtcNow();
+        (campaign.Status, campaign.ClosedAt, campaign.ClosedBy) = (cancel ? AccessReviewStatus.Cancelled : AccessReviewStatus.Completed, now, actor.Login);
+        var autoEntries = new List<AuditEntry>();
+        var autoRevoked = 0;
+        if (!cancel && campaign.RevokeUnreviewed)
+        {
+            // Siyosat: tasdiqlanmagan ruxsat qolmaydi — tizim nomidan "olib tashlandi", oqibatlari oddiy qaror bilan bir xil
+            var system = new RequestActor("system", "IdM (attestatsiya siyosati)", null, IsAdmin: true);
+            var pending = await db.AccessReviewItems.Include(i => i.Campaign).Include(i => i.IdentityRole).ThenInclude(r => r!.Role).Include(i => i.Identity)
+                .Where(i => i.CampaignId == campaignId && i.Decision == AccessReviewDecision.Pending).ToListAsync(ct);
+            foreach (var item in pending) Apply(item, keep: false, UnreviewedComment, now, system, null, automatic: true, autoEntries);
+            autoRevoked = pending.Count;
+        }
         var stats = await db.AccessReviewItems.Where(i => i.CampaignId == campaignId).GroupBy(i => i.Decision)
             .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key.ToString(), g => g.Count, ct);
+        if (autoRevoked > 0)   // bazada hali "Pending": yakuniy holat bilan
+        {
+            stats.Remove(nameof(AccessReviewDecision.Pending));
+            stats[nameof(AccessReviewDecision.Revoke)] = stats.GetValueOrDefault(nameof(AccessReviewDecision.Revoke)) + autoRevoked;
+        }
         try
         {
-            await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, cancel ? "review.campaign-cancelled" : "review.campaign-completed",
-                "review-campaign", campaign.Id.ToString(), JsonSerializer.Serialize(new { name = campaign.Name, decisions = stats }, Json),
-                actor.IpAddress, actor.CorrelationId), ct);
+            await audit.SaveChangesAsync([new AuditEntry(actor.Login, actor.Name, cancel ? "review.campaign-cancelled" : "review.campaign-completed",
+                "review-campaign", campaign.Id.ToString(), JsonSerializer.Serialize(new { name = campaign.Name, decisions = stats,
+                    autoRevoked = autoRevoked > 0 ? autoRevoked : (int?)null }, Json), actor.IpAddress, actor.CorrelationId), .. autoEntries], ct);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -177,7 +221,9 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
             .ToListAsync(ct);
         if (open.Count == 0) return 0;
         var accountIds = open.Select(i => i.AccountId!.Value).Distinct().ToList();
-        var held = (await db.AccountEntitlements.Where(ae => accountIds.Contains(ae.AccountId)).Select(ae => new { ae.AccountId, ae.EntitlementId }).ToListAsync(ct))
+        // Bevosita a'zolik olingan bo'lsa — bajarildi (ichma-ich guruh orqali meros qolishi boshqa guruhning ishi)
+        var held = (await db.AccountEntitlements.Where(ae => accountIds.Contains(ae.AccountId) && ae.ViaEntitlementId == null)
+            .Select(ae => new { ae.AccountId, ae.EntitlementId }).ToListAsync(ct))
             .Select(x => (x.AccountId, x.EntitlementId)).ToHashSet();
         var now = time.GetUtcNow();
         var entries = new List<AuditEntry>();
@@ -208,7 +254,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
     public static bool CanDecide(RequestActor actor, AccessReviewItem item)
     {
         if (actor.IdentityId is { } me && me == item.IdentityId) return false;
-        return item.ReviewerId is { } reviewer ? reviewer == actor.IdentityId : actor.IsAdmin;
+        return item.ReviewerId is { } reviewer ? actor.ActsFor(reviewer) : actor.IsAdmin;
     }
 
     private async Task<string?> ValidateAsync(CampaignScope scope, CancellationToken ct)
@@ -246,8 +292,9 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
             }).ToListAsync(ct);
         var expected = assignments.SelectMany(a => a.Entitlements.Select(e => (a.IdentityId, e.EntitlementId))).ToHashSet();
         var memberships = await db.AccountEntitlements.AsNoTracking()
+            // Faqat bevosita a'zolik: meros guruh uni bergan ichki guruh orqali ko'rib chiqiladi (uni alohida olib bo'lmaydi)
             .Where(ae => ae.Account.IdentityId != null && ids.Contains(ae.Account.IdentityId!.Value) && ae.Account.Status != AccountStatus.Deleted
-                && ae.Entitlement.DeletedAt == null)
+                && ae.Entitlement.DeletedAt == null && ae.ViaEntitlementId == null)
             .Select(ae => new
             {
                 IdentityId = ae.Account.IdentityId!.Value, ae.AccountId, ae.Account.Login, ae.EntitlementId, ae.Entitlement.Name, ae.Entitlement.IsPrivileged,

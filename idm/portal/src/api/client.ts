@@ -1,4 +1,5 @@
 import { currentUser, signIn } from '../auth/oidc'
+import { t } from '../i18n'
 
 export class ApiError extends Error {
   /** Validatsiya xatolari: maydon → xabarlar (ASP.NET ValidationProblem). */
@@ -8,12 +9,12 @@ export class ApiError extends Error {
 /** IdM API'ga so'rov: SSO access tokeni bilan. 401 bo'lsa qayta kirishga yuboradi. */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = await currentUser()
-  if (!user) { await signIn(); throw new ApiError(401, 'Kirish talab qilinadi') }
+  if (!user) { await signIn(); throw new ApiError(401, t.authRequired) }
   const response = await fetch(path, {
     ...init,
     headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers, Authorization: `Bearer ${user.access_token}`, Accept: 'application/json', 'X-Correlation-Id': crypto.randomUUID() },
   })
-  if (response.status === 401) { await signIn(); throw new ApiError(401, 'Sessiya tugadi') }
+  if (response.status === 401) { await signIn(); throw new ApiError(401, t.sessionExpired) }
   if (!response.ok) {
     const text = await response.text()
     let message = text
@@ -32,9 +33,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 /** Faylni yuklab olish (API token bilan himoyalangan, shuning uchun oddiy havola emas): server bergan nom bilan saqlanadi. */
 export async function download(path: string, fallbackName: string): Promise<void> {
   const user = await currentUser()
-  if (!user) { await signIn(); throw new ApiError(401, 'Kirish talab qilinadi') }
+  if (!user) { await signIn(); throw new ApiError(401, t.authRequired) }
   const response = await fetch(path, { headers: { Authorization: `Bearer ${user.access_token}`, 'X-Correlation-Id': crypto.randomUUID() } })
-  if (!response.ok) throw new ApiError(response.status, response.status === 403 ? 'Ruxsat yo\'q' : `HTTP ${response.status}`)
+  if (!response.ok) throw new ApiError(response.status, response.status === 403 ? t.noAccess : `HTTP ${response.status}`)
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const name = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName
   const url = URL.createObjectURL(await response.blob())

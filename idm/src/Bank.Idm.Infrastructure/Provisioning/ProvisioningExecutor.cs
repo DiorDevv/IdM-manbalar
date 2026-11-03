@@ -13,7 +13,8 @@ public record ExecuteResult(int Succeeded, int Retrying, int Failed, int Skipped
 /// bajarmaydi), keyin tizimga yoziladi va IdM bazasi darhol yangilanadi (keyingi sinxronlash tasdiqlaydi).
 /// Vaqtinchalik xato (tarmoq, server band) — kechikish bilan qayta urinish va to'plam to'xtatiladi (qolgan amallar urinishlarini
 /// behuda sarflamasligi uchun); doimiy xato yoki urinishlar tugashi — "xato", administrator ko'rib chiqadi.
-/// Tartib: avval bloklash va a'zolikdan chiqarish (xavfsizlik), keyin yaratish va qo'shish.
+/// Tartib: avval bloklash va a'zolikdan chiqarish (xavfsizlik), keyin yaratish, qo'shish va oxirida yoqish (akkaunt kerakli
+/// guruhlari bilan ochiladi).
 /// </summary>
 public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider time)
 {
@@ -28,7 +29,8 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
         var now = time.GetUtcNow();
         var due = await db.ProvisioningOperations.AsNoTracking()
             .Where(o => o.ApplicationId == applicationId && o.Status == ProvisioningStatus.Queued && (o.NextAttemptAt == null || o.NextAttemptAt <= now))
-            .OrderBy(o => o.Kind == ProvisioningKind.DisableAccount ? 0 : o.Kind == ProvisioningKind.RemoveMembership ? 1 : o.Kind == ProvisioningKind.CreateAccount ? 2 : 3)
+            .OrderBy(o => o.Kind == ProvisioningKind.DisableAccount ? 0 : o.Kind == ProvisioningKind.RemoveMembership ? 1
+                : o.Kind == ProvisioningKind.CreateAccount ? 2 : o.Kind == ProvisioningKind.AddMembership ? 3 : 4)
             .ThenBy(o => o.CreatedAt).Select(o => o.Id).Take(batchSize).ToListAsync(ct);
         int succeeded = 0, retrying = 0, failed = 0, skipped = 0;
         foreach (var id in due)
@@ -141,6 +143,13 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
                 changed = await connector.DisableAccountAsync(account.ExternalId, ct);
                 account.Status = AccountStatus.Disabled;
                 break;
+            case ProvisioningKind.EnableAccount:
+                // Tasdiq va bajarish orasida xodim yana ketgan yoki to'xtatilgan bo'lishi mumkin
+                if (op.Identity is not { Status: IdentityStatus.Active } || account.IdentityId != op.IdentityId)
+                    return (ProvisioningStatus.Obsolete, false, account);
+                changed = await connector.EnableAccountAsync(account.ExternalId, ct);
+                account.Status = AccountStatus.Enabled;
+                break;
             case ProvisioningKind.AddMembership:
             case ProvisioningKind.RemoveMembership:
                 var entitlement = op.Entitlement;
@@ -150,6 +159,8 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
                     : await connector.RemoveMemberAsync(account.ExternalId, entitlement.ExternalId, ct);
                 var link = await db.AccountEntitlements.FirstOrDefaultAsync(x => x.AccountId == account.Id && x.EntitlementId == entitlement.Id, CancellationToken.None);
                 if (add && link is null) db.AccountEntitlements.Add(new AccountEntitlement { AccountId = account.Id, EntitlementId = entitlement.Id, GrantedAt = time.GetUtcNow() });
+                if (add && link is not null) link.ViaEntitlementId = null;   // meros edi, endi bevosita ham
+                // Ichma-ich guruh orqali meros qolishi mumkin: keyingi sinxronlash uni meros sifatida qaytaradi
                 if (!add && link is not null) db.AccountEntitlements.Remove(link);
                 break;
             default:
@@ -211,6 +222,7 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
     {
         ProvisioningKind.CreateAccount => "provisioning.account-created",
         ProvisioningKind.DisableAccount => "provisioning.account-disabled",
+        ProvisioningKind.EnableAccount => "provisioning.account-enabled",
         ProvisioningKind.AddMembership => "provisioning.membership-added",
         _ => "provisioning.membership-removed"
     };

@@ -45,6 +45,54 @@ public class LdapSnapshotBuilderTests
     }
 
     [Fact]
+    public void Nested_groups_give_inherited_membership_via_the_nearest_direct_group_and_cycles_are_safe()
+    {
+        Guid Id() => Guid.NewGuid();
+        var (userId, tellers, branch, all, admins) = (Id(), Id(), Id(), Id(), Id());
+        const string userDn = "CN=Aziz Karimov,OU=Xodimlar,DC=bank,DC=test";
+        string Dn(string cn) => $"CN={cn},OU=Guruhlar,DC=bank,DC=test";
+        LdapRecord Group(Guid id, string cn, params string[] members) => Rec(Dn(cn), ("objectGUID", [id.ToByteArray()]), ("cn", [cn]), ("member", members));
+        var users = new[] { Rec(userDn, ("objectGUID", [userId.ToByteArray()]), ("sAMAccountName", ["a.karimov"])) };
+        // kassirlar ⊂ filial ⊂ hammasi ⊂ filial (halqa); admins — bog'liq emas
+        var groups = new[]
+        {
+            Group(tellers, "kassirlar", userDn),
+            Group(branch, "filial", Dn("kassirlar").ToLowerInvariant(), Dn("hammasi")),
+            Group(all, "hammasi", Dn("filial")),
+            Group(admins, "Domain Admins"),
+        };
+
+        var account = Assert.Single(LdapSnapshotBuilder.Build(new LdapConnectorOptions(), users, [], groups).Accounts);
+
+        Assert.Equal([tellers.ToString()], account.GroupIds);
+        Assert.Equal(new Dictionary<string, string> { [branch.ToString()] = tellers.ToString(), [all.ToString()] = tellers.ToString() },
+            account.InheritedGroupIds);
+
+        // O'chirilgan bo'lsa — faqat bevosita
+        var flat = Assert.Single(LdapSnapshotBuilder.Build(new LdapConnectorOptions { NestedGroups = false }, users, [], groups).Accounts);
+        Assert.Empty(flat.InheritedGroupIds);
+    }
+
+    [Theory]
+    [InlineData("dc1.bank.uz", "dc1.bank.uz", 636)]
+    [InlineData("dc2.bank.uz:3269", "dc2.bank.uz", 3269)]
+    [InlineData("10.0.0.5:389", "10.0.0.5", 389)]
+    [InlineData("[fd00::5]:636", "fd00::5", 636)]
+    [InlineData("fd00::5", "fd00::5", 636)]
+    public void Domain_controller_list_entries_take_an_optional_port(string value, string host, int port)
+    {
+        Assert.Equal((host, port), LdapConnectorOptions.ParseEndpoint(value, 636));
+    }
+
+    [Fact]
+    public void Servers_list_overrides_the_single_server_in_order()
+    {
+        Assert.Equal([("dc1", 636)], new LdapConnectorOptions { Server = "dc1" }.Endpoints);
+        Assert.Equal([("dc2", 636), ("dc3", 3269)], new LdapConnectorOptions { Server = "dc1", Servers = ["dc2", " dc3:3269 ", ""] }.Endpoints);
+        Assert.Throws<ArgumentException>(() => new LdapConnectorOptions { Servers = ["dc1:abc"] }.Endpoints);
+    }
+
+    [Fact]
     public void Posix_groups_resolve_members_by_login()
     {
         var o = new LdapConnectorOptions

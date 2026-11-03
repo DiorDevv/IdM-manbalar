@@ -48,7 +48,7 @@ export function CampaignPage() {
       <PageHead crumbs={<>{crumbs}{c.name}</>} title={c.name}
         subtitle={<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`badge ${active ? 'info' : c.status === 'Completed' ? 'ok' : 'neutral'}`}>{v.status[c.status]}</span>
-          {[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null].filter(Boolean).join(' · ')}
+          {[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(' · ')}
           <span>· {v.due}: {formatDate(c.dueDate)}{active && isOverdue(c.dueDate) && <b style={{ color: 'var(--bad)' }}> ({v.overdue})</b>}</span>
           <span>· {v.createdBy}: {c.createdByName ?? c.createdBy}</span>
         </span>}

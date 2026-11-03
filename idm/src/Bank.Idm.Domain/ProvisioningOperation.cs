@@ -19,7 +19,8 @@ public class ProvisioningOperation
     public Account? Account { get; set; }
     public Guid? EntitlementId { get; set; }
     public Entitlement? Entitlement { get; set; }
-    /// <summary>Nima uchun: "role" (rol bo'yicha kerak), "role-removed", "review-revoked" (attestatsiya), "leaver", "suspended", "joiner".</summary>
+    /// <summary>Nima uchun: "role" (rol bo'yicha kerak), "role-removed", "review-revoked" (attestatsiya), "leaver", "suspended", "joiner",
+    /// "rehire" (qayta ishga olingan), "resumed" (to'xtatish tugadi), "start-date" (ishga kirish kuni).</summary>
     public string Reason { get; set; } = null!;
     /// <summary>Ko'rsatish uchun: login, guruh nomi, rollar (rejalashtirish paytidagi holat).</summary>
     public string? Summary { get; set; }
@@ -45,7 +46,9 @@ public enum ProvisioningKind
     CreateAccount = 0,
     DisableAccount = 1,
     AddMembership = 2,
-    RemoveMembership = 3
+    RemoveMembership = 3,
+    /// <summary>Qayta yoqish: faqat IdM o'zi bloklagan (ishdan ketish, to'xtatish) yoki IdM yaratgan akkaunt.</summary>
+    EnableAccount = 4
 }
 
 public enum ProvisioningStatus

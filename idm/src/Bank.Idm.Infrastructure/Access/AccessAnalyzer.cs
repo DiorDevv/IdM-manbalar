@@ -14,19 +14,33 @@ public enum AccessState
 }
 
 public record AccessLine(Guid EntitlementId, string ApplicationCode, string EntitlementName, bool IsPrivileged, AccessState State,
-    IReadOnlyList<string> ViaRoles, IReadOnlyList<string> Accounts);
+    IReadOnlyList<string> ViaRoles, IReadOnlyList<string> Accounts)
+{
+    /// <summary>Faqat ichma-ich guruh orqali bor bo'lsa — qaysi bevosita guruh(lar) orqali; bevosita a'zolik bo'lsa bo'sh.</summary>
+    public IReadOnlyList<string> InheritedVia { get; init; } = [];
+}
 
 public record DriftSummary(Guid IdentityId, int Missing, int Excess);
 
 public record SodViolation(Guid RuleId, string RuleCode, string RuleName, RiskLevel Risk, Guid IdentityId,
-    IReadOnlyList<string> LeftEntitlements, IReadOnlyList<string> RightEntitlements);
+    IReadOnlyList<string> LeftEntitlements, IReadOnlyList<string> RightEntitlements)
+{
+    /// <summary>Amaldagi istisno (bo'lsa): buzilish ma'lum va kompensatsion nazorat ostida, ochiq buzilishlar soniga kirmaydi.</summary>
+    public SodExceptionInfo? Exception { get; init; }
+}
+
+public record SodExceptionInfo(Guid Id, DateTimeOffset ValidTo, string CompensatingControl, string ApprovedBy);
 
 /// <summary>"Bo'lishi kerak" (rollar) va "haqiqatda bor" (tizimlardan o'qilgan) ruxsatlarni solishtiradi, SoD buzilishlarini topadi.</summary>
 public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
 {
     // init xususiyatlar (konstruktor emas): EF Core ularning ustidan Where/Select'ni SQL'ga tarjima qila oladi
     private class Expected { public Guid IdentityId { get; init; } public Guid EntitlementId { get; init; } public string RoleCode { get; init; } = null!; }
-    private class Actual { public Guid IdentityId { get; init; } public Guid EntitlementId { get; init; } public string Login { get; init; } = null!; }
+    private class Actual
+    {
+        public Guid IdentityId { get; init; } public Guid EntitlementId { get; init; } public string Login { get; init; } = null!;
+        public string? Via { get; init; }
+    }
 
     private IQueryable<Expected> ExpectedQuery()
     {
@@ -41,7 +55,11 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
     private IQueryable<Actual> ActualQuery() =>
         from ae in db.AccountEntitlements
         where ae.Account.IdentityId != null && ae.Account.Status != AccountStatus.Deleted
-        select new Actual { IdentityId = ae.Account.IdentityId!.Value, EntitlementId = ae.EntitlementId, Login = ae.Account.Login };
+        select new Actual
+        {
+            IdentityId = ae.Account.IdentityId!.Value, EntitlementId = ae.EntitlementId, Login = ae.Account.Login,
+            Via = db.Entitlements.Where(v => v.Id == ae.ViaEntitlementId).Select(v => v.Name).FirstOrDefault()
+        };
 
     public async Task<IReadOnlyList<AccessLine>> ForIdentityAsync(Guid identityId, CancellationToken ct = default)
     {
@@ -53,10 +71,12 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
         return ids.Select(id =>
             {
                 var via = expected.Where(e => e.EntitlementId == id).Select(e => e.RoleCode).Distinct().Order().ToList();
-                var accounts = actual.Where(a => a.EntitlementId == id).Select(a => a.Login).Distinct().Order().ToList();
+                var held = actual.Where(a => a.EntitlementId == id).ToList();
+                var accounts = held.Select(a => a.Login).Distinct().Order().ToList();
+                var inherited = held.All(a => a.Via is not null) ? held.Select(a => a.Via!).Distinct().Order().ToList() : [];
                 var state = via.Count > 0 ? accounts.Count > 0 ? AccessState.Granted : AccessState.Missing : AccessState.Excess;
                 var e = entitlements[id];
-                return new AccessLine(id, e.Code, e.Name, e.IsPrivileged, state, via, accounts);
+                return new AccessLine(id, e.Code, e.Name, e.IsPrivileged, state, via, accounts) { InheritedVia = inherited };
             })
             .OrderBy(l => l.State == AccessState.Granted).ThenByDescending(l => l.IsPrivileged).ThenBy(l => l.ApplicationCode).ThenBy(l => l.EntitlementName)
             .ToList();
@@ -85,6 +105,12 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
         if (identityId is not null) query = query.Where(a => a.IdentityId == identityId);
         var held = (await query.Select(a => new { a.IdentityId, a.EntitlementId }).Distinct().ToListAsync(ct)).ToLookup(a => a.IdentityId, a => a.EntitlementId);
 
+        var now = time.GetUtcNow();
+        var exceptionQuery = db.SodExceptions.AsNoTracking().Where(x => x.RevokedAt == null && x.ValidFrom <= now && x.ValidTo > now);
+        if (identityId is not null) exceptionQuery = exceptionQuery.Where(x => x.IdentityId == identityId);
+        var exceptions = (await exceptionQuery.ToListAsync(ct)).GroupBy(x => (x.SodRuleId, x.IdentityId))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ValidTo).First());
+
         var result = new List<SodViolation>();
         foreach (var rule in rules)
         {
@@ -94,10 +120,15 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
             {
                 var l = group.Where(left.ContainsKey).Select(id => left[id]).Order().ToList();
                 var r = group.Where(right.ContainsKey).Select(id => right[id]).Order().ToList();
-                if (l.Count > 0 && r.Count > 0) result.Add(new SodViolation(rule.Id, rule.Code, rule.Name, rule.Risk, group.Key, l, r));
+                if (l.Count == 0 || r.Count == 0) continue;
+                var x = exceptions.GetValueOrDefault((rule.Id, group.Key));
+                result.Add(new SodViolation(rule.Id, rule.Code, rule.Name, rule.Risk, group.Key, l, r)
+                {
+                    Exception = x is null ? null : new SodExceptionInfo(x.Id, x.ValidTo, x.CompensatingControl, x.CreatedByName ?? x.CreatedBy)
+                });
             }
         }
-        return result.OrderByDescending(v => v.Risk).ThenBy(v => v.RuleCode).ToList();
+        return result.OrderBy(v => v.Exception is not null).ThenByDescending(v => v.Risk).ThenBy(v => v.RuleCode).ToList();
     }
 
     /// <summary>

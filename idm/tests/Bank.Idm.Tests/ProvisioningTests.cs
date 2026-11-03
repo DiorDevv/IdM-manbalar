@@ -52,6 +52,17 @@ public sealed class FakeProvisioner : IProvisioningConnector
         }
     }
 
+    public Task<bool> EnableAccountAsync(string accountId, CancellationToken ct = default)
+    {
+        Call("enable", accountId);
+        lock (Accounts)
+        {
+            if (!Accounts.TryGetValue(accountId, out var e)) throw new ConnectorException($"akkaunt {accountId} topilmadi");
+            Accounts[accountId] = e with { Enabled = true };
+            return Task.FromResult(!e.Enabled);
+        }
+    }
+
     public Task<bool> AddMemberAsync(string accountId, string groupId, CancellationToken ct = default)
     {
         Call("add", $"{accountId} {groupId}");
@@ -448,6 +459,122 @@ public class ProvisioningTests : IAsyncLifetime
 
         Assert.Equal(5, await ProvisioningService.RecoverInterruptedAsync(db, _time, Ct));
         Assert.All(await OperationsAsync(), o => Assert.Equal(ProvisioningStatus.Queued, o.Status));
+    }
+
+    private async Task SetStatusAsync(Guid identityId, IdentityStatus status)
+    {
+        await using var db = pg.CreateContext();
+        await db.Identities.Where(i => i.Id == identityId).ExecuteUpdateAsync(x => x.SetProperty(i => i.Status, status), Ct);
+    }
+
+    private async Task PlanApproveExecuteAsync(ProvisioningSettings? settings = null)
+    {
+        await PlanAsync(settings);
+        await using (var db = pg.CreateContext())
+        {
+            var proposed = await db.ProvisioningOperations.Where(o => o.Status == ProvisioningStatus.Proposed).Select(o => o.Id).ToListAsync(Ct);
+            if (proposed.Count > 0) await ActAsync(ProvisioningAction.Approve, proposed);
+        }
+        await ExecuteAsync(settings);
+    }
+
+    [Fact]
+    public async Task Inherited_memberships_are_never_removed_directly()
+    {
+        // Rahimovaning Domain Admins a'zoligi aslida kredit guruhi orqali (ichma-ich); ABS guruhi ham meros
+        await using (var db = pg.CreateContext())
+        {
+            await db.AccountEntitlements.Where(ae => ae.AccountId == _rahimovaAcc && ae.EntitlementId == _admins)
+                .ExecuteUpdateAsync(x => x.SetProperty(ae => ae.ViaEntitlementId, _credit), Ct);
+            db.AccountEntitlements.Add(new AccountEntitlement { AccountId = _karimovAcc, EntitlementId = _credit, ViaEntitlementId = _abs });
+            await db.SaveChangesAsync(Ct);
+        }
+
+        await PlanAsync();
+
+        var ops = (await OperationsAsync()).Select(Describe).ToList();
+        Assert.Contains($"RemoveMembership {_rahimovaAcc} {_credit} leaver", ops);
+        Assert.DoesNotContain($"RemoveMembership {_rahimovaAcc} {_admins} leaver", ops);
+        // Karimovga kerak kredit guruhi meros orqali bor — qo'shish shart emas
+        Assert.DoesNotContain(ops, o => o.StartsWith("AddMembership"));
+    }
+
+    [Fact]
+    public async Task Rehired_and_resumed_employees_get_the_accounts_idm_disabled_back()
+    {
+        await PlanApproveExecuteAsync();
+        Assert.False(_directory.Accounts["u-d.rahimova"].Enabled);
+        Assert.False(_directory.Accounts["u-n.yusupova"].Enabled);
+
+        // Rahimova qayta ishga olindi, Yusupovaning to'xtatilishi tugadi
+        await SetStatusAsync(_rahimova, IdentityStatus.Active);
+        await SetStatusAsync(_yusupova, IdentityStatus.Active);
+        await PlanAsync();
+        var enables = (await OperationsAsync()).Where(o => o is { Kind: ProvisioningKind.EnableAccount, Status: ProvisioningStatus.Proposed })
+            .Select(o => (o.AccountId!.Value, o.Reason)).OrderBy(x => x.Reason).ToList();
+        Assert.Equal(new[] { (_rahimovaAcc, "rehire"), (_yusupovaAcc, "resumed") }, enables);
+
+        await PlanApproveExecuteAsync();
+
+        Assert.True(_directory.Accounts["u-d.rahimova"].Enabled);
+        Assert.True(_directory.Accounts["u-n.yusupova"].Enabled);
+        await using var db = pg.CreateContext();
+        Assert.Equal(AccountStatus.Enabled, (await db.Accounts.SingleAsync(a => a.Id == _rahimovaAcc, Ct)).Status);
+        Assert.True(await db.AuditEvents.AnyAsync(e => e.Action == "provisioning.account-enabled" && e.TargetId == _rahimovaAcc.ToString(), Ct));
+        Assert.Equal(0, (await PlanAsync()).Created);
+    }
+
+    [Fact]
+    public async Task Account_blocked_by_someone_else_is_never_enabled()
+    {
+        // Karimov ishlaydi, lekin akkauntini administrator qo'lda bloklagan (IdM bloklamagan)
+        await using (var db = pg.CreateContext())
+            await db.Accounts.Where(a => a.Id == _karimovAcc).ExecuteUpdateAsync(x => x.SetProperty(a => a.Status, AccountStatus.Disabled), Ct);
+        await PlanApproveExecuteAsync();
+        // IdM bloklagan, lekin qayta yoqish o'chiq
+        await SetStatusAsync(_yusupova, IdentityStatus.Active);
+
+        await PlanAsync(Approval with { EnableReturning = false });
+
+        Assert.DoesNotContain(await OperationsAsync(), o => o.Kind == ProvisioningKind.EnableAccount);
+        Assert.DoesNotContain(_directory.Calls, c => c.StartsWith("enable"));
+    }
+
+    [Fact]
+    public async Task Pending_enable_is_dropped_when_the_employee_leaves_again()
+    {
+        await PlanApproveExecuteAsync();
+        await SetStatusAsync(_rahimova, IdentityStatus.Active);
+        await PlanAsync();
+        var enable = (await OperationsAsync()).Single(o => o.Kind == ProvisioningKind.EnableAccount);
+        await ActAsync(ProvisioningAction.Approve, [enable.Id]);
+
+        // Tasdiqdan keyin, bajarilishidan oldin yana ishdan ketdi
+        await SetStatusAsync(_rahimova, IdentityStatus.Terminated);
+        await ExecuteAsync();
+
+        Assert.Equal(ProvisioningStatus.Obsolete, (await OperationsAsync()).Single(o => o.Id == enable.Id).Status);
+        Assert.DoesNotContain(_directory.Calls, c => c.StartsWith("enable"));
+        Assert.False(_directory.Accounts["u-d.rahimova"].Enabled);
+    }
+
+    [Fact]
+    public async Task Account_created_for_a_joiner_is_enabled_on_the_start_date_only_when_configured()
+    {
+        await SetStatusAsync(_aliyev, IdentityStatus.Pending);
+        var settings = Approval with { CreateAccounts = true };
+        await PlanApproveExecuteAsync(settings);
+        await using (var db = pg.CreateContext())
+            Assert.Equal(AccountStatus.Disabled, (await db.Accounts.SingleAsync(a => a.IdentityId == _aliyev, Ct)).Status);
+
+        // Ishga kirish kuni keldi: standart sozlamada akkaunt yoqilmaydi (helpdesk parol berib yoqadi)
+        await SetStatusAsync(_aliyev, IdentityStatus.Active);
+        await PlanAsync(settings);
+        Assert.DoesNotContain(await OperationsAsync(), o => o.Kind == ProvisioningKind.EnableAccount);
+
+        await PlanAsync(settings with { EnableNewAccounts = true });
+        var enable = (await OperationsAsync()).Single(o => o.Kind == ProvisioningKind.EnableAccount);
+        Assert.Equal((_aliyev, "start-date"), (enable.IdentityId!.Value, enable.Reason));
     }
 
     [Theory]

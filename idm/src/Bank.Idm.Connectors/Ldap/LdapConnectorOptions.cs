@@ -8,6 +8,25 @@ public class LdapConnectorOptions
 {
     public string Server { get; set; } = null!;
     public int Port { get; set; } = 636;
+    /// <summary>
+    /// Bir nechta domen kontrolleri (tartib bo'yicha, "host" yoki "host:port"): birinchisi javob bermasa keyingisi. Bo'sh — faqat Server.
+    /// Noto'g'ri parolda keyingisiga o'tilmaydi (akkaunt barcha DC'larda bloklanib qolmasligi uchun).
+    /// </summary>
+    public string[] Servers { get; set; } = [];
+
+    /// <summary>Ulanish tartibi: Servers (berilgan bo'lsa) yoki Server, har biri porti bilan.</summary>
+    public IReadOnlyList<(string Host, int Port)> Endpoints => (Servers.Length > 0 ? Servers : [Server])
+        .Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => ParseEndpoint(s.Trim(), Port)).ToList();
+
+    internal static (string Host, int Port) ParseEndpoint(string value, int defaultPort)
+    {
+        var colon = value.LastIndexOf(':');
+        // IPv6 manzil ("::1") yoki port yo'q
+        if (colon <= 0 || value.Count(c => c == ':') > 1 && !value.StartsWith('[')) return (value, defaultPort);
+        return int.TryParse(value[(colon + 1)..], out var port) && port is > 0 and < 65536
+            ? (value[..colon].Trim('[', ']'), port)
+            : throw new ArgumentException($"LDAP server manzili noto'g'ri: {value}");
+    }
     /// <summary>LDAPS. Bankdagi AD oddiy LDAP'da parol bilan ulanishni rad etadi.</summary>
     public bool UseSsl { get; set; } = true;
     /// <summary>Xizmat akkaunti (faqat o'qish huquqi yetarli).</summary>
@@ -43,6 +62,11 @@ public class LdapConnectorOptions
     public string GroupMemberAttribute { get; set; } = "member";
     /// <summary>true: a'zo qiymati foydalanuvchi DN'i; false: foydalanuvchi logini.</summary>
     public bool GroupMemberIsDn { get; set; } = true;
+    /// <summary>
+    /// Ichma-ich guruhlar (AD: guruh boshqa guruhning a'zosi): xodim ichki guruh orqali tashqi guruh huquqini ham oladi — bu "meros"
+    /// a'zolik sifatida o'qiladi (SoD va hisobotlarda hisobga olinadi, lekin IdM uni o'zgartirmaydi). Faqat GroupMemberIsDn bilan.
+    /// </summary>
+    public bool NestedGroups { get; set; } = true;
 
     // --- Yozish (G bosqichi). Faqat provisioning yoqilganda ishlatiladi ---
 

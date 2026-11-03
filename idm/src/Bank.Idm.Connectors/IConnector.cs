@@ -33,7 +33,10 @@ public record ExternalAccount(
     string? DistinguishedName = null,
     IReadOnlyList<string>? GroupIds = null)
 {
+    /// <summary>Bevosita a'zo bo'lgan guruhlar.</summary>
     public IReadOnlyList<string> GroupIds { get; init; } = GroupIds ?? [];
+    /// <summary>Ichma-ich guruhlar orqali olingan (meros) guruhlar: guruh → qaysi bevosita guruh orqali. Bevosita guruhlar bu yerda yo'q.</summary>
+    public IReadOnlyDictionary<string, string> InheritedGroupIds { get; init; } = new Dictionary<string, string>();
 }
 
 public record ExternalGroup(string ExternalId, string Name, string? Description = null, string? DistinguishedName = null);
@@ -57,10 +60,12 @@ public interface IProvisioningConnector : IDisposable
     Task<ExternalAccount?> FindByLoginAsync(string login, CancellationToken ct = default);
     /// <summary>Tabel raqami bo'yicha akkaunt: yaratishdan oldin — oldingi urinishda yaratilgan bo'lsa, qayta yaratilmaydi.</summary>
     Task<ExternalAccount?> FindByEmployeeNumberAsync(string employeeNumber, CancellationToken ct = default);
-    /// <summary>Bloklangan holatda, parolsiz yaratadi. Natija — yaratilgan akkaunt (o'zgarmas identifikatori bilan).</summary>
+    /// <summary>Bloklangan holatda yaratadi (AD'da — tasodifiy noma'lum parol bilan). Natija — yaratilgan akkaunt (o'zgarmas identifikatori bilan).</summary>
     Task<ExternalAccount> CreateAccountAsync(NewAccount account, CancellationToken ct = default);
     /// <summary>true — bloklandi; false — allaqachon bloklangan edi.</summary>
     Task<bool> DisableAccountAsync(string accountId, CancellationToken ct = default);
+    /// <summary>true — yoqildi; false — allaqachon faol edi. Parol yo'q yoki siyosatga mos emas bo'lsa — doimiy xato.</summary>
+    Task<bool> EnableAccountAsync(string accountId, CancellationToken ct = default);
     /// <summary>true — qo'shildi; false — allaqachon a'zo edi.</summary>
     Task<bool> AddMemberAsync(string accountId, string groupId, CancellationToken ct = default);
     /// <summary>true — olib tashlandi; false — a'zo emas edi.</summary>

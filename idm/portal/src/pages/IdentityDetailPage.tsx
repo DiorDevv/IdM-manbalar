@@ -43,10 +43,13 @@ export function IdentityDetailPage() {
       )}
 
       {access.data && access.data.sod.length > 0 && (
-        <div className="alert bad" style={{ marginBottom: 16 }}>
+        <div className={`alert ${access.data.sod.some(v => !v.exception) ? 'bad' : 'warn'}`} style={{ marginBottom: 16 }}>
           <Icon name="shield" size={18} />
           <div className="grow"><strong>{t.sod.identityAlert}</strong>
-            {access.data.sod.map(v => <div key={v.ruleId} style={{ marginTop: 6 }}><div style={{ marginBottom: 4 }}>{v.ruleName} ({v.ruleCode})</div><Conflict left={v.left} right={v.right} /></div>)}
+            {access.data.sod.map(v => <div key={v.ruleId} style={{ marginTop: 6 }}><div style={{ marginBottom: 4 }}>{v.ruleName} ({v.ruleCode})
+              {v.exception && <> · <span title={t.sod.exceptedBy(v.exception.approvedBy, v.exception.compensatingControl)}>
+                {t.sod.excepted(formatDate(new Date(Date.parse(v.exception.validTo) - 60_000).toISOString()))}</span></>}</div>
+              <Conflict left={v.left} right={v.right} /></div>)}
           </div>
         </div>
       )}
@@ -89,7 +92,7 @@ export function IdentityDetailPage() {
         {access.isError ? <ErrorBox error={access.error} /> : !access.data ? <div className="card-body"><div className="skeleton" /></div> :
           access.data.lines.length === 0 ? <Empty icon="lock" title={t.roles.noAccess} /> : (
             <table className="data">
-              <thead><tr><th>{t.roles.colEntitlements}</th><th>{t.identities.colStatus}</th><th>{t.roles.via}</th><th>Akkaunt</th></tr></thead>
+              <thead><tr><th>{t.roles.colEntitlements}</th><th>{t.identities.colStatus}</th><th>{t.roles.via}</th><th>{t.identities.account}</th></tr></thead>
               <tbody>
                 {access.data.lines.map(l => (
                   <tr key={l.entitlementId}>
@@ -97,7 +100,8 @@ export function IdentityDetailPage() {
                       <div className="cell-sub">{l.applicationCode}</div></td>
                     <td><span className={`badge ${stateTone[l.state]}`} title={t.roles.stateHelp[l.state]}>{t.roles[l.state === 'Granted' ? 'granted' : l.state === 'Missing' ? 'missing' : 'excess']}</span></td>
                     <td className="cell-sub">{l.viaRoles.join(', ') || '—'}</td>
-                    <td className="mono">{l.accounts.join(', ') || '—'}</td>
+                    <td><div className="mono">{l.accounts.join(', ') || '—'}</div>
+                      {l.inheritedVia && l.inheritedVia.length > 0 && <div className="cell-sub" title={t.identities.inheritedVia(l.inheritedVia.join(', '))}>↳ {l.inheritedVia.join(', ')}</div>}</td>
                   </tr>
                 ))}
               </tbody>

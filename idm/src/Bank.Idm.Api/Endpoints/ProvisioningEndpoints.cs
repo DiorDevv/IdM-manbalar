@@ -35,7 +35,8 @@ public static class ProvisioningEndpoints
                     var d = enabled.GetValueOrDefault(a.Code);
                     return new ProvisioningApplicationStatus(a.Code, a.Name, provisioning.ModeOf(a.Code), d?.Provisioning.CreateAccounts ?? false,
                         d?.Provisioning.MaxAutoOperations ?? 0, Count(a.Id, ProvisioningStatus.Proposed), Count(a.Id, ProvisioningStatus.Queued),
-                        Count(a.Id, ProvisioningStatus.Running), Count(a.Id, ProvisioningStatus.Failed), Count(a.Id, ProvisioningStatus.Succeeded));
+                        Count(a.Id, ProvisioningStatus.Running), Count(a.Id, ProvisioningStatus.Failed), Count(a.Id, ProvisioningStatus.Succeeded),
+                        d?.Provisioning.EnableReturning ?? false, d?.Provisioning.EnableNewAccounts ?? false);
                 }).ToList();
         });
 

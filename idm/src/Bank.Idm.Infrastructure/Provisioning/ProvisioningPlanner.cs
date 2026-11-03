@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Bank.Idm.Infrastructure.Provisioning;
 
 public record ProvisioningSettings(ProvisioningMode Mode, bool CreateAccounts = false, int MaxAutoOperations = 20,
-    IReadOnlyCollection<string>? ProtectedLogins = null, bool DisableSuspended = true, int MaxAttempts = 5, int LoginMaxLength = 20);
+    IReadOnlyCollection<string>? ProtectedLogins = null, bool DisableSuspended = true, int MaxAttempts = 5, int LoginMaxLength = 20,
+    bool EnableReturning = true, bool EnableNewAccounts = false);
 
 /// <param name="Skipped">Reja tuzilmadi: sababi (masalan oxirgi sinxronlash muvaffaqiyatsiz).</param>
 /// <param name="Held">Avtomatik rejimda amallar soni chegaradan oshdi: yangi amallar tasdiqqa to'xtatildi.</param>
@@ -21,7 +22,10 @@ public record PlanResult(int Planned, int Created, int Obsoleted, bool Held, str
 /// <item>rol bo'yicha kerak, lekin yo'q guruh — shaxsiy akkauntga qo'shiladi; akkaunt yo'q bo'lsa (sozlamaga ko'ra) yaratiladi;</item>
 /// <item>rol olib tashlangan — faqat IdM o'zi qo'shgan a'zolik olib tashlanadi. Qo'lda berilgan ortiqcha ruxsatlarga tegilmaydi
 /// (ularni attestatsiyada rahbar ko'rib chiqadi): noto'g'ri sozlangan rol butun bankning ruxsatlarini o'chirib yubormasligi uchun;</item>
-/// <item>attestatsiyada rahbar olib tashlagan ortiqcha guruh — olib tashlanadi (rol bo'yicha kerak bo'lib qolmagan bo'lsa).</item>
+/// <item>attestatsiyada rahbar olib tashlagan ortiqcha guruh — olib tashlanadi (rol bo'yicha kerak bo'lib qolmagan bo'lsa);</item>
+/// <item>qayta ishga olingan yoki to'xtatilishi tugagan xodim — IdM o'zi bloklagan akkaunti qayta yoqiladi; IdM yaratgan akkaunt — ishga
+/// kirish kuni (sozlamaga ko'ra). Akkauntning oxirgi holatini IdM emas, boshqa kimdir o'zgartirgan bo'lsa (administrator qo'lda
+/// bloklagan) — tegilmaydi.</item>
 /// </list>
 /// Xizmat akkauntlari va himoyalangan loginlar hech qachon o'zgartirilmaydi. Reja faqat oxirgi sinxronlash muvaffaqiyatli bo'lsa tuziladi
 /// (eskirgan ma'lumot bilan yozilmaydi). Keraksiz bo'lib qolgan kutilayotgan amallar bekor qilinadi (Obsolete).
@@ -30,7 +34,9 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
 {
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    private record AccountRow(Guid Id, Guid? IdentityId, string Login, AccountStatus Status, AccountKind Kind, List<Guid> Entitlements);
+    /// <param name="Entitlements">Haqiqatda bor (bevosita va meros) — "kerak guruh bormi" uchun.</param>
+    /// <param name="Direct">Faqat bevosita a'zolik — olib tashlash uchun (meros a'zolikni ichki guruhdan chiqmasdan olib bo'lmaydi).</param>
+    private record AccountRow(Guid Id, Guid? IdentityId, string Login, AccountStatus Status, AccountKind Kind, List<Guid> Entitlements, List<Guid> Direct);
     private record Planned(ProvisioningKind Kind, Guid? IdentityId, Guid? AccountId, Guid? EntitlementId, string Reason, string? Summary);
 
     public static string DedupKey(Guid applicationId, ProvisioningKind kind, Guid? identityId, Guid? accountId, Guid? entitlementId) =>
@@ -55,7 +61,8 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
                 : $"{app.Code}: oxirgi sinxronlash muvaffaqiyatsiz ({lastRun}), eskirgan ma'lumot bilan yozilmaydi", []);
 
         var accounts = await db.Accounts.AsNoTracking().Where(a => a.ApplicationId == app.Id && a.Status != AccountStatus.Deleted)
-            .Select(a => new AccountRow(a.Id, a.IdentityId, a.Login, a.Status, a.Kind, a.Entitlements.Select(e => e.EntitlementId).ToList()))
+            .Select(a => new AccountRow(a.Id, a.IdentityId, a.Login, a.Status, a.Kind, a.Entitlements.Select(e => e.EntitlementId).ToList(),
+                a.Entitlements.Where(e => e.ViaEntitlementId == null).Select(e => e.EntitlementId).ToList()))
             .ToListAsync(ct);
         var entitlements = await db.Entitlements.AsNoTracking().Where(e => e.ApplicationId == app.Id && e.DeletedAt == null)
             .ToDictionaryAsync(e => e.Id, e => e.Name, ct);
@@ -77,6 +84,13 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
             .Select(o => new { AccountId = o.AccountId!.Value, EntitlementId = o.EntitlementId!.Value, o.Kind, o.CompletedAt }).ToListAsync(ct);
         var granted = history.GroupBy(h => (h.AccountId, h.EntitlementId))
             .Where(g => g.OrderBy(h => h.CompletedAt).Last().Kind == ProvisioningKind.AddMembership).Select(g => g.Key).ToHashSet();
+
+        // Akkaunt holatini IdM oxirgi marta qanday o'zgartirgan: bloklagan (qaysi sababdan), yoqqan yoki yaratgan
+        var lifecycleKinds = new[] { ProvisioningKind.CreateAccount, ProvisioningKind.DisableAccount, ProvisioningKind.EnableAccount };
+        var lastLifecycle = (await db.ProvisioningOperations.AsNoTracking()
+            .Where(o => o.ApplicationId == app.Id && o.Status == ProvisioningStatus.Succeeded && o.AccountId != null && lifecycleKinds.Contains(o.Kind))
+            .Select(o => new { AccountId = o.AccountId!.Value, o.Kind, o.Reason, o.CompletedAt }).ToListAsync(ct))
+            .GroupBy(o => o.AccountId).ToDictionary(g => g.Key, g => g.OrderBy(o => o.CompletedAt).Last());
 
         // Attestatsiyada olib tashlangan ortiqcha guruhlar (hali tizimdan olinmagan)
         var revoked = (await db.AccessReviewItems.AsNoTracking()
@@ -104,7 +118,7 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
                 foreach (var a in touchable)
                 {
                     if (a.Status == AccountStatus.Enabled) plan.Add(new(ProvisioningKind.DisableAccount, i.Id, a.Id, null, "leaver", null));
-                    foreach (var e in a.Entitlements.Where(entitlements.ContainsKey))
+                    foreach (var e in a.Direct.Where(entitlements.ContainsKey))
                         plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "leaver", null));
                 }
                 continue;
@@ -113,8 +127,22 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
                 foreach (var a in touchable.Where(a => a.Status == AccountStatus.Enabled))
                     plan.Add(new(ProvisioningKind.DisableAccount, i.Id, a.Id, null, "suspended", null));
 
+            if (i.Status == IdentityStatus.Active)
+                foreach (var a in touchable.Where(a => a.Status == AccountStatus.Disabled))
+                {
+                    if (!lastLifecycle.TryGetValue(a.Id, out var last)) continue;
+                    var reason = last switch
+                    {
+                        { Kind: ProvisioningKind.DisableAccount, Reason: "leaver" } when settings.EnableReturning => "rehire",
+                        { Kind: ProvisioningKind.DisableAccount, Reason: "suspended" } when settings.EnableReturning => "resumed",
+                        { Kind: ProvisioningKind.CreateAccount } when settings.EnableNewAccounts => "start-date",
+                        _ => null
+                    };
+                    if (reason is not null) plan.Add(new(ProvisioningKind.EnableAccount, i.Id, a.Id, null, reason, null));
+                }
+
             foreach (var a in touchable)
-                foreach (var e in a.Entitlements.Where(e => !want.ContainsKey(e) && entitlements.ContainsKey(e)))
+                foreach (var e in a.Direct.Where(e => !want.ContainsKey(e) && entitlements.ContainsKey(e)))
                 {
                     if (granted.Contains((a.Id, e))) plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "role-removed", null));
                     else if (revoked.Contains((a.Id, e))) plan.Add(new(ProvisioningKind.RemoveMembership, i.Id, a.Id, e, "review-revoked", null));

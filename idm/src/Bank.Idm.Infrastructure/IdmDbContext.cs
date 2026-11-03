@@ -28,6 +28,9 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<AccessReviewItem> AccessReviewItems => Set<AccessReviewItem>();
     public DbSet<ClusterNode> ClusterNodes => Set<ClusterNode>();
     public DbSet<SiemCheckpoint> SiemCheckpoints => Set<SiemCheckpoint>();
+    public DbSet<SodException> SodExceptions => Set<SodException>();
+    public DbSet<ApproverDelegation> ApproverDelegations => Set<ApproverDelegation>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -77,6 +80,8 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         b.Entity<AccountEntitlement>(e =>
         {
             e.HasKey(x => new { x.AccountId, x.EntitlementId });
+            e.Ignore(x => x.IsInherited);
+            e.HasOne<Entitlement>().WithMany().HasForeignKey(x => x.ViaEntitlementId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Account).WithMany(x => x.Entitlements).HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -163,6 +168,41 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<Notification>(e =>
+        {
+            e.HasIndex(x => x.DedupKey).IsUnique();
+            e.HasIndex(x => new { x.SentAt, x.FailedAt, x.NextAttemptAt });
+            e.Property(x => x.DedupKey).HasMaxLength(200);
+            e.Property(x => x.Kind).HasMaxLength(32);
+            e.Property(x => x.Email).HasMaxLength(320);
+            e.Property(x => x.Subject).HasMaxLength(500);
+            e.Property(x => x.Body).HasMaxLength(4000);
+            e.Property(x => x.LastError).HasMaxLength(1000);
+        });
+        b.Entity<ApproverDelegation>(e =>
+        {
+            e.HasIndex(x => new { x.DelegateId, x.ValidTo });
+            e.HasIndex(x => new { x.DelegatorId, x.ValidTo });
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+            e.Property(x => x.CreatedByName).HasMaxLength(256);
+            e.Property(x => x.RevokedBy).HasMaxLength(256);
+            e.HasOne(x => x.Delegator).WithMany().HasForeignKey(x => x.DelegatorId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Delegate).WithMany().HasForeignKey(x => x.DelegateId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<SodException>(e =>
+        {
+            e.HasIndex(x => new { x.SodRuleId, x.IdentityId });
+            e.HasIndex(x => x.ValidTo);
+            e.Property(x => x.Reason).HasMaxLength(2000);
+            e.Property(x => x.CompensatingControl).HasMaxLength(2000);
+            e.Property(x => x.CreatedBy).HasMaxLength(256);
+            e.Property(x => x.CreatedByName).HasMaxLength(256);
+            e.Property(x => x.RevokedBy).HasMaxLength(256);
+            e.Property(x => x.RevokedByName).HasMaxLength(256);
+            e.HasOne(x => x.SodRule).WithMany().HasForeignKey(x => x.SodRuleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<AccessReviewCampaign>(e =>
         {

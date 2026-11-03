@@ -115,7 +115,7 @@ public class LdapProvisionerLiveTests : IDisposable
         using var provisioner = new LdapProvisioner(options);
         var groupId = (await new LdapConnector(options).ReadAsync(Ct)).Groups.Single().ExternalId;
 
-        // Yaratish: bloklangan, parolsiz, tabel raqami bilan
+        // Yaratish: bloklangan (OpenLDAP'da userPassword yo'q — kirib bo'lmaydi), tabel raqami bilan
         Assert.Null(await provisioner.FindByEmployeeNumberAsync("TEST-1", Ct));
         var created = await provisioner.CreateAccountAsync(new NewAccount("t.testov", "Test", "Testov", "Testov Test", "TEST-1", "t.testov@bank.local", "IT", "Sinovchi"), Ct);
         Assert.True(Guid.TryParse(created.ExternalId, out _));
@@ -143,6 +143,11 @@ public class LdapProvisionerLiveTests : IDisposable
         Assert.True(await provisioner.DisableAccountAsync(created.ExternalId, Ct));
         Assert.False((await new LdapConnector(options).ReadAsync(Ct)).Accounts.Single().IsEnabled);
 
+        // Qayta yoqish: bloklash qiymati olinadi; ikkinchi marta — o'zgarishsiz
+        Assert.True(await provisioner.EnableAccountAsync(created.ExternalId, Ct));
+        Assert.True((await new LdapConnector(options).ReadAsync(Ct)).Accounts.Single().IsEnabled);
+        Assert.False(await provisioner.EnableAccountAsync(created.ExternalId, Ct));
+
         // Qamrovdan tashqarida yoki mavjud bo'lmagan obyekt — doimiy xato
         var missing = await Assert.ThrowsAsync<ConnectorException>(() => provisioner.DisableAccountAsync(Guid.NewGuid().ToString(), Ct));
         Assert.Contains("topilmadi", missing.Message);
@@ -168,3 +173,22 @@ public class LdapProvisionerLiveTests : IDisposable
         Assert.True(e.IsTransient);
     }
 }
+
+public class RandomPasswordTests
+{
+    [Fact]
+    public void Generated_password_is_long_complex_and_unique()
+    {
+        var passwords = Enumerable.Range(0, 50).Select(_ => LdapProvisioner.RandomPassword()).ToList();
+        Assert.Equal(50, passwords.Distinct().Count());
+        Assert.All(passwords, p =>
+        {
+            Assert.Equal(40, p.Length);
+            Assert.Contains(p, char.IsUpper);
+            Assert.Contains(p, char.IsLower);
+            Assert.Contains(p, char.IsDigit);
+            Assert.Contains(p, c => !char.IsLetterOrDigit(c));
+        });
+    }
+}
+

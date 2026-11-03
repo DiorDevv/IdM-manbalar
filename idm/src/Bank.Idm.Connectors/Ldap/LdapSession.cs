@@ -6,9 +6,29 @@ namespace Bank.Idm.Connectors.Ldap;
 /// <summary>LDAP ulanishi va so'rovlar: o'qish (LdapConnector) va yozish (LdapProvisioner) uchun umumiy.</summary>
 internal static class LdapSession
 {
+    /// <summary>Serverlarni tartib bilan sinaydi: vaqtinchalik xatoda keyingisi, noto'g'ri parolda (49) darhol to'xtaydi.</summary>
     public static LdapConnection Open(LdapConnectorOptions options, string bindDn, string password)
     {
-        var connection = new LdapConnection(new LdapDirectoryIdentifier(options.Server, options.Port), new NetworkCredential(bindDn, password), AuthType.Basic)
+        var endpoints = options.Endpoints;
+        if (endpoints.Count == 0) throw new ConnectorException("LDAP serveri ko'rsatilmagan (Server yoki Servers)");
+        var errors = new List<string>();
+        foreach (var (host, port) in endpoints)
+        {
+            try
+            {
+                return OpenOne(options, host, port, bindDn, password);
+            }
+            catch (ConnectorException e) when (e.IsTransient)
+            {
+                errors.Add(e.Message);
+            }
+        }
+        throw new ConnectorException(errors.Count == 1 ? errors[0] : $"Hech bir LDAP serveriga ulanib bo'lmadi: {string.Join("; ", errors)}", transient: true);
+    }
+
+    private static LdapConnection OpenOne(LdapConnectorOptions options, string host, int port, string bindDn, string password)
+    {
+        var connection = new LdapConnection(new LdapDirectoryIdentifier(host, port), new NetworkCredential(bindDn, password), AuthType.Basic)
         {
             Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds)
         };
@@ -26,7 +46,7 @@ internal static class LdapSession
             var scheme = options.UseSsl ? "ldaps" : "ldap";
             // Ulanish xatosi vaqtinchalik bo'lishi mumkin (server o'chgan, tarmoq); noto'g'ri parol (49) — doimiy
             var transient = e is LdapException { ErrorCode: not 49 };
-            throw new ConnectorException($"{scheme}://{options.Server}:{options.Port} ga ulanib bo'lmadi ({bindDn}): {e.Message}", e, transient);
+            throw new ConnectorException($"{scheme}://{host}:{port} ga ulanib bo'lmadi ({bindDn}): {e.Message}", e, transient);
         }
     }
 

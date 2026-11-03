@@ -7,7 +7,16 @@ using Microsoft.EntityFrameworkCore;
 namespace Bank.Idm.Infrastructure.Requests;
 
 /// <summary>Kim amal bajaryapti: SSO logini, unga bog'langan xodim (AD akkaunti orqali) va IdM administratorimi.</summary>
-public record RequestActor(string Login, string? Name, Guid? IdentityId, bool IsAdmin, string? IpAddress = null, string? CorrelationId = null);
+/// <param name="ActingFor">Amaldagi o'rinbosarlik: shu xodimlar o'rniga qaror qila oladi (zanjirsiz).</param>
+public record RequestActor(string Login, string? Name, Guid? IdentityId, bool IsAdmin, string? IpAddress = null, string? CorrelationId = null,
+    IReadOnlyList<Guid>? ActingFor = null)
+{
+    /// <summary>Men va men o'rinbosari bo'lgan xodimlar: tasdiqlovchi sifatida kimlar o'rnida qaror qilaman.</summary>
+    public IReadOnlyList<Guid> Approvers => IdentityId is { } me ? [me, .. ActingFor ?? []] : [];
+    public bool ActsFor(Guid approver) => Approvers.Contains(approver);
+    /// <summary>Qaror boshqa xodim o'rniga bo'lsa — o'sha xodim (audit uchun).</summary>
+    public Guid? OnBehalfOf(Guid? approver) => approver is { } a && a != IdentityId && ActsFor(a) ? a : null;
+}
 
 /// <summary>Xizmat natijasi: muvaffaqiyat yoki HTTP holati va foydalanuvchiga ko'rsatiladigan xabar.</summary>
 /// <summary>Arizada saqlanadigan SoD ziddiyati (JSON).</summary>
@@ -120,7 +129,8 @@ public class AccessRequestService(IdmDbContext db, AuditLog audit, AccessAnalyze
         var entries = new List<AuditEntry>
         {
             Entry(actor, approve ? "request.step-approved" : "request.rejected", request.Id,
-                new { role = request.Role.Code, beneficiary = request.Beneficiary.EmployeeNumber, step = step.Kind.ToString(), comment = text })
+                new { role = request.Role.Code, beneficiary = request.Beneficiary.EmployeeNumber, step = step.Kind.ToString(), comment = text,
+                    onBehalfOf = actor.OnBehalfOf(step.ApproverId) })
         };
         if (!approve)
         {
@@ -164,7 +174,7 @@ public class AccessRequestService(IdmDbContext db, AuditLog audit, AccessAnalyze
     public static bool CanDecide(RequestActor actor, AccessRequest request, Approval step)
     {
         if (actor.IdentityId is { } me && (me == request.BeneficiaryId || me == request.RequesterId)) return false;
-        return step.ApproverId is { } approver ? approver == actor.IdentityId : actor.IsAdmin;
+        return step.ApproverId is { } approver ? actor.ActsFor(approver) : actor.IsAdmin;
     }
 
     private IEnumerable<AuditEntry> Grant(RequestActor actor, AccessRequest request, Role role, Identity beneficiary, DateTimeOffset now)

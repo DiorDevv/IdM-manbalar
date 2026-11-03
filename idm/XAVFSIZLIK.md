@@ -83,8 +83,10 @@ Rollar: oddiy xodim, rahbar (xodimlari bor), administrator, auditor — har biri
 
 - **TCP syslog ilova darajasida tasdiqlanmaydi** (RELP yo'q): ulanish uzilganda oxirgi to'plamning bir qismi takror yuborilishi mumkin
   (yo'qolmaydi — checkpoint yuborishdan keyin yangilanadi); SIEM `id` bo'yicha takrorni tashlashi kerak.
-- **Akkaunt yaratish** bloklangan va parolsiz: parolni helpdesk beradi — jarayon bank tomonida tasdiqlanishi kerak.
-- **Yakunlangan attestatsiyada ko'rib chiqilmagan ruxsatlar** avtomatik olinmaydi (siyosat bank qarori bilan qo'shiladi).
+- **Akkaunt yaratish** bloklangan va tasodifiy noma'lum parol bilan (AD; parol saqlanmaydi): xodimga parolni helpdesk beradi —
+  jarayon bank tomonida tasdiqlanishi kerak. Yozish akkauntining eng kam huquqlari README'da (Samba AD'da sinovdan o'tgan).
+- **Yakunlangan attestatsiyada ko'rib chiqilmagan ruxsatlar** standart holatda avtomatik olinmaydi; kampaniyada "ko'rib chiqilmaganlarni
+  olib tashlash" siyosatini yoqish — bank qarori.
 - **SimpleIdServer** — alohida mahsulot: o'z qabul testlarida (`SimpleIdServer.IdServer.Host.Acceptance.Tests`, 316 ta) bizning
   patch'larimizdan oldin ham 18 ta yiqilish bor (2026-10-27 holati; access token patch'i bu sonni o'zgartirmaydi). SSO'ni bank
   standartlariga moslash alohida baholanadi.

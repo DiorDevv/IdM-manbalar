@@ -7,6 +7,7 @@ import type { PagedResult, RequestListItem, RequestStatus } from '../api/types'
 import { formatDateTime, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { Empty, ErrorBox, PageHead, Pager, Person, RiskBadge, SkeletonRows, Tabs, type TabDef } from '../components/ui'
+import { DelegationsPanel } from './DelegationsPanel'
 
 const q = t.requests
 const PAGE = 25
@@ -76,6 +77,7 @@ export function RequestsPage() {
           </>
         )}
       </section>
+      {me.data?.identityId && <DelegationsPanel />}
     </>
   )
 }

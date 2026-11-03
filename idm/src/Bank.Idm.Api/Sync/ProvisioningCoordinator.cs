@@ -56,8 +56,10 @@ public class ProvisioningCoordinator(ConnectorSyncCoordinator sync, IServiceScop
             var fulfilled = await scope.ServiceProvider.GetRequiredService<ProvisioningPlanner>()
                 .CompleteRequestsAsync(ProvisioningExecutor.SystemActor, ProvisioningExecutor.SystemActorName, ct);
             if (fulfilled > 0) logger.LogInformation("{Count} ta ariza bajarildi", fulfilled);
-            var remediated = await scope.ServiceProvider.GetRequiredService<Bank.Idm.Infrastructure.Reviews.AccessReviewService>()
-                .RemediateAsync(ProvisioningExecutor.SystemActor, ProvisioningExecutor.SystemActorName, ct);
+            var reviews = scope.ServiceProvider.GetRequiredService<Bank.Idm.Infrastructure.Reviews.AccessReviewService>();
+            var expired = await reviews.ExpireDueAsync(ProvisioningExecutor.SystemActor, "IdM (attestatsiya siyosati)", ct);
+            if (expired > 0) logger.LogInformation("Muddati o'tgan {Count} ta attestatsiya kampaniyasi siyosat bo'yicha yakunlandi", expired);
+            var remediated = await reviews.RemediateAsync(ProvisioningExecutor.SystemActor, ProvisioningExecutor.SystemActorName, ct);
             if (remediated > 0) logger.LogInformation("Attestatsiyada olib tashlangan {Count} ta ruxsat tizimdan olindi", remediated);
         }
         catch (Exception e) when (!ct.IsCancellationRequested)

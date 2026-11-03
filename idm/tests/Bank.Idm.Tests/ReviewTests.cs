@@ -138,6 +138,74 @@ public class ReviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Inherited_group_is_not_reviewed_on_its_own()
+    {
+        // Karimovning ABS guruhi aslida kredit guruhi orqali (ichma-ich): alohida olib bo'lmaydi, ko'rib chiqishga tushmaydi
+        await using (var db = pg.CreateContext())
+        {
+            await db.AccountEntitlements.Where(ae => ae.AccountId == _karimovAcc && ae.EntitlementId == _abs)
+                .ExecuteUpdateAsync(x => x.SetProperty(ae => ae.ViaEntitlementId, _credit), Ct);
+            Assert.Equal(1, (await Service(db).PreviewAsync(Scope(), Ct)).Value!.Entitlements);
+        }
+    }
+
+    [Fact]
+    public async Task Overdue_campaign_with_the_policy_revokes_what_nobody_reviewed()
+    {
+        var withPolicy = await CreateAsync(Scope() with { RevokeUnreviewed = true });
+        var items = await ItemsAsync();
+        var kept = items.First(i => i.ReviewerId is null).Id;
+        Assert.Equal(1, (await DecideAsync(Boss, [kept], keep: true)).Value);
+
+        // Muddat kuni hali tugamagan — hech narsa; oxirgi kundan keyin — yakunlanadi
+        _time.Now = _time.Now.AddDays(14);
+        await using (var db = pg.CreateContext()) Assert.Equal(0, await Service(db).ExpireDueAsync("system", "IdM", Ct));
+        _time.Now = _time.Now.AddDays(2);
+        await using (var db = pg.CreateContext()) Assert.Equal(1, await Service(db).ExpireDueAsync("system", "IdM", Ct));
+
+        await using (var db = pg.CreateContext())
+        {
+            var campaign = await db.AccessReviewCampaigns.SingleAsync(c => c.Id == withPolicy.Id, Ct);
+            Assert.Equal(AccessReviewStatus.Completed, campaign.Status);
+            var after = await db.AccessReviewItems.Where(i => i.CampaignId == withPolicy.Id).ToListAsync(Ct);
+            Assert.Equal(AccessReviewDecision.Keep, after.Single(i => i.Id == kept).Decision);
+            Assert.All(after.Where(i => i.Id != kept), i => Assert.Equal((AccessReviewDecision.Revoke, "system"), (i.Decision, i.DecidedBy)));
+            // Rol darhol tugadi
+            var role = after.Single(i => i.Kind == AccessReviewItemKind.Role);
+            Assert.NotNull((await db.IdentityRoles.SingleAsync(r => r.Id == role.IdentityRoleId, Ct)).ValidTo);
+            var completed = await db.AuditEvents.SingleAsync(e => e.Action == "review.campaign-completed", Ct);
+            Assert.Contains("\"autoRevoked\":2", completed.Details);
+            Assert.Equal(2, await db.AuditEvents.CountAsync(e => e.Action == "review.revoked" && e.Details!.Contains("\"automatic\":true"), Ct));
+            Assert.Equal(0, await Service(db).ExpireDueAsync("system", "IdM", Ct));   // takror — hech narsa
+        }
+    }
+
+    [Fact]
+    public async Task Overdue_campaign_without_the_policy_stays_open_and_leaves_unreviewed_items()
+    {
+        var campaign = await CreateAsync();
+        _time.Now = _time.Now.AddDays(30);
+        await using (var db = pg.CreateContext()) Assert.Equal(0, await Service(db).ExpireDueAsync("system", "IdM", Ct));
+        await using (var db = pg.CreateContext()) Assert.NotNull((await Service(db).CloseAsync(Boss, campaign.Id, cancel: false, Ct)).Value);
+        Assert.All(await ItemsAsync(), i => Assert.Equal(AccessReviewDecision.Pending, i.Decision));
+    }
+
+    [Fact]
+    public async Task Delegate_reviews_for_the_manager_but_never_their_own_access()
+    {
+        await CreateAsync();
+        var karimovItems = (await ItemsAsync()).Where(i => i.IdentityId == _karimov).Select(i => i.Id).ToList();
+        var colleague = new RequestActor("n.colleague", "Hamkasb", Guid.NewGuid(), IsAdmin: false);
+
+        Assert.Equal(403, (await DecideAsync(colleague, karimovItems, keep: true)).Status);
+        // Karimov o'z rahbarining o'rinbosari bo'lsa ham o'z ruxsatini ko'rib chiqa olmaydi
+        Assert.Equal(403, (await DecideAsync(new RequestActor("a.karimov", "Karimov", _karimov, false, ActingFor: [_rahimova]), karimovItems, keep: true)).Status);
+        Assert.Equal(karimovItems.Count, (await DecideAsync(colleague with { ActingFor = [_rahimova] }, karimovItems, keep: true)).Value);
+        await using var db = pg.CreateContext();
+        Assert.Contains(_rahimova.ToString(), (await db.AuditEvents.FirstAsync(e => e.Action == "review.kept", Ct)).Details);
+    }
+
+    [Fact]
     public async Task Only_the_assigned_reviewer_decides_nobody_reviews_themselves_and_decisions_are_final()
     {
         await CreateAsync();

@@ -25,4 +25,10 @@ public class AccountEntitlement
     public Guid EntitlementId { get; set; }
     public Entitlement Entitlement { get; set; } = null!;
     public DateTimeOffset GrantedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>
+    /// Bo'sh — bevosita a'zolik. Aks holda meros: ichma-ich guruh orqali (shu bevosita guruh a'zoligi tufayli). Meros a'zolik
+    /// "haqiqatda bor" va SoD'da hisobga olinadi, lekin uni tizimga yozish yoki attestatsiya bevosita olib tashlamaydi.
+    /// </summary>
+    public Guid? ViaEntitlementId { get; set; }
+    public bool IsInherited => ViaEntitlementId is not null;
 }

@@ -54,4 +54,22 @@ public class LdapConnectorLiveTests
         var e = await Assert.ThrowsAsync<ConnectorException>(() => new LdapConnector(OpenLdap("noto'g'ri")).ReadAsync(TestContext.Current.CancellationToken));
         Assert.Contains("ulanib bo'lmadi", e.Message);
     }
+
+    [Fact]
+    public async Task Falls_over_to_the_next_domain_controller_but_not_on_a_wrong_password()
+    {
+        Assert.SkipWhen(Server is null, "IDM_TEST_LDAP ko'rsatilmagan");
+        var ct = TestContext.Current.CancellationToken;
+        var o = OpenLdap();
+        o.TimeoutSeconds = 5;
+        o.Servers = ["127.0.0.1:1", $"{o.Server}:{o.Port}"];   // birinchisi — hech kim tinglamaydi
+
+        Assert.NotEmpty((await new LdapConnector(o).ReadAsync(ct)).Accounts);
+
+        var wrong = OpenLdap("noto'g'ri");
+        wrong.Servers = [$"{wrong.Server}:{wrong.Port}", "127.0.0.1:1"];
+        var e = await Assert.ThrowsAsync<ConnectorException>(() => new LdapConnector(wrong).ReadAsync(ct));
+        Assert.False(e.IsTransient);
+        Assert.DoesNotContain("127.0.0.1:1", e.Message);   // ikkinchisiga urinilmadi
+    }
 }

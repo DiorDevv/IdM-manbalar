@@ -57,6 +57,11 @@ public static class MetricsEndpoints
         Metric("idm_access_requests_pending", "Ko'rib chiqilayotgan arizalar", "gauge", [("", await db.AccessRequests.CountAsync(r => r.Status == AccessRequestStatus.Pending, ct))]);
         Metric("idm_review_items_pending", "Faol kampaniyalarda ko'rib chiqilmagan ruxsatlar", "gauge",
             [("", await db.AccessReviewItems.CountAsync(i => i.Decision == AccessReviewDecision.Pending && i.Campaign.Status == AccessReviewStatus.Active, ct))]);
+        Metric("idm_notifications", "Xabarnomalar navbati: kutilmoqda (pending) va yuborilmagan (failed)", "gauge",
+        [
+            (Label("status", "pending"), await db.Notifications.CountAsync(n => n.SentAt == null && n.FailedAt == null, ct)),
+            (Label("status", "failed"), await db.Notifications.CountAsync(n => n.FailedAt != null, ct))
+        ]);
         Metric("idm_leavers_with_active_accounts", "Ishdan ketgan, akkaunti faol xodimlar", "gauge", [("", await ReportEndpoints.LeaversWithActiveAccounts(db).CountAsync(ct))]);
         Metric("idm_orphan_accounts", "Egasiz shaxsiy akkauntlar", "gauge",
             [("", await db.Accounts.CountAsync(a => a.IdentityId == null && a.Status != AccountStatus.Deleted && a.Kind == AccountKind.Personal, ct))]);

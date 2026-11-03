@@ -69,6 +69,21 @@ public class ProductionGuardTests
     }
 
     [Fact]
+    public void Mail_notifications_require_starttls_and_an_https_portal_link()
+    {
+        var on = new Dictionary<string, string?>(Secure)
+        {
+            ["Idm:Notifications:Enabled"] = "true", ["Idm:Notifications:PortalUrl"] = "https://idm.bank.uz",
+            ["Idm:Notifications:Smtp:Host"] = "smtp.bank.uz", ["Idm:Notifications:Smtp:From"] = "idm@bank.uz",
+        };
+        Assert.Empty(Check(on).Errors);
+        var bad = Check(new(on) { ["Idm:Notifications:Smtp:UseTls"] = "false", ["Idm:Notifications:PortalUrl"] = "http://idm.bank.uz" });
+        Assert.Equal(2, bad.Errors.Count);
+        Assert.Contains(bad.Errors, e => e.Contains("STARTTLS"));
+        Assert.Contains(bad.Errors, e => e.Contains("PortalUrl"));
+    }
+
+    [Fact]
     public void Secrets_in_a_settings_file_are_refused_but_the_same_value_from_environment_is_fine()
     {
         var file = Path.Combine(Path.GetTempPath(), $"idm-{Guid.NewGuid():N}.json");

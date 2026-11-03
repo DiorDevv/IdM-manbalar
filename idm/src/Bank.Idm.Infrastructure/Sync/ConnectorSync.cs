@@ -115,19 +115,35 @@ public class ConnectorSync(IdmDbContext db, AuditLog audit, TimeProvider time) :
             a.LastSyncedAt = now;
             pairs.Add((a, x));
 
-            var desired = x.GroupIds.Select(id => entByExternal.GetValueOrDefault(id)).OfType<Entitlement>().ToDictionary(e => e.Id);
+            // Bevosita a'zolik (via = null) va ichma-ich guruh orqali meros (via = bevosita guruh); ikkalasi bo'lsa — bevosita
+            var desired = new Dictionary<Guid, (Entitlement Entitlement, Entitlement? Via)>();
+            foreach (var e in x.GroupIds.Select(id => entByExternal.GetValueOrDefault(id)).OfType<Entitlement>()) desired[e.Id] = (e, null);
+            foreach (var (groupId, viaId) in x.InheritedGroupIds)
+                if (entByExternal.GetValueOrDefault(groupId) is { } e && entByExternal.GetValueOrDefault(viaId) is { } via)
+                    desired.TryAdd(e.Id, (e, via));
             foreach (var current in a.Entitlements.Where(ae => !desired.ContainsKey(ae.EntitlementId)).ToList())
             {
                 a.Entitlements.Remove(current);
                 run.MembershipsRemoved++;
-                Audit("account.entitlement-removed", "account", a.Id, new { application = app.Code, login = a.Login, group = entitlements.FirstOrDefault(e => e.Id == current.EntitlementId)?.Name });
+                Audit("account.entitlement-removed", "account", a.Id, new { application = app.Code, login = a.Login,
+                    group = entitlements.FirstOrDefault(e => e.Id == current.EntitlementId)?.Name, inherited = current.IsInherited ? true : (bool?)null });
+            }
+            foreach (var current in a.Entitlements)
+            {
+                var via = desired[current.EntitlementId].Via;
+                if (current.ViaEntitlementId == via?.Id) continue;
+                current.ViaEntitlementId = via?.Id;
+                Audit("account.entitlement-changed", "account", a.Id, new { application = app.Code, login = a.Login,
+                    group = desired[current.EntitlementId].Entitlement.Name, via = via?.Name, inherited = via is not null });
             }
             var have = a.Entitlements.Select(ae => ae.EntitlementId).ToHashSet();
-            foreach (var e in desired.Values.Where(e => !have.Contains(e.Id)))
+            foreach (var (e, via) in desired.Values.Where(d => !have.Contains(d.Entitlement.Id)))
             {
-                a.Entitlements.Add(new AccountEntitlement { AccountId = a.Id, EntitlementId = e.Id, GrantedAt = now });
+                a.Entitlements.Add(new AccountEntitlement { AccountId = a.Id, EntitlementId = e.Id, GrantedAt = now, ViaEntitlementId = via?.Id });
                 run.MembershipsAdded++;
-                Audit("account.entitlement-added", "account", a.Id, new { application = app.Code, login = a.Login, group = e.Name });
+                Audit("account.entitlement-added", "account", a.Id, via is null
+                    ? new { application = app.Code, login = a.Login, group = e.Name }
+                    : (object)new { application = app.Code, login = a.Login, group = e.Name, via = via.Name, inherited = true });
             }
         }
         foreach (var a in vanished)

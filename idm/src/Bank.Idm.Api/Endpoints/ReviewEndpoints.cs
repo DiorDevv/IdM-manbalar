@@ -104,15 +104,16 @@ public static class ReviewEndpoints
     {
         var me = actor.IdentityId;
         var admin = actor.IsAdmin;
+        var reviewers = actor.Approvers.ToList();
         return query.Where(i => i.Decision == AccessReviewDecision.Pending && i.Campaign.Status == AccessReviewStatus.Active && i.IdentityId != me
-            && (i.ReviewerId == me && me != null || i.ReviewerId == null && admin));
+            && (i.ReviewerId != null && reviewers.Contains(i.ReviewerId.Value) || i.ReviewerId == null && admin));
     }
 
     private static IQueryable<CampaignItem> Campaigns(IQueryable<AccessReviewCampaign> source) => source.AsNoTracking().Select(c => new CampaignItem(c.Id, c.Name,
         c.Description, c.Status, c.Department, c.Application == null ? null : c.Application.Code, c.PrivilegedOnly, c.DueDate, c.CreatedAt, c.CreatedBy,
         c.CreatedByName, c.ClosedAt, c.Items.Count, c.Items.Count(i => i.Decision == AccessReviewDecision.Keep),
         c.Items.Count(i => i.Decision == AccessReviewDecision.Revoke), c.Items.Count(i => i.Decision == AccessReviewDecision.Pending),
-        c.Items.Count(i => i.Decision == AccessReviewDecision.Revoke && i.RemediatedAt == null)));
+        c.Items.Count(i => i.Decision == AccessReviewDecision.Revoke && i.RemediatedAt == null), c.RevokeUnreviewed));
 
-    private static CampaignScope Scope(CampaignBody b) => new(b.Name, b.Description, b.Department, b.ApplicationId, b.PrivilegedOnly, b.DueDate);
+    private static CampaignScope Scope(CampaignBody b) => new(b.Name, b.Description, b.Department, b.ApplicationId, b.PrivilegedOnly, b.DueDate, b.RevokeUnreviewed);
 }

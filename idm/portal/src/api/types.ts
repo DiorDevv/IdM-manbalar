@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null; ownedRoles?: number; ownedRolesDue?: number }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number
@@ -24,7 +24,7 @@ export interface IdentityListItem {
   id: string; employeeNumber: string; displayName: string; email: string | null; department: string | null
   jobTitle: string | null; status: IdentityStatus; source: IdentitySource; accountCount: number; updatedAt: string
 }
-export interface EntitlementRef { id: string; name: string; isPrivileged: boolean }
+export interface EntitlementRef { id: string; name: string; isPrivileged: boolean; via?: string | null }
 export interface AccountItem { id: string; applicationCode: string; applicationName: string; login: string; status: AccountStatus; kind: string; lastSyncedAt: string | null; entitlements: EntitlementRef[] }
 export interface IdentityDetails {
   id: string; employeeNumber: string; firstName: string; lastName: string; middleName: string | null; email: string | null
@@ -64,13 +64,20 @@ export interface RoleMemberItem { identityId: string; name: string; employeeNumb
 export interface RoleDetails {
   id: string; code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean; createdAt: string
   entitlements: EntitlementPick[]; rules: RoleRuleItem[]; members: RoleMemberItem[]; sodConflicts: string[]
+  ownerId?: string | null; ownerName?: string | null; ownerStatus?: IdentityStatus | null; certifiedAt?: string | null; certifiedBy?: string | null
 }
-export interface SaveRole { code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean }
+export interface OwnedRoleItem {
+  id: string; code: string; name: string; description: string | null; risk: RiskLevel; ownerName: string | null; members: number
+  entitlements: EntitlementPick[]; rules: string[]; certifiedAt: string | null; certifiedBy: string | null; due: boolean
+}
+export interface SaveRole { code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean; ownerId?: string | null }
 export interface AttributeValues { departments: string[]; jobTitles: string[] }
 export interface BirthrightResult { assigned: number; removed: number; identitiesChecked: number }
-export interface AccessLine { entitlementId: string; applicationCode: string; entitlementName: string; isPrivileged: boolean; state: AccessState; viaRoles: string[]; accounts: string[] }
+export interface AccessLine { entitlementId: string; applicationCode: string; entitlementName: string; isPrivileged: boolean; state: AccessState; viaRoles: string[]; accounts: string[]; inheritedVia?: string[] }
 export interface IdentityRoleItem { roleId: string; code: string; name: string; source: AssignmentSource; validFrom: string }
-export interface SodViolationItem { ruleId: string; ruleCode: string; ruleName: string; risk: RiskLevel; identityId: string; identityName: string; employeeNumber: string; department: string | null; left: string[]; right: string[] }
+export interface SodViolationItem { ruleId: string; ruleCode: string; ruleName: string; risk: RiskLevel; identityId: string; identityName: string; employeeNumber: string; department: string | null; left: string[]; right: string[]
+  exception?: SodExceptionInfo | null }
+export interface SodExceptionInfo { id: string; validTo: string; compensatingControl: string; approvedBy: string }
 export interface IdentityAccess { roles: IdentityRoleItem[]; lines: AccessLine[]; sod: SodViolationItem[] }
 export interface SodRuleItem { id: string; code: string; name: string; description: string | null; risk: RiskLevel; left: EntitlementPick[]; right: EntitlementPick[]; violationCount: number; createdAt: string; createdBy: string }
 export interface DriftItem { identityId: string; name: string; employeeNumber: string; department: string | null; status: IdentityStatus; missing: number; excess: number }
@@ -81,6 +88,11 @@ export type StepKind = 'Manager' | 'ResourceOwner' | 'Security'
 export type Decision = 'Pending' | 'Approved' | 'Rejected'
 export interface CatalogRole { id: string; code: string; name: string; description: string | null; risk: RiskLevel; entitlements: string[] }
 export interface PersonBrief { id: string; name: string; employeeNumber: string; department: string | null; jobTitle: string | null }
+export interface DelegationItem {
+  id: string; delegatorId: string; delegatorName: string; delegateId: string; delegateName: string
+  validFrom: string; validTo: string; reason: string | null; createdBy: string; active: boolean
+}
+export interface MyDelegations { given: DelegationItem[]; received: DelegationItem[] }
 export interface SodConflictInfo { ruleCode: string; ruleName: string; risk: string; left: string[]; right: string[] }
 export interface RequestPreview { canSubmit: boolean; blocker: string | null; steps: { kind: StepKind; approverName: string | null; auto: boolean }[]; sod: SodConflictInfo[] }
 export interface RequestListItem {
@@ -94,7 +106,7 @@ export interface RequestDetails {
   approvals: ApprovalItem[]; sodConflicts: SodConflictInfo[]; canDecide: boolean; canCancel: boolean
 }
 
-export type ProvisioningKind = 'CreateAccount' | 'DisableAccount' | 'AddMembership' | 'RemoveMembership'
+export type ProvisioningKind = 'CreateAccount' | 'DisableAccount' | 'EnableAccount' | 'AddMembership' | 'RemoveMembership'
 export type ProvisioningStatus = 'Proposed' | 'Queued' | 'Running' | 'Succeeded' | 'Failed' | 'Obsolete' | 'Cancelled'
 export type ProvisioningMode = 'Off' | 'Approval' | 'Automatic'
 export interface ProvisioningOperationItem {
@@ -106,6 +118,7 @@ export interface ProvisioningOperationItem {
 export interface ProvisioningApplicationStatus {
   code: string; name: string; mode: ProvisioningMode; createAccounts: boolean; maxAutoOperations: number
   proposed: number; queued: number; running: number; failed: number; succeededLast24h: number
+  enableReturning: boolean; enableNewAccounts: boolean
 }
 export interface PlanResult { planned: number; created: number; obsoleted: number; held: boolean; skipped: string | null; warnings: string[] }
 export interface ProvisioningActionResult { changed: number; skipped: number; error: string | null }
@@ -113,12 +126,12 @@ export interface ProvisioningActionResult { changed: number; skipped: number; er
 export type ReviewStatus = 'Active' | 'Completed' | 'Cancelled'
 export type ReviewDecision = 'Pending' | 'Keep' | 'Revoke'
 export type ReviewItemKind = 'Role' | 'Entitlement'
-export interface CampaignBody { name: string; description: string | null; department: string | null; applicationId: string | null; privilegedOnly: boolean; dueDate: string }
+export interface CampaignBody { name: string; description: string | null; department: string | null; applicationId: string | null; privilegedOnly: boolean; dueDate: string; revokeUnreviewed?: boolean }
 export interface CampaignPreview { items: number; roles: number; entitlements: number; privileged: number; identities: number; reviewers: number; adminPool: number }
 export interface CampaignItem {
   id: string; name: string; description: string | null; status: ReviewStatus; department: string | null; applicationCode: string | null; privilegedOnly: boolean
   dueDate: string; createdAt: string; createdBy: string; createdByName: string | null; closedAt: string | null
-  total: number; kept: number; revoked: number; pending: number; revokedOpen: number
+  total: number; kept: number; revoked: number; pending: number; revokedOpen: number; revokeUnreviewed?: boolean
 }
 export interface CampaignDetails { campaign: CampaignItem; reviewers: { reviewerId: string | null; reviewerName: string | null; total: number; pending: number }[] }
 export interface ReviewItem {
