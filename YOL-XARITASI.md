@@ -156,6 +156,10 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] Yuklama testi: 10 000 va 50 000 xodim; topilgan sekinlik (attestatsiya 60 s) va xotira (Excel 1.7 GB) tuzatildi.
 - [x] Zaxira nusxa va tiklashni tekshirish skriptlari, `verify-audit`, PostgreSQL eng kam huquqli rollar (sinovdan o'tgan).
 - [x] Axborot xavfsizligi bo'limi uchun hujjat: tahdidlar va nazoratlar, pentest va chiqarish ro'yxatlari (`idm/XAVFSIZLIK.md`).
+- [x] So'rovlar chegarasi (2026-11-06): login/IP bo'yicha, og'ir amallar navbati, so'rov vaqt chegarasi (`Idm:Limits`), 429/504 portalda.
+- [x] Bir vaqtdagi yuklama testi (2026-11-06, k6, `idm/tests/load`, 10 000 xodim): 300 foydalanuvchi — sahifa p95 13 ms, 1000 foydalanuvchi
+  30 s da kirganda — p95 28 ms, 5xx yo'q, bazaga ≤ 16 ulanish. Topilma va tuzatish: attestatsiya navbati 500 yozuv (320 KB) → xodimlar bo'yicha
+  sahifalash, JSON siqish (trafik 1.1 GB → 186 MB), bosh sahifa hisoblari 30 s keshda.
 - [ ] Bank tomonida: haqiqiy TLS sertifikatlari va proksi, Vault, SSO'da MFA (ACR) sozlash, bank AD'sida sinov, pentest,
   axborot xavfsizligi bo'limi tekshiruvi va tasdig'i, RTO/RPO kelishuvi.
 
@@ -173,3 +177,54 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 
 Ochiq qolganlar: bankning haqiqiy AD'si, katta guruhlar (`member;range=`), bir nechta DC, rus tili,
 deprovisioning hodisalari auditda ko'rinmaydi, provisioning tarixini tozalash siyosati.
+
+## 5. Real bank IdM darajasiga chiqish (2026-11-03 holati)
+
+Kod tomoni pilotga tayyor; asosiy farq — boshqariladigan tizimlar kam (faqat AD/LDAP va HR CSV) va bank muhitida sinalmagan.
+
+### Ma'lum, hali sinalmagan yoki zaif joylar
+- Portal brauzerda ko'zdan kechirilmagan (faqat testlar, tip tekshiruvi, build).
+- `member;range` (1500+ a'zoli guruh) — faqat haqiqiy Windows AD'da tekshiriladi (Samba bitta javobda beradi).
+- SMTP jonli serverda sinalmagan; 465 (implicit TLS) qo'llanmaydi, faqat 587 STARTTLS.
+- Katta kampaniyada "ko'rib chiqilmaganlarni olib tashlash" har yozuvga alohida audit — yuklama testida yo'q.
+- API xato xabarlari faqat o'zbekcha; rol tarkibi muddati kelganda egasiga pochta xabari yo'q.
+- SimpleIdServer'ga 20+ o'z patchimiz — yangilanishlarda qo'llab-quvvatlash xavfi (Keycloak kabi muqobilni AX bilan ko'rib chiqish).
+
+### Real IGA'dan funksional farqlar (ustuvorlik bo'yicha)
+1. **Konnektorlar:** ABS (core banking), pochta (Exchange), ma'lumotlar bazalari, ichki ilovalar; umumiy SCIM/REST konnektor;
+   API'si yo'q tizimlar uchun **"qo'lda bajarish"** (tizim administratoriga topshiriq → bajarib portalda tasdiqlaydi).
+2. **Mover attestatsiyasi:** bo'lim/lavozim o'zgarganda yangi rahbarga eski (ariza bilan olingan) ruxsatlarni ko'rib chiqish.
+3. Parolni o'zi tiklash xizmati; PAM bilan integratsiya (odatda alohida mahsulot).
+4. Yangi xodimga parolni yetkazish (helpdesk) jarayoni — bank bilan kelishish.
+5. Rol "qazib olish" (mavjud ruxsatlardan rollarni taklif qilish).
+6. Xodimning o'z kabineti: "mening ruxsatlarim", ruxsatdan o'zi voz kechish.
+
+### Ishlab chiqarish uchun (texnik bo'lmagan qism ham)
+- Me'yoriy: Markaziy bank talablari, shaxsga doir ma'lumotlar qonuni (jumladan O'zbekistonda saqlash), saqlash va o'chirish muddatlari — yuristlar va AX bilan.
+- Ekspluatatsiya: o'rnatish paketi (konteyner yoki systemd), Prometheus ogohlantirishlari, tiklash mashqlari, runbook'lar, navbatchi jamoa.
+- Mustaqil pentest va tashqi kod tekshiruvi; rahbarlar va administratorlar uchun qisqa qo'llanmalar.
+
+### Tavsiya etilgan tartib
+1. Pilotga tayyorlash (2–4 hafta): bank AD'sida sinov OU va akkauntlar, HR eksporti, `AdLiveTests` bank AD'siga qarshi, portalni ko'rib chiqish.
+2. Pilot — faqat o'qish (1 oy, bitta bo'lim yoki filial): korrelyatsiya hisobotlari va SoD, yozish o'chiq.
+3. Yozish `Approval` rejimida: avval ishdan ketganlarni bloklash, keyin rol guruhlari; ishonch hosil bo'lgach `Automatic` (chegara bilan).
+4. Kengaytirish: ABS va "qo'lda bajarish" konnektorlari, mover attestatsiyasi, birinchi chorak attestatsiyasi.
+5. I bosqichining bank qismini yopish va to'liq ishga tushirish.
+
+## 6. Zamonaviy IGA va Markaziy bank talablari bo'yicha reja (2026-11-06)
+
+Manba: Gartner 2026 IGA Market Guide (vendor xulosalari), SailPoint, Microsoft Entra ID Governance, midPoint; Markaziy bankning
+tijorat banklari uchun axborot va kiberxavfsizlik minimal talablari nizomi (AV 18.08.2025, № 3669, 7-bob, 37–49-bandlar).
+Bozor yo'nalishi: chorakda bir marta qo'lda attestatsiyadan uzluksiz, hodisaga asoslangan boshqaruvga; inson bo'lmagan
+(xizmat) akkauntlar; imtiyozli huquqni vaqtincha berish (JIT); tavsiyalar va g'ayrioddiy huquqlarni aniqlash.
+
+| Bosqich | Nima | Asos |
+|---|---|---|
+| **J. Uzluksiz nazorat** | Oylik avtomatik attestatsiya (jadval) va natija hujjati; mover: lavozim/bo'lim o'zgarganda eski ariza rollari yangi rahbarga ko'rib chiqishga, avtomatik rollar almashadi; IdM'dan tashqari qilingan o'zgarish (AD'da qo'lda qo'shilgan guruh, ayniqsa imtiyozli) — ogohlantirish va mikro-attestatsiya yoki qaytarish | MB 40, 41, 44-bandlar; Gartner "continuous" |
+| **K. Konnektorlar** | "Qo'lda bajarish" (tizim administratoriga topshiriq → portalda tasdiq), umumiy SQL/REST/SCIM konnektor, ABS | MB 37, 40 (barcha tizimlar) |
+| **L. Imtiyozli va xizmat akkauntlari** | Xizmat akkauntining egasi va maqsadi, egasiz xizmat akkauntlari hisoboti, davriy ko'rib chiqish; imtiyozli rolni muddatli (soatlab) berish — JIT; PAM bilan integratsiya (ro'yxat, sessiya auditiga havola) | MB 42, 48, 49; NHI trendi |
+| **M. Tahlil va tavsiyalar** | Hamkasblar guruhi bo'yicha g'ayrioddiy huquqlar (outlier), ortiqcha huquqlar; ariza va attestatsiyada "hamkasblarning 90% da bor/yo'q" tavsiyasi; rollarni qazib olish | MB 42; SailPoint/Entra tavsiyalari |
+| **N. O'z-o'ziga xizmat va hayot sikli** | "Mening ruxsatlarim", ruxsatdan voz kechish; ishga kirishdan oldingi va ishdan ketgandagi vazifalar (egalikni topshirish, rahbarga xabar) | Entra lifecycle workflows |
+| **O. Kirish konteksti** | Ish vaqtidan tashqari kirish taqiqi, to'lov huquqi borlarga qurilma (token) talabi — SSO siyosati bilan | MB 45–47 |
+
+Bank tomonida: MB nizomi 7-bobini AX bilan band-band solishtirish (IP/MAC audit — 43-band, PAM — 48-band).

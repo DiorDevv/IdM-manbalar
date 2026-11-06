@@ -64,6 +64,21 @@ builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
+builder.Services.AddIdmRequestLimits(options.Limits, options.Sso.LoginClaim);
+builder.Services.AddSingleton<SharedSnapshot<DashboardCounts>>();
+if (options.ResponseCompression)
+{
+    // Faqat JSON/matn (Excel allaqachon siqilgan). BREACH: javoblarda sir (CSRF token va h.k.) yo'q, token sarlavhada.
+    builder.Services.AddResponseCompression(o =>
+    {
+        o.EnableForHttps = true;
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+        o.MimeTypes = ["application/json", "application/problem+json", "text/plain"];
+    });
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+}
 builder.Services.AddOpenApi();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
@@ -126,10 +141,13 @@ if (options.TrustedProxies.Length > 0)
     app.UseForwardedHeaders(forwarded);
 }
 if (!app.Environment.IsDevelopment()) app.UseHsts();
+if (options.ResponseCompression) app.UseResponseCompression();
 app.UseIdmSecurityHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseAuthentication();
+app.UseRateLimiter();      // login bo'yicha: autentifikatsiyadan keyin
+app.UseRequestTimeouts();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment()) app.MapOpenApi();

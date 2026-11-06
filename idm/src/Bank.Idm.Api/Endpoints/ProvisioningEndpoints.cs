@@ -70,7 +70,7 @@ public static class ProvisioningEndpoints
         {
             var result = await provisioning.PlanAsync(code, user.Login, user.Name, ct);
             return result is null ? TypedResults.NotFound() : TypedResults.Ok(result);
-        }).RequireAuthorization(IdmEndpoints.CanAdminister);
+        }).RequireAuthorization(IdmEndpoints.CanAdminister).WithHeavyLimit();
 
         group.MapPost("/operations/{action}", async Task<Results<Ok<ProvisioningActionResult>, ProblemHttpResult>> (string action, ProvisioningActionBody body,
             IdmDbContext db, ProvisioningService service, ProvisioningCoordinator provisioning, CurrentUser user, CancellationToken ct) =>

@@ -140,5 +140,8 @@ export interface ReviewItem {
   isPrivileged: boolean; reviewerId: string | null; reviewerName: string | null; decision: ReviewDecision; comment: string | null; decidedAt: string | null
   decidedBy: string | null; decidedByName: string | null; remediatedAt: string | null
 }
+/** Attestatsiya navbati: skip/take — xodimlar bo'yicha, items — shu xodimlarning barcha yozuvlari. */
+export interface ReviewInbox { items: ReviewItem[]; totalItems: number; totalPeople: number; skip: number; take: number }
 export type ReportKey = 'access' | 'privileged' | 'sod' | 'orphans' | 'leavers' | 'campaign'
 export interface ReportTable { key: ReportKey; title: string; subtitle: string | null; columns: string[]; rows: (string | null)[][]; generatedAt: string }
+

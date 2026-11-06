@@ -17,7 +17,7 @@ namespace Bank.Idm.Api.Endpoints;
 public static class MetricsEndpoints
 {
     public static void MapMetrics(this WebApplication app) => app.MapGet("/metrics", async (HttpContext http, IOptionsMonitor<IdmOptions> options,
-        IdmDbContext db, ILeadership cluster, TimeProvider time, CancellationToken ct) =>
+        IdmDbContext db, ILeadership cluster, TimeProvider time, RequestLimitCounters limits, CancellationToken ct) =>
     {
         var token = options.CurrentValue.MetricsToken;
         if (string.IsNullOrEmpty(token)) return Results.NotFound();
@@ -35,6 +35,8 @@ public static class MetricsEndpoints
         static string Label(string key, string value) => $"{key}=\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")}\"";
 
         Metric("idm_up", "IdM API ishlayapti", "gauge", [("", 1)]);
+        Metric("idm_http_throttled_total", "So'rovlar chegarasi bo'yicha rad etilgan so'rovlar (shu nusxa ishga tushgandan beri)", "counter",
+            limits.Snapshot.Select(r => (Label("reason", r.Reason), (double)r.Count)));
         Metric("idm_leader", "Shu nusxa yetakchimi (fon ishlari)", "gauge", [(Label("node", cluster.NodeId), cluster.IsLeader ? 1 : 0)]);
         Metric("idm_cluster_nodes", "Yurak urishi bor server nusxalari", "gauge",
             [("", await db.ClusterNodes.CountAsync(n => n.HeartbeatAt >= now.AddSeconds(-options.CurrentValue.Cluster.DeadAfterSeconds), ct))]);

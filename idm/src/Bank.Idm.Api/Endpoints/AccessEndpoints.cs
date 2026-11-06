@@ -166,7 +166,7 @@ public static partial class AccessEndpoints
 
         // Qoidalar o'zgargach: kimga rol berilishi va kimdan olinishi darhol hisoblanadi (keyingi sinxronlashda ham avtomatik)
         admin.MapPost("/roles/recalculate", async (BirthrightService birthright, CurrentUser user, CancellationToken ct) =>
-            await birthright.RecalculateAsync(user.Login, user.Name, ct));
+            await birthright.RecalculateAsync(user.Login, user.Name, ct)).WithHeavyLimit();
 
         // ---------- Xodim: rollar va ruxsatlar farqi ----------
         read.MapGet("/identities/{id:guid}/access", async Task<Results<Ok<IdentityAccess>, NotFound>> (Guid id, IdmDbContext db, AccessAnalyzer analyzer,

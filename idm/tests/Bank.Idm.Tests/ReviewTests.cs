@@ -363,6 +363,37 @@ public class ReviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Inbox_is_paged_by_employee_and_never_splits_one_employee_across_pages()
+    {
+        // Rahimovaga yana 3 xodim: har birida 2 ta asossiz guruh (ABS va IT)
+        await using (var db = pg.CreateContext())
+        {
+            var ad = await db.Applications.SingleAsync(a => a.Id == _app, Ct);
+            var groups = await db.Entitlements.Where(e => e.ExternalId == "g-abs" || e.ExternalId == "g-it").ToListAsync(Ct);
+            for (var n = 0; n < 3; n++)
+            {
+                var person = new Identity { EmployeeNumber = $"P{n}", FirstName = $"Xodim{n}", LastName = $"Bo'ysunuvchi{n}", ManagerId = _rahimova, Department = "Kredit bo'limi", Source = IdentitySource.Hr };
+                var account = new Account { Application = ad, Identity = person, ExternalId = $"u-p{n}", Login = $"p{n}", EmployeeNumber = person.EmployeeNumber };
+                foreach (var g in groups) account.Entitlements.Add(new AccountEntitlement { Entitlement = g });
+                db.AddRange(person, account);
+            }
+            await db.SaveChangesAsync(Ct);
+        }
+        await CreateAsync();
+        var rahimova = Client("d.rahimova");
+
+        var first = (await rahimova.GetFromJsonAsync<ReviewInbox>("/api/reviews/inbox?take=3", Json, Ct))!;
+        var second = (await rahimova.GetFromJsonAsync<ReviewInbox>("/api/reviews/inbox?skip=3&take=3", Json, Ct))!;
+        Assert.Equal((4, 8), (first.TotalPeople, first.TotalItems));   // Karimov (2) + 3 xodim (2 tadan)
+        Assert.Equal(3, first.Items.Select(i => i.IdentityId).Distinct().Count());
+        Assert.Single(second.Items.Select(i => i.IdentityId).Distinct());
+        Assert.Empty(first.Items.Select(i => i.IdentityId).Intersect(second.Items.Select(i => i.IdentityId)));
+        Assert.Equal(8, first.Items.Count + second.Items.Count);
+        Assert.Equal(first.TotalItems, (await rahimova.GetFromJsonAsync<MeResponse>("/api/me", Json, Ct))!.ReviewCount);
+        Assert.Empty((await rahimova.GetFromJsonAsync<ReviewInbox>("/api/reviews/inbox?skip=6", Json, Ct))!.Items);
+    }
+
+    [Fact]
     public async Task Portal_flow_admin_launches_manager_decides_auditor_exports()
     {
         var boss = Client("boss");
@@ -378,10 +409,13 @@ public class ReviewTests : IAsyncLifetime
         // Rahbar: o'z xodimining 2 yozuvi; xodim: hech narsa va kampaniyalarni ko'ra olmaydi
         var rahimova = Client("d.rahimova");
         Assert.Equal(2, (await rahimova.GetFromJsonAsync<MeResponse>("/api/me", Json, Ct))!.ReviewCount);
-        var inbox = (await rahimova.GetFromJsonAsync<List<ReviewItemDto>>("/api/reviews/inbox", Json, Ct))!;
+        var page = (await rahimova.GetFromJsonAsync<ReviewInbox>("/api/reviews/inbox", Json, Ct))!;
+        Assert.Equal((2, 1), (page.TotalItems, page.TotalPeople));
+        var inbox = page.Items;
+        Assert.Equal(2, inbox.Count);
         Assert.All(inbox, i => Assert.Equal("T1", i.EmployeeNumber));
         var karimov = Client("a.karimov");
-        Assert.Empty((await karimov.GetFromJsonAsync<List<ReviewItemDto>>("/api/reviews/inbox", Json, Ct))!);
+        Assert.Empty((await karimov.GetFromJsonAsync<ReviewInbox>("/api/reviews/inbox", Json, Ct))!.Items);
         Assert.Equal(HttpStatusCode.Forbidden, (await karimov.GetAsync("/api/reviews/campaigns", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await karimov.PostAsJsonAsync("/api/reviews/decide", new { ids = inbox.Select(i => i.Id), keep = true }, Ct)).StatusCode);
 

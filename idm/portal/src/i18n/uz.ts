@@ -10,6 +10,8 @@ export const uz = {
   theme: { label: 'Mavzu', system: 'tizim sozlamasi', light: 'och', dark: 'tungi' },
   language: { label: 'Til', uz: 'Oʻzbekcha', ru: 'Русский' },
   authRequired: 'Kirish talab qilinadi', sessionExpired: 'Sessiya tugadi', noAccess: 'Ruxsat yo\'q',
+  tooManyRequests: 'So\'rovlar juda ko\'p yoki server band. Bir necha soniyadan keyin qayta urinib ko\'ring.',
+  requestTimeout: 'Server javob berishga ulgurmadi. Birozdan keyin qayta urinib ko\'ring.',
   portalRoles: { 'idm.admin': 'IdM administratori', 'idm.auditor': 'Auditor', 'idm.hr': 'Kadrlar bo\'limi', employee: 'Xodim' },
   cmd: {
     title: 'Tezkor o\'tish', trigger: 'Qidirish yoki o\'tish…', placeholder: 'Xodim (ism, tabel raqami) yoki sahifa…', placeholderPages: 'Sahifa nomi…',
@@ -204,7 +206,7 @@ export const uz = {
     emptyInbox: 'Ko\'rib chiqishingizni kutayotgan ruxsat yo\'q',
     emptyInboxText: 'Attestatsiya kampaniyasi boshlanganda xodimlaringizning ruxsatlari shu yerda paydo bo\'ladi.',
     emptyCampaigns: 'Kampaniyalar yo\'q', emptyCampaignsText: 'Masalan har chorakda: barcha xodimlarning ariza bilan berilgan rollari va asossiz guruhlari.',
-    due: 'Muddat', overdue: 'muddati o\'tgan', items: (n: number) => `${n} ta ruxsat`,
+    due: 'Muddat', overdue: 'muddati o\'tgan', items: (n: number) => `${n} ta ruxsat`, people: (n: number) => `${n} ta xodim`,
     kind: { Role: 'Rol', Entitlement: 'Asossiz guruh' } as Record<string, string>,
     kindHelp: { Role: 'Ariza yoki qo\'lda berilgan rol: olib tashlansa, rol darhol tugaydi va uning guruhlari tizimdan olinadi.',
       Entitlement: 'Tizimda bor, lekin hech qaysi rol bilan asoslanmagan guruh: olib tashlansa, tizimdan olinadi.' } as Record<string, string>,

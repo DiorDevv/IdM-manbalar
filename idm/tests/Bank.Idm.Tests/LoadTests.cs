@@ -16,11 +16,12 @@ namespace Bank.Idm.Tests;
 /// <summary>
 /// Yuklama testi: bank miqyosi — 10 000+ xodim. Faqat IDM_LOAD_TEST bilan (CI'da emas, uzoq ishlaydi):
 /// IDM_LOAD_TEST=10000 dotnet test --filter-class '*LoadTests'. Har bir amalning vaqti chiqariladi va chegara bilan tekshiriladi.
+/// IDM_LOAD_KEEP_DB=idm_load (IDM_TEST_POSTGRES bilan) — baza o'chirilmaydi: API'ni shu ma'lumot ustida k6 bilan sinash (tests/load).
 /// </summary>
 public class LoadTests(ITestOutputHelper output) : IAsyncLifetime
 {
     private static readonly int Size = int.TryParse(Environment.GetEnvironmentVariable("IDM_LOAD_TEST"), out var n) ? n : 0;
-    private readonly PostgresFixture pg = new();
+    private readonly PostgresFixture pg = new(Environment.GetEnvironmentVariable("IDM_LOAD_KEEP_DB") is { Length: > 0 } keep ? keep : null);
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
     private const int Groups = 300, Departments = 40, Titles = 25;
     private readonly List<(string Step, TimeSpan Time)> _timings = [];

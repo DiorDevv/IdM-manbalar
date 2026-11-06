@@ -15,6 +15,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers, Authorization: `Bearer ${user.access_token}`, Accept: 'application/json', 'X-Correlation-Id': crypto.randomUUID() },
   })
   if (response.status === 401) { await signIn(); throw new ApiError(401, t.sessionExpired) }
+  throwIfBusy(response)
   if (!response.ok) {
     const text = await response.text()
     let message = text
@@ -30,11 +31,18 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T
 }
 
+/** So'rovlar chegarasi (429) yoki vaqt tugadi (504): tanlangan tilda tushunarli xabar (server xabari faqat o'zbekcha). */
+function throwIfBusy(response: Response) {
+  if (response.status === 429) throw new ApiError(429, t.tooManyRequests)
+  if (response.status === 504) throw new ApiError(504, t.requestTimeout)
+}
+
 /** Faylni yuklab olish (API token bilan himoyalangan, shuning uchun oddiy havola emas): server bergan nom bilan saqlanadi. */
 export async function download(path: string, fallbackName: string): Promise<void> {
   const user = await currentUser()
   if (!user) { await signIn(); throw new ApiError(401, t.authRequired) }
   const response = await fetch(path, { headers: { Authorization: `Bearer ${user.access_token}`, 'X-Correlation-Id': crypto.randomUUID() } })
+  throwIfBusy(response)
   if (!response.ok) throw new ApiError(response.status, response.status === 403 ? t.noAccess : `HTTP ${response.status}`)
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const name = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName

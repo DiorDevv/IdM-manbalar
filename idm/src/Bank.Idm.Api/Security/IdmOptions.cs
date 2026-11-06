@@ -24,6 +24,12 @@ public class IdmOptions
     public string? MetricsToken { get; set; }
     /// <summary>Tizimga yozish aylanishi oralig'i (reja + navbat); 0 — fon ishlovchisi o'chiq.</summary>
     public int ProvisioningIntervalSeconds { get; set; } = 30;
+    /// <summary>Bosh sahifa hisoblari shuncha soniya keshlanadi (0 — har safar hisoblanadi).</summary>
+    public int DashboardCacheSeconds { get; set; } = 30;
+    /// <summary>JSON javoblarni siqish (brotli/gzip). Proksi siqsa, o'chirish mumkin.</summary>
+    public bool ResponseCompression { get; set; } = true;
+    /// <summary>So'rovlar chegarasi (rate limiting) va vaqt chegarasi.</summary>
+    public RequestLimitOptions Limits { get; set; } = new();
     /// <summary>Rol tarkibi shuncha kunda bir egasi tomonidan tasdiqlanishi kerak (0 — talab yo'q).</summary>
     public int RoleCertificationDays { get; set; } = 365;
 }

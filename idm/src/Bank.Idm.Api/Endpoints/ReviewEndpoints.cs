@@ -16,6 +16,7 @@ namespace Bank.Idm.Api.Endpoints;
 public static class ReviewEndpoints
 {
     private const int MaxTake = 200;
+    private const int MaxInboxPeople = 100;
 
     private static readonly Expression<Func<AccessReviewItem, ReviewItemDto>> ToDto = i => new ReviewItemDto(i.Id, i.CampaignId, i.Campaign.Name, i.Campaign.DueDate,
         i.Kind, i.IdentityId, i.Identity.LastName + " " + i.Identity.FirstName, i.Identity.EmployeeNumber, i.Identity.Department, i.Identity.JobTitle,
@@ -26,12 +27,23 @@ public static class ReviewEndpoints
     {
         var reviews = api.MapGroup("/reviews");
 
-        reviews.MapGet("/inbox", async (IdmDbContext db, CurrentUser user, CancellationToken ct) =>
+        // Xodimlar bo'yicha sahifalash: bir xodimning barcha yozuvlari bitta sahifada (rahbar xodimni to'liq ko'rib qaror qiladi).
+        // Muddati yaqin xodimlar birinchi. Ilgari bir so'rovda 500 yozuv (≈320 KB) qaytar edi.
+        reviews.MapGet("/inbox", async (IdmDbContext db, CurrentUser user, int skip = 0, int take = 25, CancellationToken ct = default) =>
         {
+            (skip, take) = (Math.Max(skip, 0), Math.Clamp(take, 1, MaxInboxPeople));
             var actor = await RequestEndpoints.ActorAsync(db, user, ct);
-            return await Inbox(db.AccessReviewItems.AsNoTracking(), actor)
-                .OrderBy(i => i.Campaign.DueDate).ThenBy(i => i.Identity.LastName).ThenBy(i => i.Identity.FirstName).ThenBy(i => i.Kind).ThenBy(i => i.Title)
-                .Take(AccessReviewService.MaxBatch).Select(ToDto).ToListAsync(ct);
+            var inbox = Inbox(db.AccessReviewItems.AsNoTracking(), actor);
+            var people = inbox.GroupBy(i => new { i.IdentityId, i.Identity.LastName, i.Identity.FirstName })
+                .Select(g => new { g.Key.IdentityId, g.Key.LastName, g.Key.FirstName, Due = g.Min(i => i.Campaign.DueDate) });
+            var totalItems = await inbox.CountAsync(ct);
+            var totalPeople = totalItems == 0 ? 0 : await people.CountAsync(ct);
+            var ids = totalItems == 0 ? [] : await people.OrderBy(p => p.Due).ThenBy(p => p.LastName).ThenBy(p => p.FirstName).ThenBy(p => p.IdentityId)
+                .Skip(skip).Take(take).Select(p => p.IdentityId).ToListAsync(ct);
+            var items = ids.Count == 0 ? [] : await inbox.Where(i => ids.Contains(i.IdentityId))
+                .OrderBy(i => i.Campaign.DueDate).ThenBy(i => i.Identity.LastName).ThenBy(i => i.Identity.FirstName).ThenBy(i => i.IdentityId)
+                .ThenBy(i => i.Kind).ThenBy(i => i.Title).Select(ToDto).ToListAsync(ct);
+            return new ReviewInbox(items, totalItems, totalPeople, skip, take);
         });
 
         reviews.MapPost("/decide", async Task<Results<Ok<int>, ProblemHttpResult>> (ReviewDecisionBody body, IdmDbContext db, AccessReviewService service,
@@ -81,7 +93,7 @@ public static class ReviewEndpoints
         {
             var result = await service.PreviewAsync(Scope(body), ct);
             return result.Error is null ? TypedResults.Ok(result.Value) : TypedResults.Problem(result.Error, statusCode: result.Status);
-        }).RequireAuthorization(IdmEndpoints.CanAdminister);
+        }).RequireAuthorization(IdmEndpoints.CanAdminister).WithHeavyLimit();
 
         campaigns.MapPost("/", async Task<Results<Created<CampaignItem>, ProblemHttpResult>> (CampaignBody body, IdmDbContext db, AccessReviewService service,
             CurrentUser user, CancellationToken ct) =>
@@ -89,7 +101,7 @@ public static class ReviewEndpoints
             var result = await service.CreateAsync(await RequestEndpoints.ActorAsync(db, user, ct), Scope(body), ct);
             if (result.Value is null) return TypedResults.Problem(result.Error, statusCode: result.Status);
             return TypedResults.Created($"/api/reviews/campaigns/{result.Value.Id}", await Campaigns(db.AccessReviewCampaigns.Where(c => c.Id == result.Value.Id)).FirstAsync(ct));
-        }).RequireAuthorization(IdmEndpoints.CanAdminister);
+        }).RequireAuthorization(IdmEndpoints.CanAdminister).WithHeavyLimit();
 
         campaigns.MapPost("/{id:guid}/close", async Task<Results<Ok<CampaignItem>, ProblemHttpResult>> (Guid id, CloseCampaignBody body, IdmDbContext db,
             AccessReviewService service, CurrentUser user, CancellationToken ct) =>

@@ -129,7 +129,7 @@ public static class ApplicationEndpoints
                 await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "connector.mass-delete-approved", "application", app.Id.ToString(),
                     $$"""{"application":"{{app.Code}}","runId":"{{started.RunId}}"}""", user.IpAddress, user.CorrelationId), ct);
             return TypedResults.Accepted($"/api/applications/{app.Code}/runs", new SyncStarted(started.RunId!.Value));
-        }).RequireAuthorization(IdmEndpoints.CanAdminister);
+        }).RequireAuthorization(IdmEndpoints.CanAdminister).WithHeavyLimit();
     }
 
     internal static async Task<Dictionary<Guid, ConnectorRunItem>> LastRunsAsync(IdmDbContext db, CancellationToken ct)

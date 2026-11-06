@@ -30,8 +30,8 @@ initTheme()
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    // 401/403/404 qayta urinib bo'lmaydi; tarmoq xatolarida bir marta qayta urinish
-    queries: { retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 1, refetchOnWindowFocus: false, staleTime: 15_000 },
+    // Tarmoq xatosi va 5xx'da bir marta qayta urinish; 4xx va 504 (vaqt tugadi — og'ir so'rovni takrorlash serverni yana band qiladi) qayta urinilmaydi
+    queries: { retry: (count, error) => !(error instanceof ApiError && (error.status < 500 || error.status === 504)) && count < 1, refetchOnWindowFocus: false, staleTime: 15_000 },
   },
 })
 

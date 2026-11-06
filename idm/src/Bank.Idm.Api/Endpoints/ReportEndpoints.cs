@@ -59,7 +59,7 @@ public static class ReportEndpoints
             if (!xlsx) return TypedResults.Ok(table);
             var stamp = TimeZoneInfo.ConvertTime(table.GeneratedAt, TimeZoneInfo.FindSystemTimeZoneById("Asia/Tashkent")).ToString("yyyyMMdd-HHmm");
             return TypedResults.File(XlsxWriter.Write(table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"idm-{key}-{stamp}.xlsx");
-        });
+        }).WithHeavyLimit();
 
         reports.MapGet("/orphan-accounts", async (IdmDbContext db, int skip = 0, int take = 50, CancellationToken ct = default) =>
         {

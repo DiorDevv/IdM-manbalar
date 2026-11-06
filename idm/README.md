@@ -253,6 +253,31 @@ Yuklama testi topgan va tuzatilgan: kampaniya yozuvlari EF o'rniga PostgreSQL `C
 so'rovi proksi vaqt chegarasiga yetmaydi); Excel varag'i oqim bilan yoziladi (ajratilgan xotira 1.7 GB → 240 MB).
 Hisobot chegaralari: Excel — 1 000 000 qator, chop etish (brauzer) — 20 000 qator (undan katta bo'lsa 413 va Excel taklifi).
 
+**Bir vaqtda ko'p foydalanuvchi** (k6, API ustida): [tests/load/README.md](tests/load/README.md).
+
+## So'rovlar chegarasi va vaqt chegarasi
+Bitta foydalanuvchi, skript yoki og'ir hisobot serverni band qilib qo'ymasligi uchun (`Idm:Limits`, standart qiymatlar bilan yoqilgan):
+
+| Sozlama | Standart | Ma'nosi |
+|---|---|---|
+| `UserBurst` / `UserPerSecond` | 200 / 20 | Login bo'yicha: birdaniga 200 so'rov, uzoq muddatda soniyasiga 20 (portal sahifasi 5–15 so'rov) |
+| `AnonymousPerMinute` | 120 | Tokensiz yoki yaroqsiz tokenli so'rovlar, IP bo'yicha (`TrustedProxies` orqali haqiqiy IP) |
+| `HeavyPerUser` | 1 | Og'ir amal bitta foydalanuvchidan bir vaqtda (takror bosish) |
+| `HeavyConcurrent` / `HeavyQueue` | 4 / 16 | Og'ir amallar butun nusxa bo'yicha; ortig'i navbatda kutadi, navbat to'lsa 429 |
+| `RequestTimeoutSeconds` / `HeavyTimeoutSeconds` | 30 / 300 | Oshsa 504, bazadagi so'rov ham bekor qilinadi |
+
+Og'ir amallar: hisobot eksporti, audit zanjirini tekshirish, rollarni qayta hisoblash, tizimga yozish rejasi, kampaniya (oldindan
+ko'rish va yaratish), qo'lda sinxronlash. Rad etilganda — 429, `Retry-After` va tushunarli xabar (portal tanlangan tilda ko'rsatadi);
+har biri logda va `idm_http_throttled_total{reason="user|anonymous|heavy"}` metrikasida. `/health` va `/metrics` cheklanmaydi.
+Chegaralar har nusxada alohida. Proksi (nginx/HAProxy) vaqt chegarasi `HeavyTimeoutSeconds`dan katta bo'lishi kerak.
+
+**Javob hajmi va kesh** (k6 topilmalari, 2026-11-06):
+- JSON javoblar brotli/gzip bilan siqiladi (`Idm:ResponseCompression`, standart yoqilgan; proksi siqsa o'chirish mumkin). Excel siqilmaydi.
+- Attestatsiya navbati (`/api/reviews/inbox?skip=&take=`) xodimlar bo'yicha sahifalanadi: bir sahifada 25 xodim va ularning barcha
+  yozuvlari. Ilgari bitta so'rov 500 ta yozuv (≈320 KB) qaytarardi.
+- Bosh sahifa hisoblari (SoD buzilishlari ham) `Idm:DashboardCacheSeconds` (30 s) davomida umumiy keshdan olinadi. Bir vaqtda kelgan
+  so'rovlardan faqat bittasi qayta hisoblaydi. Sinxronlash tugasa, kesh darhol yangilanadi. Tizimlar holati keshsiz, jonli.
+
 ## Xabarnomalar (pochta)
 `Idm:Notifications` (standart — o'chiq). Faqat yetakchi server rejalashtiradi va yuboradi; har bir hodisa uchun bitta xat (navbat
 `notifications`, noyob kalit — server qayta ishga tushsa ham takrorlanmaydi). Xat o'zbekcha va ruscha, portal havolasi bilan;

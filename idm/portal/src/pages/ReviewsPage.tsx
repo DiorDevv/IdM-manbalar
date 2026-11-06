@@ -1,14 +1,14 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useIsAdmin, useMe } from '../api/me'
 import { RoleCertification } from './RoleCertification'
-import type { ApplicationItem, CampaignBody, CampaignItem, CampaignPreview, ReviewItem } from '../api/types'
+import type { ApplicationItem, CampaignBody, CampaignItem, CampaignPreview, ReviewInbox, ReviewItem } from '../api/types'
 import { formatDate, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { Field, Modal, formError } from '../components/forms'
-import { Empty, ErrorBox, PageHead, Person, SkeletonRows, Tabs, type TabDef } from '../components/ui'
+import { Empty, ErrorBox, PageHead, Pager, Person, SkeletonRows, Tabs, type TabDef } from '../components/ui'
 
 const v = t.reviews
 type Tab = 'inbox' | 'roles' | 'campaigns'
@@ -39,15 +39,24 @@ export function isOverdue(due: string): boolean {
   return due < new Date().toISOString().slice(0, 10)
 }
 
+/** Bir sahifadagi xodimlar soni (har birining barcha yozuvlari bilan) va bitta qaror so'rovidagi eng ko'p yozuv (server: MaxBatch). */
+const INBOX_PEOPLE = 25
+const DECIDE_BATCH = 500
+
 function Inbox() {
   const client = useQueryClient()
-  const items = useQuery({ queryKey: ['reviews', 'inbox'], queryFn: () => api<ReviewItem[]>('/api/reviews/inbox') })
+  const [skip, setSkip] = useState(0)
+  const page = useQuery({ queryKey: ['reviews', 'inbox', skip], queryFn: () => api<ReviewInbox>(`/api/reviews/inbox?skip=${skip}&take=${INBOX_PEOPLE}`) })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirm, setConfirm] = useState<{ keep: boolean; ids: string[] } | null>(null)
   const [comment, setComment] = useState('')
   const decide = useMutation({
-    mutationFn: (x: { keep: boolean; ids: string[]; comment: string }) =>
-      api<number>('/api/reviews/decide', { method: 'POST', body: JSON.stringify({ ids: x.ids, keep: x.keep, comment: x.comment || null }) }),
+    mutationFn: async (x: { keep: boolean; ids: string[]; comment: string }) => {
+      let done = 0
+      for (let i = 0; i < x.ids.length; i += DECIDE_BATCH)
+        done += await api<number>('/api/reviews/decide', { method: 'POST', body: JSON.stringify({ ids: x.ids.slice(i, i + DECIDE_BATCH), keep: x.keep, comment: x.comment || null }) })
+      return done
+    },
     onSuccess: () => { setConfirm(null); setComment(''); setSelected(new Set()) },
     onSettled: () => client.invalidateQueries({ predicate: q => q.queryKey[0] === 'reviews' || q.queryKey[0] === 'me' }),
   })
@@ -55,24 +64,30 @@ function Inbox() {
   // Kampaniya → xodim → yozuvlar
   const groups = useMemo(() => {
     const byCampaign = new Map<string, { name: string; due: string; people: Map<string, ReviewItem[]> }>()
-    for (const i of items.data ?? []) {
+    for (const i of page.data?.items ?? []) {
       const c = byCampaign.get(i.campaignId) ?? { name: i.campaignName, due: i.dueDate, people: new Map() }
       c.people.set(i.identityId, [...(c.people.get(i.identityId) ?? []), i])
       byCampaign.set(i.campaignId, c)
     }
     return [...byCampaign.entries()]
-  }, [items.data])
+  }, [page.data])
 
-  if (items.isError) return <ErrorBox error={items.error} onRetry={() => { void items.refetch() }} />
-  if (items.isPending) return <table className="data"><SkeletonRows cols={4} /></table>
-  if (items.data.length === 0) return <Empty icon="review" title={v.emptyInbox} text={v.emptyInboxText} />
+  // Qarordan keyin xodimlar navbatdan chiqadi: oxirgi sahifa bo'shab qolsa, mavjud oxirgi sahifaga qaytish
+  const totalPeople = page.data?.totalPeople ?? 0
+  useEffect(() => {
+    if (page.data && skip > 0 && skip >= totalPeople) setSkip(Math.max(0, Math.floor((totalPeople - 1) / INBOX_PEOPLE) * INBOX_PEOPLE))
+  }, [page.data, skip, totalPeople])
+
+  if (page.isError) return <ErrorBox error={page.error} onRetry={() => { void page.refetch() }} />
+  if (page.isPending) return <table className="data"><SkeletonRows cols={4} /></table>
+  if (page.data.totalItems === 0) return <Empty icon="review" title={v.emptyInbox} text={v.emptyInboxText} />
   const toggle = (id: string) => setSelected(s => { const next = new Set(s); if (!next.delete(id)) next.add(id); return next })
   const chosen = [...selected]
 
   return (
     <>
       <div className="toolbar">
-        <span className="muted">{chosen.length > 0 ? v.selected(chosen.length) : v.items(items.data.length)}</span>
+        <span className="muted">{chosen.length > 0 ? v.selected(chosen.length) : `${v.items(page.data.totalItems)} · ${v.people(page.data.totalPeople)}`}</span>
         {chosen.length > 0 && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
             <button className="btn secondary sm" onClick={() => setConfirm({ keep: true, ids: chosen })}><Icon name="check" size={15} />{v.keep}</button>
@@ -128,6 +143,8 @@ function Inbox() {
           })}
         </div>
       ))}
+
+      <Pager skip={skip} page={INBOX_PEOPLE} total={page.data.totalPeople} onChange={x => { setSkip(x); setSelected(new Set()) }} />
 
       <Modal open={!!confirm} title={confirm?.keep ? v.keepTitle : v.revokeTitle} onClose={() => { setConfirm(null); decide.reset() }}
         footer={<>

@@ -29,10 +29,11 @@ public static class IdmEndpoints
                 user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due));
         });
 
-        api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer, CancellationToken ct) =>
+        // Bosh sahifa: butun bank bo'yicha hisoblar (SoD buzilishlari ham) har ochilishda emas — umumiy keshdan (Idm:DashboardCacheSeconds);
+        // tizimlar holati (sinxronlash ketyaptimi) jonli. Kesh hisoblangandan keyin sinxronlash tugagan bo'lsa — darhol qayta hisoblanadi.
+        api.MapGet("/dashboard", async (IdmDbContext db, ConnectorSyncCoordinator sync, Bank.Idm.Infrastructure.Access.AccessAnalyzer analyzer,
+            SharedSnapshot<DashboardCounts> cache, Microsoft.Extensions.Options.IOptionsMonitor<IdmOptions> options, CancellationToken ct) =>
         {
-            var byStatus = await db.Identities.GroupBy(i => i.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
-            int Count(IdentityStatus s) => byStatus.FirstOrDefault(x => x.Key == s)?.Count ?? 0;
             var lastRuns = await ApplicationEndpoints.LastRunsAsync(db, ct);
             var lastSuccess = await db.ConnectorRuns.Where(r => r.Status == ConnectorRunStatus.Succeeded).GroupBy(r => r.ApplicationId)
                 .Select(g => new { g.Key, At = g.Max(r => r.FinishedAt) }).ToDictionaryAsync(x => x.Key, x => x.At, ct);
@@ -40,17 +41,25 @@ public static class IdmEndpoints
                 .Where(a => sync.IsConfigured(a.Code) || lastRuns.ContainsKey(a.Id))
                 .Select(a => new ConnectorStatus(a.Code, a.Name, a.Kind, sync.IsRunning(a.Code), lastRuns.GetValueOrDefault(a.Id), lastSuccess.GetValueOrDefault(a.Id)))
                 .ToList();
-            return new DashboardSummary(
-                byStatus.Sum(x => x.Count), Count(IdentityStatus.Active), Count(IdentityStatus.Suspended), Count(IdentityStatus.Terminated),
-                await db.Applications.CountAsync(a => a.IsActive, ct),
-                await db.Accounts.CountAsync(a => a.Status != AccountStatus.Deleted, ct),
-                await db.Accounts.CountAsync(a => a.Status == AccountStatus.Disabled, ct),
-                await db.Accounts.CountAsync(a => a.IdentityId == null && a.Status != AccountStatus.Deleted && a.Kind == AccountKind.Personal, ct),
-                await ReportEndpoints.LeaversWithActiveAccounts(db).CountAsync(ct),
-                (await analyzer.SodViolationsAsync(null, ct)).Count(v => v.Exception is null),
-                await db.AccessRequests.CountAsync(r => r.Status == AccessRequestStatus.Pending, ct),
-                await db.AuditEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, ct),
-                connectors);
+            var lastFinished = lastRuns.Values.Max(r => r?.FinishedAt);
+            var counts = await cache.GetAsync(TimeSpan.FromSeconds(Math.Max(0, options.CurrentValue.DashboardCacheSeconds)), async token =>
+            {
+                var byStatus = await db.Identities.GroupBy(i => i.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(token);
+                int Count(IdentityStatus s) => byStatus.FirstOrDefault(x => x.Key == s)?.Count ?? 0;
+                return new DashboardCounts(
+                    byStatus.Sum(x => x.Count), Count(IdentityStatus.Active), Count(IdentityStatus.Suspended), Count(IdentityStatus.Terminated),
+                    await db.Applications.CountAsync(a => a.IsActive, token),
+                    await db.Accounts.CountAsync(a => a.Status != AccountStatus.Deleted, token),
+                    await db.Accounts.CountAsync(a => a.Status == AccountStatus.Disabled, token),
+                    await db.Accounts.CountAsync(a => a.IdentityId == null && a.Status != AccountStatus.Deleted && a.Kind == AccountKind.Personal, token),
+                    await ReportEndpoints.LeaversWithActiveAccounts(db).CountAsync(token),
+                    (await analyzer.SodViolationsAsync(null, token)).Count(v => v.Exception is null),
+                    await db.AccessRequests.CountAsync(r => r.Status == AccessRequestStatus.Pending, token),
+                    await db.AuditEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, token));
+            }, e => lastFinished > e.At, ct);
+            var c = counts.Value;
+            return new DashboardSummary(c.Identities, c.ActiveIdentities, c.SuspendedIdentities, c.TerminatedIdentities, c.Applications, c.Accounts,
+                c.DisabledAccounts, c.OrphanAccounts, c.LeaversWithActiveAccounts, c.SodViolations, c.PendingRequests, c.LastAuditAt, connectors, counts.At);
         }).RequireAuthorization(CanReadAll);
 
         var identities = api.MapGroup("/identities").RequireAuthorization(CanReadAll);
@@ -151,7 +160,7 @@ public static class IdmEndpoints
                 .ToListAsync(ct);
             return new PagedResult<AuditItem>(items, total, skip, take);
         });
-        auditGroup.MapGet("/verify", async (AuditLog audit, CancellationToken ct) => await audit.VerifyChainAsync(ct));
+        auditGroup.MapGet("/verify", async (AuditLog audit, CancellationToken ct) => await audit.VerifyChainAsync(ct)).WithHeavyLimit();
     }
 
     private static Dictionary<string, string[]> Validate(CreateIdentityRequest r)

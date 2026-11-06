@@ -43,6 +43,7 @@ avtomatik test uni tekshiradi. Sozlamalar tafsiloti: [README.md](README.md).
 | Begona xodim ma'lumotini ko'rish | Arizaning borligi ham oshkor qilinmaydi (404); hisobot va eksport — admin/auditor; har eksport auditda | `RequestTests`, `ReviewTests` |
 | Server nusxasi qulashi, ish yarim qolishi | Yetakchi tanlash (advisory lock), to'xtagan nusxa ishlarini yopish, idempotent amallar | `ClusterTests`, jonli sinov (2 s) |
 | Zaxira nusxa yaroqsiz bo'lib chiqishi | `deploy/restore-verify.sh`: nazorat summasi, audit belgisi, butun zanjir | qo'lda / taymer |
+| Ko'p so'rov bilan serverni band qilish (skript, takror bosish, o'g'irlangan token) | Login/IP bo'yicha so'rovlar chegarasi, og'ir amallar navbati, so'rov vaqt chegarasi (`Idm:Limits`) | `RequestLimitTests`, k6 (`tests/load`) |
 | Zaif bog'liqliklar | CI: `dotnet list package --vulnerable`, `npm audit --audit-level=high` | CI |
 
 ## 3. Pentest uchun tekshirish ro'yxati
@@ -59,7 +60,7 @@ Rollar: oddiy xodim, rahbar (xodimlari bor), administrator, auditor — har biri
 - [ ] **Ommaviy amal:** 30% xodim "ishdan ketgan" HR fayli — sinxronlash to'xtashi; `Automatic` rejimda chegaradan ko'p amal — tasdiqqa to'xtashi.
 - [ ] **Poyga:** bir arizani ikki tasdiqlovchi bir vaqtda; bir amalni ikki marta tasdiqlash; ikki nusxada bir tizimni bir vaqtda sinxronlash.
 - [ ] **Audit:** bazada `UPDATE audit_events` (trigger rad etadi); trigger o'chirilib qilingan o'zgarish `verify-audit`da ko'rinishi.
-- [ ] **Eksport:** Excel'dagi `=HYPERLINK(...)` qiymati formula bo'lmasligi; katta hisobot (DoS): chop etishda 413.
+- [ ] **Eksport:** Excel'dagi `=HYPERLINK(...)` qiymati formula bo'lmasligi; katta hisobot (DoS): chop etishda 413; bir foydalanuvchidan ko'p so'rov va parallel eksport — 429.
 - [ ] **Sarlavhalar va TLS:** HSTS, `nosniff`, kesh yo'qligi; LDAPS/PostgreSQL/SIEM sertifikat tekshiruvi (soxta sertifikat bilan MITM).
 - [ ] **Metrikalar:** `/metrics` tokensiz va noto'g'ri token bilan (401/404), javobda shaxsiy ma'lumot yo'qligi.
 - [ ] **Portal:** XSS (xodim ismi, rol tavsifi, audit tafsiloti orqali), CSP (proksida), token `sessionStorage`da, chiqishdan keyin qayta foydalanish.

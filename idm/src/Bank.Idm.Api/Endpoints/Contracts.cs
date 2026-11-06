@@ -16,7 +16,13 @@ public record OwnedRoleItem(Guid Id, string Code, string Name, string? Descripti
 public record DashboardSummary(
     int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,
     int Applications, int Accounts, int DisabledAccounts, int OrphanAccounts, int LeaversWithActiveAccounts, int SodViolations, int PendingRequests,
-    DateTimeOffset? LastAuditAt, IReadOnlyList<ConnectorStatus> Connectors);
+    DateTimeOffset? LastAuditAt, IReadOnlyList<ConnectorStatus> Connectors, DateTimeOffset? CalculatedAt = null);
+
+/// <summary>Bosh sahifa hisoblari (keshlanadi, <see cref="SharedSnapshot{T}"/>).</summary>
+public record DashboardCounts(
+    int Identities, int ActiveIdentities, int SuspendedIdentities, int TerminatedIdentities,
+    int Applications, int Accounts, int DisabledAccounts, int OrphanAccounts, int LeaversWithActiveAccounts, int SodViolations, int PendingRequests,
+    DateTimeOffset? LastAuditAt);
 
 /// <summary>Tizim konnektorining holati: oxirgi ishga tushish va oxirgi muvaffaqiyatli sinxronlash.</summary>
 public record ConnectorStatus(string Code, string Name, ApplicationKind Kind, bool IsRunning, ConnectorRunItem? LastRun, DateTimeOffset? LastSuccessAt);
@@ -178,6 +184,9 @@ public record CampaignItem(Guid Id, string Name, string? Description, AccessRevi
 public record CampaignReviewerProgress(Guid? ReviewerId, string? ReviewerName, int Total, int Pending);
 
 public record CampaignDetails(CampaignItem Campaign, IReadOnlyList<CampaignReviewerProgress> Reviewers);
+
+/// <summary>Attestatsiya navbati sahifasi: Skip/Take — xodimlar soni bo'yicha; Items — shu xodimlarning barcha yozuvlari.</summary>
+public record ReviewInbox(IReadOnlyList<ReviewItemDto> Items, int TotalItems, int TotalPeople, int Skip, int Take);
 
 public record ReviewItemDto(Guid Id, Guid CampaignId, string CampaignName, DateOnly DueDate, AccessReviewItemKind Kind, Guid IdentityId, string IdentityName,
     string EmployeeNumber, string? Department, string? JobTitle, IdentityStatus IdentityStatus, string ApplicationCode, string Title, string? Subtitle,
