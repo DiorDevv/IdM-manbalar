@@ -28,9 +28,32 @@ public class AuditLog(IdmDbContext db, TimeProvider time)
     // pg_advisory_xact_lock uchun o'zgarmas kalit ("audit" so'zidan olingan)
     private const long ChainLockKey = 0x6175646974;
 
+    private List<AuditEntry>? _capture;
+
+    /// <summary>
+    /// Sinov bajarilishi (keyin bekor qilinadigan tranzaksiyada): audit yozuvlari bazaga yozilmaydi, <paramref name="sink"/>ga yig'iladi.
+    /// Aks holda bekor qilingan yozuv ham identity raqamini olib qo'yardi va jurnalda "tushib qolgan" raqam paydo bo'lardi.
+    /// </summary>
+    public IDisposable Capture(List<AuditEntry> sink)
+    {
+        _capture = sink;
+        return new CaptureScope(this);
+    }
+
+    private sealed class CaptureScope(AuditLog owner) : IDisposable
+    {
+        public void Dispose() => owner._capture = null;
+    }
+
     /// <summary>Kontekstdagi barcha o'zgarishlarni va audit yozuvlarini atomar saqlaydi.</summary>
     public async Task SaveChangesAsync(IReadOnlyList<AuditEntry> entries, CancellationToken ct = default)
     {
+        if (_capture is not null)
+        {
+            _capture.AddRange(entries);
+            await db.SaveChangesAsync(ct);
+            return;
+        }
         var ownsTransaction = db.Database.CurrentTransaction is null;
         var transaction = ownsTransaction ? await db.Database.BeginTransactionAsync(ct) : null;
         try

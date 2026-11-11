@@ -78,12 +78,14 @@ public partial class AdminChanges(IServiceProvider services, IdmDbContext db, Au
         if (kind == ChangeKinds.ConnectorMassDelete) trial = await CheckMassDeleteAsync(json, ct);   // tashqi ta'sirli: sinab ko'rilmaydi
         else
         {
+            var captured = new List<AuditEntry>();
             await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+            using (audit.Capture(captured))
             {
                 trial = await TryExecuteAsync(kind, json, user, ct);
-                preview.AddRange(db.ChangeTracker.Entries<AuditEvent>().Select(e => new PreviewEntry(e.Entity.Action, e.Entity.Details)));
                 await transaction.RollbackAsync(ct);
             }
+            preview.AddRange(captured.Select(e => new PreviewEntry(e.Action, e.Details)));
             db.ChangeTracker.Clear();
         }
         if (!IsSuccess(trial)) return trial;

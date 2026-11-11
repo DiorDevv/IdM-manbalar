@@ -170,6 +170,8 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 ### J. One Identity Manager darajasiga chiqish (2026-11-11 dan)
 Bank uchun kerakli OIM funksiyalari (SAP, PAM, bulut konnektorlari — kerak emas). Taxminan 3–4 oy.
 - [x] 1. Ikki kishilik tasdiq va portal vakolatlarini boshqarish (2026-11-11): xavfli administrator amallari ikkinchi administrator tasdig'i bilan.
+  Jonli sinovda topildi: SSO'dan chiqishda SimpleIdServer inglizcha "Revoke session" tasdiq sahifasini ko'rsatadi — bosilmasa SSO sessiyasi ochiq
+  qoladi (ochiq: sahifani o'tkazib yuborish yoki bank dizayniga moslash).
 - [ ] 2. Universal SQL/REST konnektor, ustida iABS va 1C (bank ma'lumoti kerak: iABS 7 servis shinasi yoki Oracle view).
 - [ ] 3. Tashkilot daraxti: filial → bo'lim → sho''ba, rollar daraxt bo'ylab meros.
 - [ ] 4. Dinamik rollar: shartli qoidalar va istisnolar.

@@ -112,6 +112,9 @@ public class FourEyesTests : IAsyncLifetime
             var r = await db.ChangeRequests.SingleAsync(Ct);
             Assert.Equal((ChangeRequestStatus.Applied, "boss2", "Tekshirildi"), (r.Status, r.DecidedBy, r.DecisionComment));
             Assert.True((await new AuditLog(db, TimeProvider.System).VerifyChainAsync(Ct)).IsValid);
+            // Sinov bajarilishi audit raqamini band qilmaydi: jurnalda "tushib qolgan" raqam yo'q (stendda topilgan)
+            var ids = await db.AuditEvents.OrderBy(e => e.Id).Select(e => e.Id).ToListAsync(Ct);
+            Assert.Equal(ids.Count, ids[^1] - ids[0] + 1);
         }
     }
 
