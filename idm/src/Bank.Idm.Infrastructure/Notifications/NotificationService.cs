@@ -158,8 +158,25 @@ public class NotificationService(IdmDbContext db, TimeProvider time)
             }
         }
 
+        // 4. O'tish (mover): yangi rahbarga — xodimning qaysi rollari qaror kutayotgani (bir o'tish uchun bitta xabar)
+        var movers = await db.IdentityRoles.AsNoTracking()
+            .Where(r => r.MoverDueAt != null && (r.ValidTo == null || r.ValidTo > now) && r.Identity.ManagerId != null)
+            .GroupBy(r => new { r.IdentityId, ManagerId = r.Identity.ManagerId!.Value, Name = r.Identity.LastName + " " + r.Identity.FirstName })
+            .Select(g => new { g.Key.IdentityId, g.Key.ManagerId, g.Key.Name, Count = g.Count(), DueAt = g.Min(r => r.MoverDueAt!.Value) }).ToListAsync(ct);
+        foreach (var m in movers)
+        {
+            var due = TimeZoneInfo.ConvertTime(m.DueAt, Tashkent).ToString("dd.MM.yyyy");
+            foreach (var (to, suffix) in WithDelegates(m.ManagerId))
+                planned.Add(new($"mover:{m.IdentityId:N}:{m.DueAt.UtcTicks}{suffix}", "mover", to,
+                    $"Xodim o'tdi: rollarni ko'rib chiqing / Перевод сотрудника: проверьте роли",
+                    Text($"{m.Name} sizning bo'limingizga o'tdi. Avvalgi joyidagi {m.Count} ta rol bo'yicha qaror qiling: kerak bo'lsa qoldiring, " +
+                         $"aks holda {due} dan keyin avtomatik olib tashlanadi.",
+                         $"{m.Name} переведён(а) в ваше подразделение. Примите решение по ролям с прежнего места ({m.Count}): оставьте нужные, " +
+                         $"остальные будут отозваны автоматически после {due}.", $"{portal}/requests?tab=movers")));
+        }
+
         if (planned.Count == 0) return 0;
-        var keys = planned.Select(p => p.Key).Distinct().ToList();
+        var keys =planned.Select(p => p.Key).Distinct().ToList();
         var existing = (await db.Notifications.AsNoTracking().Where(n => keys.Contains(n.DedupKey)).Select(n => n.DedupKey).ToListAsync(ct)).ToHashSet();
         var fresh = planned.Where(p => !existing.Contains(p.Key)).DistinctBy(p => p.Key).ToList();
         if (fresh.Count == 0) return 0;

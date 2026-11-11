@@ -91,6 +91,10 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [x] HR haqiqat manbai: HR'dagi xodim AD manbalidan HR manbaliga o'tadi; HR ulanganda AD xodim yaratmaydi.
 - [x] Korrelyatsiya hisobotlari: ishdan ketgan, lekin akkaunti faol; egasiz akkauntlar; akkauntsiz xodimlar; HR'da yo'q xodimlar.
 - [x] JML hodisalari lentasi (portal "Hodisalar"), Toshkent vaqti bo'yicha sanalar, ommaviy ishdan ketishda to'xtash.
+- [x] Filial va o'tish (mover) siyosati (2026-11-11): filial HR'dan, avtomatik rol qoidasida filial; filial yoki bo'lim o'zgarsa ariza/qo'lda
+  berilgan rollar yangi rahbar qaroriga (7 kun), qoldirilmasa avtomatik olinadi; eski arizalar bekor; ommaviy o'tishda import to'xtaydi.
+  Topilgan va tuzatilgan xato: ishdan ketgan xodimning muddatli roli muddati tugaguncha qolardi.
+- [ ] Ochiq: bankda HR manbai — iABS (Fido-Biznes): kadrlar eksporti yoki Oracle view / iABS 7 servis shinasi orqali konnektor.
 - [ ] Ochiq: bankning haqiqiy HR tizimi bilan ulash (fayl joyi va formati yoki bazadagi view) — HR bo'limi bilan kelishiladi.
 - **Tayyor:** "egasiz akkauntlar" hisoboti, ishdan ketgan xodimning hamma akkauntlari bir joyda ko'rinadi.
 

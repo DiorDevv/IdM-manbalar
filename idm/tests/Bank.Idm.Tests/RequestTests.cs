@@ -280,4 +280,38 @@ public class RequestTests : IAsyncLifetime
         Assert.Equal(2, audit.Count);
         Assert.Contains("kredit-berish", audit[1].Details);
     }
+
+    [Fact]
+    public async Task Mover_reviews_are_visible_and_decidable_only_by_the_current_manager_or_an_admin()
+    {
+        Guid assignment;
+        await using (var db = pg.CreateContext())
+        {
+            var a = new IdentityRole { IdentityId = _karimov, RoleId = _kredit, Source = RoleAssignmentSource.Request, MoverDueAt = DateTimeOffset.UtcNow.AddDays(7) };
+            db.IdentityRoles.Add(a);
+            await db.SaveChangesAsync(Ct);
+            assignment = a.Id;
+        }
+        PagedResult<MoverItem> List(string login, string scope = "mine") =>
+            As(login).GetFromJsonAsync<PagedResult<MoverItem>>($"/api/mover-reviews?scope={scope}", Json, Ct).GetAwaiter().GetResult()!;
+        Task<HttpResponseMessage> Decide(string login, string decision, string? comment) =>
+            As(login).PostAsJsonAsync($"/api/mover-reviews/{assignment}", new MoverDecisionBody(decision, comment), Ct);
+
+        var mine = Assert.Single(List("d.rahimova").Items);
+        Assert.Equal((assignment, true), (mine.AssignmentId, mine.CanDecide));
+        Assert.Equal(1, (await As("d.rahimova").GetFromJsonAsync<MeResponse>("/api/me", Json, Ct))!.MoverCount);
+        Assert.Empty(List("a.karimov").Items);                                   // o'z roli ro'yxatda yo'q
+        Assert.Empty(List("n.yusupova").Items);
+        Assert.Equal(HttpStatusCode.Forbidden, (await As("n.yusupova").GetAsync("/api/mover-reviews?scope=all", Ct)).StatusCode);
+        Assert.Single(List("boss", "all").Items);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Decide("a.karimov", "keep", "menga kerak")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Decide("n.yusupova", "revoke", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Decide("d.rahimova", "maybe", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Decide("d.rahimova", "keep", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Decide("d.rahimova", "keep", "Yangi joyda ham kredit ko'radi")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Decide("boss", "revoke", null)).StatusCode);
+        Assert.Empty(List("d.rahimova").Items);
+        Assert.Equal(0, (await As("d.rahimova").GetFromJsonAsync<MeResponse>("/api/me", Json, Ct))!.MoverCount);
+    }
 }

@@ -90,4 +90,23 @@ public class CsvHrSourceTests
     [InlineData(IdentityStatus.Active, IdentityStatus.Active, null)]
     public void Status_transitions_map_to_jml_events(IdentityStatus from, IdentityStatus to, IdentityEventKind? expected) =>
         Assert.Equal(expected, HrSync.Transition(from, to));
+
+    [Fact]
+    public void Branch_column_is_read_only_when_configured_and_must_then_be_present()
+    {
+        var csv = "employeeNumber;lastName;firstName;filial\nTAB-1;Karimov;Aziz;Chilonzor filiali\nTAB-2;Rahimova;Dilnoza;\n";
+
+        var unconfigured = CsvHrSource.Parse(csv, new CsvHrSourceOptions());
+        Assert.False(unconfigured.HasBranch);
+        Assert.Null(unconfigured.Records[0].Branch);
+
+        var configured = CsvHrSource.Parse(csv, new CsvHrSourceOptions { Columns = { Branch = "filial" } });
+        Assert.True(configured.HasBranch);
+        Assert.Equal(("Chilonzor filiali", null), (configured.Records[0].Branch, configured.Records[1].Branch));
+
+        // Sozlangan ustun faylda yo'q: hamma "o'tgan" bo'lib qolmasligi uchun import rad etiladi
+        var e = Assert.Throws<ConnectorException>(() => CsvHrSource.Parse("employeeNumber;lastName;firstName\nTAB-1;Karimov;Aziz\n",
+            new CsvHrSourceOptions { Columns = { Branch = "filial" } }));
+        Assert.Contains("filial", e.Message);
+    }
 }

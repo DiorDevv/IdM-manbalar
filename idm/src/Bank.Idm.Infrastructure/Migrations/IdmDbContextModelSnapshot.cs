@@ -901,6 +901,11 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Branch")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("branch");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1049,6 +1054,10 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("identity_id");
 
+                    b.Property<DateTimeOffset?>("MoverDueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("mover_due_at");
+
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid")
                         .HasColumnName("role_id");
@@ -1069,6 +1078,10 @@ namespace Bank.Idm.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_identity_roles");
+
+                    b.HasIndex("MoverDueAt")
+                        .HasDatabaseName("ix_identity_roles_mover_due_at")
+                        .HasFilter("mover_due_at IS NOT NULL");
 
                     b.HasIndex("RoleId")
                         .HasDatabaseName("ix_identity_roles_role_id");
@@ -1435,6 +1448,11 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("Branch")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("branch");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")

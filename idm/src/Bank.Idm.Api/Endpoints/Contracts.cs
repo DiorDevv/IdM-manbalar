@@ -5,7 +5,7 @@ namespace Bank.Idm.Api.Endpoints;
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
 public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0,
-    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null, int OwnedRoles = 0, int OwnedRolesDue = 0);
+    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null, int OwnedRoles = 0, int OwnedRolesDue = 0, int MoverCount = 0);
 
 public record CertifyRoleBody(IReadOnlyList<Guid> Keep, string? Comment);
 
@@ -28,12 +28,12 @@ public record DashboardCounts(
 public record ConnectorStatus(string Code, string Name, ApplicationKind Kind, bool IsRunning, ConnectorRunItem? LastRun, DateTimeOffset? LastSuccessAt);
 
 public record IdentityListItem(Guid Id, string EmployeeNumber, string DisplayName, string? Email, string? Department,
-    string? JobTitle, IdentityStatus Status, IdentitySource Source, int AccountCount, DateTimeOffset UpdatedAt);
+    string? JobTitle, IdentityStatus Status, IdentitySource Source, int AccountCount, DateTimeOffset UpdatedAt, string? Branch = null);
 
 public record IdentityDetails(Guid Id, string EmployeeNumber, string FirstName, string LastName, string? MiddleName,
     string? Email, string? Department, string? JobTitle, Guid? ManagerId, string? ManagerName, IdentityStatus Status,
     IdentitySource Source, DateOnly? HireDate, DateOnly? TerminationDate, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-    IReadOnlyList<AccountItem> Accounts);
+    IReadOnlyList<AccountItem> Accounts, string? Branch = null);
 
 public record AccountItem(Guid Id, string ApplicationCode, string ApplicationName, string Login, AccountStatus Status, AccountKind Kind,
     DateTimeOffset? LastSyncedAt, IReadOnlyList<EntitlementRef> Entitlements);
@@ -84,7 +84,7 @@ public record EntitlementPick(Guid Id, string ApplicationCode, string Name, bool
 public record RoleListItem(Guid Id, string Code, string Name, string? Description, RiskLevel Risk, bool IsRequestable,
     int EntitlementCount, int MemberCount, int RuleCount);
 
-public record RoleRuleItem(Guid Id, string? Department, string? JobTitle, int MatchCount, DateTimeOffset CreatedAt, string CreatedBy);
+public record RoleRuleItem(Guid Id, string? Department, string? JobTitle, int MatchCount, DateTimeOffset CreatedAt, string CreatedBy, string? Branch = null);
 
 public record RoleMemberItem(Guid IdentityId, string Name, string EmployeeNumber, string? Department, IdentityStatus Status,
     RoleAssignmentSource Source, DateTimeOffset ValidFrom);
@@ -99,11 +99,20 @@ public record SaveRoleRequest(string Code, string Name, string? Description, Ris
 
 public record SetRoleEntitlementsRequest(IReadOnlyList<Guid> EntitlementIds);
 
-public record AddRoleRuleRequest(string? Department, string? JobTitle);
+public record AddRoleRuleRequest(string? Department, string? JobTitle, string? Branch = null);
 
-public record AttributeValues(IReadOnlyList<string> Departments, IReadOnlyList<string> JobTitles);
+public record AttributeValues(IReadOnlyList<string> Departments, IReadOnlyList<string> JobTitles, IReadOnlyList<string>? Branches = null);
 
-public record IdentityRoleItem(Guid RoleId, string Code, string Name, RoleAssignmentSource Source, DateTimeOffset ValidFrom);
+/// <param name="MoverDueAt">Xodim boshqa filial/bo'limga o'tgan: shu vaqtgacha yangi rahbar qoldirmasa, rol tugaydi.</param>
+public record IdentityRoleItem(Guid RoleId, string Code, string Name, RoleAssignmentSource Source, DateTimeOffset ValidFrom,
+    Guid AssignmentId = default, DateTimeOffset? ValidTo = null, DateTimeOffset? MoverDueAt = null);
+
+/// <summary>O'tgan xodimning qaror kutilayotgan roli.</summary>
+public record MoverItem(Guid AssignmentId, Guid IdentityId, string Name, string EmployeeNumber, string? Branch, string? Department, string? JobTitle,
+    Guid RoleId, string RoleCode, string RoleName, RiskLevel Risk, RoleAssignmentSource Source, DateTimeOffset? ValidTo, DateTimeOffset DueAt,
+    string? ManagerName, bool CanDecide);
+
+public record MoverDecisionBody(string Decision, string? Comment);
 
 public record IdentityAccess(IReadOnlyList<IdentityRoleItem> Roles, IReadOnlyList<Bank.Idm.Infrastructure.Access.AccessLine> Lines,
     IReadOnlyList<SodViolationItem> Sod);

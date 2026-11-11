@@ -43,6 +43,11 @@ public class IdentityRole
     public DateTimeOffset? ValidTo { get; set; }
     /// <summary>Ariza orqali berilgan bo'lsa, o'sha ariza.</summary>
     public Guid? AccessRequestId { get; set; }
+    /// <summary>
+    /// Xodim boshqa filial yoki bo'limga o'tdi: shu vaqtgacha yangi rahbar rolni "qoldirish" deb tasdiqlamasa, rol tugaydi.
+    /// Bo'sh — qaror kutilmaydi. Faqat ariza yoki qo'lda berilgan rollarda (avtomatik rollar qoidadan qayta hisoblanadi).
+    /// </summary>
+    public DateTimeOffset? MoverDueAt { get; set; }
 }
 
 public enum RoleAssignmentSource
@@ -54,7 +59,7 @@ public enum RoleAssignmentSource
 }
 
 /// <summary>
-/// Avtomatik ("tug'ma") rol qoidasi: bo'lim va/yoki lavozim mos kelgan har bir ishlayotgan xodimga rol beriladi.
+/// Avtomatik ("tug'ma") rol qoidasi: filial, bo'lim va/yoki lavozim mos kelgan har bir ishlayotgan xodimga rol beriladi.
 /// Bo'sh maydon — "har qanday". Qiymatlar HR'dagi kabi, katta-kichik harf farqsiz solishtiriladi.
 /// </summary>
 public class RoleRule
@@ -62,6 +67,7 @@ public class RoleRule
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid RoleId { get; set; }
     public Role Role { get; set; } = null!;
+    public string? Branch { get; set; }
     public string? Department { get; set; }
     public string? JobTitle { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

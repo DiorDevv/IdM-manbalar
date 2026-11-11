@@ -105,6 +105,7 @@ export function RoleDetailPage() {
             <div className="list-row" key={x.id}>
               <span className="chip-icon" style={{ ['--tone' as string]: 'var(--teal)', ['--tone-soft' as string]: 'var(--teal-soft)' }}><Icon name="sparkle" size={14} /></span>
               <div className="grow" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {x.branch && <><span className="rule-chip">{r.branch}: <b>{x.branch}</b></span><span className="muted">+</span></>}
                 <span className="rule-chip">{r.department}: <b>{x.department ?? r.any}</b></span>
                 <span className="muted">+</span>
                 <span className="rule-chip">{r.jobTitle}: <b>{x.jobTitle ?? r.any}</b></span>
@@ -158,29 +159,34 @@ function AddEntitlements({ open, current, pending, onClose, onSave }: { open: bo
 }
 
 function AddRule({ open, roleId, onClose, onSaved }: { open: boolean; roleId: string; onClose: () => void; onSaved: (role: RoleDetails) => void }) {
+  const [branch, setBranch] = useState('')
   const [department, setDepartment] = useState('')
   const [jobTitle, setJobTitle] = useState('')
   // Har ochilishda toza forma (oldin Esc bilan yopilgan bo'lsa ham)
-  useEffect(() => { if (open) { setDepartment(''); setJobTitle(''); save.reset() } }, [open])
+  useEffect(() => { if (open) { setBranch(''); setDepartment(''); setJobTitle(''); save.reset() } }, [open])
   const values = useQuery({ queryKey: ['identity-attributes'], queryFn: () => api<AttributeValues>('/api/identity-attributes'), enabled: open, staleTime: 60_000 })
   const save = useMutation({
-    mutationFn: () => api<RoleDetails>(`/api/roles/${roleId}/rules`, { method: 'POST', body: JSON.stringify({ department: department || null, jobTitle: jobTitle || null }) }),
-    onSuccess: x => { setDepartment(''); setJobTitle(''); onSaved(x) },
+    mutationFn: () => api<RoleDetails>(`/api/roles/${roleId}/rules`, { method: 'POST', body: JSON.stringify({ branch: branch || null, department: department || null, jobTitle: jobTitle || null }) }),
+    onSuccess: x => { setBranch(''); setDepartment(''); setJobTitle(''); onSaved(x) },
   })
-  const general = formError(save.error, ['department', 'jobTitle'])
+  const general = formError(save.error, ['branch', 'department', 'jobTitle'])
   return (
     <Modal open={open} title={r.addRule} onClose={onClose} footer={<>
       <button className="btn secondary" onClick={onClose}>{t.cancel}</button>
-      <button className="btn primary" disabled={save.isPending || (!department.trim() && !jobTitle.trim())} onClick={() => save.mutate()}>{r.save}</button>
+      <button className="btn primary" disabled={save.isPending || (!branch.trim() && !department.trim() && !jobTitle.trim())} onClick={() => save.mutate()}>{r.save}</button>
     </>}>
       <div className="form">
         {general && <div className="alert bad">{general}</div>}
+        {(values.data?.branches?.length ?? 0) > 0 && <Field label={r.branch} error={fieldError(save.error, 'branch')}>
+          <input className="input" list="branch-values" value={branch} onChange={e => setBranch(e.target.value)} placeholder={r.any} />
+        </Field>}
         <Field label={r.department} error={fieldError(save.error, 'department')} help={r.ruleHelp}>
           <input className="input" list="dept-values" value={department} onChange={e => setDepartment(e.target.value)} placeholder={r.any} />
         </Field>
         <Field label={r.jobTitle} error={fieldError(save.error, 'jobTitle')}>
           <input className="input" list="title-values" value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder={r.any} />
         </Field>
+        <datalist id="branch-values">{values.data?.branches?.map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="dept-values">{values.data?.departments.map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="title-values">{values.data?.jobTitles.map(v => <option key={v} value={v} />)}</datalist>
       </div>

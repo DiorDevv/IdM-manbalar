@@ -44,6 +44,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.Property(x => x.LastName).HasMaxLength(128);
             e.Property(x => x.MiddleName).HasMaxLength(128);
             e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.Branch).HasMaxLength(256);
             e.Property(x => x.Department).HasMaxLength(256);
             e.Property(x => x.JobTitle).HasMaxLength(256);
             e.HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.SetNull);
@@ -103,6 +104,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         b.Entity<RoleRule>(e =>
         {
             e.HasIndex(x => x.RoleId);
+            e.Property(x => x.Branch).HasMaxLength(256);
             e.Property(x => x.Department).HasMaxLength(256);
             e.Property(x => x.JobTitle).HasMaxLength(256);
             e.Property(x => x.CreatedBy).HasMaxLength(256);
@@ -126,6 +128,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         {
             // Bir xodimda bir rol bir manbadan faqat bitta amaldagi yozuv (parallel qayta hisoblashdan himoya)
             e.HasIndex(x => new { x.IdentityId, x.RoleId, x.Source }).IsUnique().HasFilter("valid_to IS NULL");
+            e.HasIndex(x => x.MoverDueAt).HasFilter("mover_due_at IS NOT NULL");
             e.HasOne(x => x.Identity).WithMany(x => x.Roles).HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
         });

@@ -50,7 +50,7 @@ export function IdentitiesPage() {
                     <tr key={i.id} className="clickable" onClick={() => navigate(`/identities/${i.id}`)}>
                       <td><Person name={i.displayName} sub={i.email ?? '—'} to={`/identities/${i.id}`} /></td>
                       <td className="mono">{i.employeeNumber}</td>
-                      <td><div>{i.department ?? '—'}</div><div className="cell-sub">{i.jobTitle ?? ''}</div></td>
+                      <td><div>{i.department ?? '—'}</div><div className="cell-sub">{[i.branch, i.jobTitle].filter(Boolean).join(', ')}</div></td>
                       <td><StatusBadge status={i.status} /></td>
                       <td><span className="badge neutral plain">{t.source[i.source]}</span></td>
                       <td className="num" style={{ textAlign: 'right' }}>{i.accountCount}</td>

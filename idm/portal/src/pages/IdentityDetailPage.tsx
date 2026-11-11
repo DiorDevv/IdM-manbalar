@@ -69,6 +69,7 @@ export function IdentityDetailPage() {
         </div>
         <div className="facts">
           <Fact icon="mail" label={f.email}>{i.email ?? '—'}</Fact>
+          {i.branch && <Fact icon="building" label={f.branch}>{i.branch}</Fact>}
           <Fact icon="building" label={f.department}>{i.department ?? '—'}</Fact>
           <Fact icon="briefcase" label={f.jobTitle}>{i.jobTitle ?? '—'}</Fact>
           <Fact icon="user" label={f.manager}>{i.managerId ? <Link to={`/identities/${i.managerId}`}>{i.managerName}</Link> : '—'}</Fact>
@@ -84,6 +85,7 @@ export function IdentityDetailPage() {
             {access.data.roles.length === 0 ? <span className="muted" style={{ fontSize: 12.5 }}>{t.roles.noRoles}</span> : access.data.roles.map(r => (
               <Link key={`${r.roleId}-${r.source}`} to={`/roles/${r.roleId}`} className="chip" title={t.roles.source[r.source]}>
                 <Icon name="role" size={12} />{r.name}<span className="muted">{t.roles.source[r.source]}</span>
+                {r.moverDueAt && <span className="badge warn plain" title={formatDateTime(r.moverDueAt)}>{t.movers.roleBadge(formatDate(r.moverDueAt))}</span>}
               </Link>
             ))}
           </div>}

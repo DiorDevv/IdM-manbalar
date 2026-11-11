@@ -94,7 +94,7 @@ public class ConnectorSyncCoordinator(IServiceScopeFactory scopes, IOptionsMonit
             var factory = scope.ServiceProvider.GetRequiredService<IConnectorFactory>();
             var run = definition.IsHr
                 ? await scope.ServiceProvider.GetRequiredService<HrSync>()
-                    .ExecuteAsync(runId, factory.CreateHrSource(code, definition), definition.ToHrSettings(), actorName, allowMassDelete, ct)
+                    .ExecuteAsync(runId, factory.CreateHrSource(code, definition), definition.ToHrSettings(options.CurrentValue.Mover), actorName, allowMassDelete, ct)
                 : await scope.ServiceProvider.GetRequiredService<ConnectorSync>()
                     .ExecuteAsync(runId, factory.Create(code, definition), definition.ToSettings(), actorName, allowMassDelete, ct);
             if (run.Status == ConnectorRunStatus.Succeeded)

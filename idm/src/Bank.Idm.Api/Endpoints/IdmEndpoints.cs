@@ -18,15 +18,17 @@ public static class IdmEndpoints
     {
         var api = app.MapGroup("/api").RequireAuthorization();
 
-        api.MapGet("/me", async (CurrentUser user, IdmDbContext db, Microsoft.Extensions.Options.IOptions<IdmOptions> options, CancellationToken ct) =>
+        api.MapGet("/me", async (CurrentUser user, IdmDbContext db, Bank.Idm.Infrastructure.Access.MoverService movers, TimeProvider time,
+            Microsoft.Extensions.Options.IOptions<IdmOptions> options, CancellationToken ct) =>
         {
             var actor = await RequestEndpoints.ActorAsync(db, user, ct);
             var hasTeam = actor.IdentityId is { } me && await db.Identities.AnyAsync(i => i.ManagerId == me && i.Status != IdentityStatus.Terminated, ct);
             var inbox = await RequestEndpoints.Inbox(db.AccessRequests, actor).CountAsync(ct);
             var reviews = await ReviewEndpoints.Inbox(db.AccessReviewItems, actor).CountAsync(ct);
             var owned = await AccessEndpoints.OwnedRolesAsync(db, actor, DateTimeOffset.UtcNow, options.Value.RoleCertificationDays, ct);
+            var moverCount = actor.IdentityId is null ? 0 : await MoverEndpoints.Mine(movers.Pending(time.GetUtcNow()), actor).CountAsync(ct);
             return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews, user.MfaRequiredFor,
-                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due));
+                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due), moverCount);
         });
 
         // Bosh sahifa: butun bank bo'yicha hisoblar (SoD buzilishlari ham) har ochilishda emas — umumiy keshdan (Idm:DashboardCacheSeconds);
@@ -63,11 +65,12 @@ public static class IdmEndpoints
         }).RequireAuthorization(CanReadAll);
 
         var identities = api.MapGroup("/identities").RequireAuthorization(CanReadAll);
-        identities.MapGet("/", async (IdmDbContext db, string? search, IdentityStatus? status, int skip = 0, int take = 50, CancellationToken ct = default) =>
+        identities.MapGet("/", async (IdmDbContext db, string? search, IdentityStatus? status, string? branch, int skip = 0, int take = 50, CancellationToken ct = default) =>
         {
             take = Math.Clamp(take, 1, MaxTake); skip = Math.Max(skip, 0);
             var query = db.Identities.AsNoTracking();
             if (status is not null) query = query.Where(i => i.Status == status);
+            if (!string.IsNullOrWhiteSpace(branch)) query = query.Where(i => i.Branch == branch.Trim());
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = $"%{search.Trim()}%";
@@ -78,7 +81,7 @@ public static class IdmEndpoints
             var items = await query.OrderBy(i => i.LastName).ThenBy(i => i.FirstName).Skip(skip).Take(take)
                 .Select(i => new IdentityListItem(i.Id, i.EmployeeNumber,
                     i.MiddleName == null ? i.LastName + " " + i.FirstName : i.LastName + " " + i.FirstName + " " + i.MiddleName,
-                    i.Email, i.Department, i.JobTitle, i.Status, i.Source, i.Accounts.Count, i.UpdatedAt))
+                    i.Email, i.Department, i.JobTitle, i.Status, i.Source, i.Accounts.Count, i.UpdatedAt, i.Branch))
                 .ToListAsync(ct);
             return new PagedResult<IdentityListItem>(items, total, skip, take);
         });
@@ -96,7 +99,8 @@ public static class IdmEndpoints
                     a.Login, a.Status, a.Kind, a.LastSyncedAt,
                     a.Entitlements.OrderBy(ae => ae.IsInherited).ThenByDescending(ae => ae.Entitlement.IsPrivileged).ThenBy(ae => ae.Entitlement.Name)
                         .Select(ae => new EntitlementRef(ae.Entitlement.Id, ae.Entitlement.Name, ae.Entitlement.IsPrivileged,
-                            ae.ViaEntitlementId == null ? null : a.Entitlements.FirstOrDefault(v => v.EntitlementId == ae.ViaEntitlementId)?.Entitlement.Name)).ToList())).ToList()));
+                            ae.ViaEntitlementId == null ? null : a.Entitlements.FirstOrDefault(v => v.EntitlementId == ae.ViaEntitlementId)?.Entitlement.Name)).ToList())).ToList(),
+                i.Branch));
         });
 
         // Xodim tarixi: xodimning o'zi va uning akkauntlari bo'yicha audit yozuvlari (eng yangisi birinchi)
@@ -144,6 +148,7 @@ public static class IdmEndpoints
         api.MapAccessEndpoints();
         api.MapInsightEndpoints();
         api.MapRequestEndpoints();
+        api.MapMoverEndpoints();
         api.MapProvisioningEndpoints();
         api.MapReviewEndpoints();
 

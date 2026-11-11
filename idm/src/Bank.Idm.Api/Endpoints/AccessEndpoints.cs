@@ -39,7 +39,8 @@ public static partial class AccessEndpoints
 
         read.MapGet("/identity-attributes", async (IdmDbContext db, CancellationToken ct) => new AttributeValues(
             await db.Identities.Where(i => i.Department != null).Select(i => i.Department!).Distinct().OrderBy(x => x).Take(500).ToListAsync(ct),
-            await db.Identities.Where(i => i.JobTitle != null).Select(i => i.JobTitle!).Distinct().OrderBy(x => x).Take(500).ToListAsync(ct)));
+            await db.Identities.Where(i => i.JobTitle != null).Select(i => i.JobTitle!).Distinct().OrderBy(x => x).Take(500).ToListAsync(ct),
+            await db.Identities.Where(i => i.Branch != null).Select(i => i.Branch!).Distinct().OrderBy(x => x).Take(500).ToListAsync(ct)));
 
         // ---------- Rollar ----------
         read.MapGet("/roles", async (IdmDbContext db, TimeProvider time, CancellationToken ct) =>
@@ -138,19 +139,19 @@ public static partial class AccessEndpoints
         {
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct);
             if (role is null) return TypedResults.NotFound();
-            var (department, title) = (Clean(request.Department), Clean(request.JobTitle));
-            // Ikkalasi bo'sh qoida — butun bankka rol: xato bilan berilmasligi uchun taqiqlanadi
-            if (department is null && title is null)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Bo'lim yoki lavozimdan kamida bittasi kerak"] });
-            if (department?.Length > 256 || title?.Length > 256)
+            var (branch, department, title) = (Clean(request.Branch), Clean(request.Department), Clean(request.JobTitle));
+            // Hammasi bo'sh qoida — butun bankka rol: xato bilan berilmasligi uchun taqiqlanadi
+            if (branch is null && department is null && title is null)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Filial, bo'lim yoki lavozimdan kamida bittasi kerak"] });
+            if (branch?.Length > 256 || department?.Length > 256 || title?.Length > 256)
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Ko'pi bilan 256 belgi"] });
+            static bool Same(string? a, string? b) => BirthrightService.Matches(a, b) && BirthrightService.Matches(b, a);
             var rules = await db.RoleRules.Where(r => r.RoleId == id).ToListAsync(ct);
-            if (rules.Any(r => BirthrightService.Matches(r.Department, department) && BirthrightService.Matches(department, r.Department)
-                    && BirthrightService.Matches(r.JobTitle, title) && BirthrightService.Matches(title, r.JobTitle)))
+            if (rules.Any(r => Same(r.Branch, branch) && Same(r.Department, department) && Same(r.JobTitle, title)))
                 return TypedResults.Conflict("Bunday qoida allaqachon bor");
-            var rule = new RoleRule { RoleId = id, Department = department, JobTitle = title, CreatedAt = time.GetUtcNow(), CreatedBy = user.Login };
+            var rule = new RoleRule { RoleId = id, Branch = branch, Department = department, JobTitle = title, CreatedAt = time.GetUtcNow(), CreatedBy = user.Login };
             db.RoleRules.Add(rule);
-            await audit.SaveChangesAsync(Entry(user, "role.rule-added", id, new { role.Code, department, jobTitle = title }), ct);
+            await audit.SaveChangesAsync(Entry(user, "role.rule-added", id, new { role.Code, branch, department, jobTitle = title }), ct);
             return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
         });
 
@@ -160,7 +161,7 @@ public static partial class AccessEndpoints
             var rule = await db.RoleRules.Include(r => r.Role).FirstOrDefaultAsync(r => r.Id == ruleId && r.RoleId == id, ct);
             if (rule is null) return TypedResults.NotFound();
             db.RoleRules.Remove(rule);
-            await audit.SaveChangesAsync(Entry(user, "role.rule-removed", id, new { rule.Role.Code, rule.Department, rule.JobTitle }), ct);
+            await audit.SaveChangesAsync(Entry(user, "role.rule-removed", id, new { rule.Role.Code, rule.Branch, rule.Department, rule.JobTitle }), ct);
             return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
         });
 
@@ -175,7 +176,8 @@ public static partial class AccessEndpoints
             if (!await db.Identities.AnyAsync(i => i.Id == id, ct)) return TypedResults.NotFound();
             var now = time.GetUtcNow();
             var roles = await db.IdentityRoles.AsNoTracking().Where(r => r.IdentityId == id && r.ValidFrom <= now && (r.ValidTo == null || r.ValidTo > now))
-                .OrderBy(r => r.Role.Name).Select(r => new IdentityRoleItem(r.RoleId, r.Role.Code, r.Role.Name, r.Source, r.ValidFrom)).ToListAsync(ct);
+                .OrderBy(r => r.Role.Name).Select(r => new IdentityRoleItem(r.RoleId, r.Role.Code, r.Role.Name, r.Source, r.ValidFrom, r.Id, r.ValidTo, r.MoverDueAt))
+                .ToListAsync(ct);
             var sod = await ToItemsAsync(db, await analyzer.SodViolationsAsync(id, ct), ct);
             return TypedResults.Ok(new IdentityAccess(roles, await analyzer.ForIdentityAsync(id, ct), sod));
         });
@@ -311,7 +313,7 @@ public static partial class AccessEndpoints
         bool Due(Role r) => certificationDays > 0 && (r.CertifiedAt is null || r.CertifiedAt < now.AddDays(-certificationDays));
         return roles.Select(r => new OwnedRoleItem(r.Id, r.Code, r.Name, r.Description, r.Risk, r.Owner == null ? null : r.Owner.LastName + " " + r.Owner.FirstName,
                 members.GetValueOrDefault(r.Id), r.Entitlements.Select(e => e.Entitlement).OrderBy(e => e.Application.Code).ThenBy(e => e.Name).Select(Pick).ToList(),
-                r.Rules.Select(x => $"{x.Department ?? "*"} / {x.JobTitle ?? "*"}").ToList(), r.CertifiedAt, r.CertifiedByName ?? r.CertifiedBy, Due(r)))
+                r.Rules.Select(x => $"{x.Branch ?? "*"} / {x.Department ?? "*"} / {x.JobTitle ?? "*"}").ToList(), r.CertifiedAt, r.CertifiedByName ?? r.CertifiedBy, Due(r)))
             .OrderByDescending(r => r.Due).ThenBy(r => r.Code).ToList();
     }
 
@@ -334,10 +336,11 @@ public static partial class AccessEndpoints
             .OrderBy(r => r.Identity.LastName).ThenBy(r => r.Identity.FirstName).Take(500)
             .Select(r => new RoleMemberItem(r.IdentityId, r.Identity.LastName + " " + r.Identity.FirstName, r.Identity.EmployeeNumber, r.Identity.Department,
                 r.Identity.Status, r.Source, r.ValidFrom)).ToListAsync(ct);
-        var people = await db.Identities.AsNoTracking().Where(i => i.Status != IdentityStatus.Terminated).Select(i => new { i.Department, i.JobTitle }).ToListAsync(ct);
-        var rules = role.Rules.OrderBy(r => r.Department).ThenBy(r => r.JobTitle)
+        var people = await db.Identities.AsNoTracking().Where(i => i.Status != IdentityStatus.Terminated).Select(i => new { i.Branch, i.Department, i.JobTitle }).ToListAsync(ct);
+        var rules = role.Rules.OrderBy(r => r.Branch).ThenBy(r => r.Department).ThenBy(r => r.JobTitle)
             .Select(r => new RoleRuleItem(r.Id, r.Department, r.JobTitle,
-                people.Count(p => BirthrightService.Matches(r.Department, p.Department) && BirthrightService.Matches(r.JobTitle, p.JobTitle)), r.CreatedAt, r.CreatedBy))
+                people.Count(p => BirthrightService.Matches(r.Branch, p.Branch) && BirthrightService.Matches(r.Department, p.Department)
+                    && BirthrightService.Matches(r.JobTitle, p.JobTitle)), r.CreatedAt, r.CreatedBy, r.Branch))
             .ToList();
         var entitlements = role.Entitlements.Select(e => e.Entitlement).OrderBy(e => e.Application.Code).ThenBy(e => e.Name).Select(Pick).ToList();
         var conflicts = await analyzer.RoleConflictsAsync(entitlements.Select(e => e.Id).ToList(), ct);

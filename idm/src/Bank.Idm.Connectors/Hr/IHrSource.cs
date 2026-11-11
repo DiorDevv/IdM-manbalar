@@ -12,6 +12,8 @@ public record HrSnapshot(IReadOnlyList<HrRecord> Records)
     public IReadOnlyList<string> Warnings { get; init; } = [];
     /// <summary>Faylda bor, lekin xato tufayli o'qilmagan tabel raqamlari: ular "HR'da yo'q" deb hisoblanmaydi.</summary>
     public IReadOnlySet<string> SkippedEmployeeNumbers { get; init; } = new HashSet<string>();
+    /// <summary>Manba filialni beradimi. Yo'q bo'lsa xodimlarning filiali o'zgartirilmaydi (bo'sh qiymat "filial yo'q" degani emas).</summary>
+    public bool HasBranch { get; init; }
 }
 
 /// <summary>HR'dagi xodim yozuvi. Status bo'sh bo'lsa, sanalardan aniqlanadi.</summary>
@@ -26,7 +28,8 @@ public record HrRecord(
     string? ManagerEmployeeNumber = null,
     DateOnly? HireDate = null,
     DateOnly? TerminationDate = null,
-    HrStatus? Status = null);
+    HrStatus? Status = null,
+    string? Branch = null);
 
 public enum HrStatus
 {

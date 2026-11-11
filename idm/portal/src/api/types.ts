@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null; ownedRoles?: number; ownedRolesDue?: number }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null; ownedRoles?: number; ownedRolesDue?: number; moverCount?: number }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number
@@ -22,7 +22,7 @@ export interface ConnectorRun {
 }
 export interface IdentityListItem {
   id: string; employeeNumber: string; displayName: string; email: string | null; department: string | null
-  jobTitle: string | null; status: IdentityStatus; source: IdentitySource; accountCount: number; updatedAt: string
+  jobTitle: string | null; status: IdentityStatus; source: IdentitySource; accountCount: number; updatedAt: string; branch?: string | null
 }
 export interface EntitlementRef { id: string; name: string; isPrivileged: boolean; via?: string | null }
 export interface AccountItem { id: string; applicationCode: string; applicationName: string; login: string; status: AccountStatus; kind: string; lastSyncedAt: string | null; entitlements: EntitlementRef[] }
@@ -30,7 +30,7 @@ export interface IdentityDetails {
   id: string; employeeNumber: string; firstName: string; lastName: string; middleName: string | null; email: string | null
   department: string | null; jobTitle: string | null; managerId: string | null; managerName: string | null
   status: IdentityStatus; source: IdentitySource; hireDate: string | null; terminationDate: string | null
-  createdAt: string; updatedAt: string; accounts: AccountItem[]
+  createdAt: string; updatedAt: string; accounts: AccountItem[]; branch?: string | null
 }
 export interface ApplicationItem {
   id: string; code: string; name: string; description: string | null; kind: string; risk: RiskLevel; isActive: boolean
@@ -59,7 +59,7 @@ export type AssignmentSource = 'Birthright' | 'Request' | 'Manual'
 export type AccessState = 'Granted' | 'Missing' | 'Excess'
 export interface EntitlementPick { id: string; applicationCode: string; name: string; isPrivileged: boolean; risk: RiskLevel }
 export interface RoleListItem { id: string; code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean; entitlementCount: number; memberCount: number; ruleCount: number }
-export interface RoleRuleItem { id: string; department: string | null; jobTitle: string | null; matchCount: number; createdAt: string; createdBy: string }
+export interface RoleRuleItem { id: string; department: string | null; jobTitle: string | null; matchCount: number; createdAt: string; createdBy: string; branch?: string | null }
 export interface RoleMemberItem { identityId: string; name: string; employeeNumber: string; department: string | null; status: IdentityStatus; source: AssignmentSource; validFrom: string }
 export interface RoleDetails {
   id: string; code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean; createdAt: string
@@ -71,10 +71,16 @@ export interface OwnedRoleItem {
   entitlements: EntitlementPick[]; rules: string[]; certifiedAt: string | null; certifiedBy: string | null; due: boolean
 }
 export interface SaveRole { code: string; name: string; description: string | null; risk: RiskLevel; isRequestable: boolean; ownerId?: string | null }
-export interface AttributeValues { departments: string[]; jobTitles: string[] }
+export interface AttributeValues { departments: string[]; jobTitles: string[]; branches?: string[] | null }
 export interface BirthrightResult { assigned: number; removed: number; identitiesChecked: number }
 export interface AccessLine { entitlementId: string; applicationCode: string; entitlementName: string; isPrivileged: boolean; state: AccessState; viaRoles: string[]; accounts: string[]; inheritedVia?: string[] }
-export interface IdentityRoleItem { roleId: string; code: string; name: string; source: AssignmentSource; validFrom: string }
+export interface IdentityRoleItem { roleId: string; code: string; name: string; source: AssignmentSource; validFrom: string; assignmentId?: string; validTo?: string | null; moverDueAt?: string | null }
+/** Boshqa filial yoki bo'limga o'tgan xodimning qaror kutilayotgan roli. */
+export interface MoverItem {
+  assignmentId: string; identityId: string; name: string; employeeNumber: string; branch: string | null; department: string | null; jobTitle: string | null
+  roleId: string; roleCode: string; roleName: string; risk: RiskLevel; source: AssignmentSource; validTo: string | null; dueAt: string
+  managerName: string | null; canDecide: boolean
+}
 export interface SodViolationItem { ruleId: string; ruleCode: string; ruleName: string; risk: RiskLevel; identityId: string; identityName: string; employeeNumber: string; department: string | null; left: string[]; right: string[]
   exception?: SodExceptionInfo | null }
 export interface SodExceptionInfo { id: string; validTo: string; compensatingControl: string; approvedBy: string }

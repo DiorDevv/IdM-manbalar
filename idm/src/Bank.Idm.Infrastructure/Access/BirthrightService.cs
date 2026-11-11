@@ -8,7 +8,7 @@ namespace Bank.Idm.Infrastructure.Access;
 public record BirthrightResult(int Assigned, int Removed, int IdentitiesChecked);
 
 /// <summary>
-/// Avtomatik ("tug'ma") rollar: qoidaga (bo'lim, lavozim) mos ishlayotgan xodimga rol beriladi, mos kelmay qolsa yoki xodim ishdan
+/// Avtomatik ("tug'ma") rollar: qoidaga (filial, bo'lim, lavozim) mos ishlayotgan xodimga rol beriladi, mos kelmay qolsa yoki xodim ishdan
 /// ketsa — olib tashlanadi (yozuvga tugash sanasi qo'yiladi, tarix saqlanadi). Faqat Birthright manbali tayinlashlarga tegadi:
 /// ariza yoki qo'lda berilgan rollar o'zgarmaydi — faqat xodim ishdan ketganda: unda barcha rollari tugaydi va kutilayotgan arizalari bekor qilinadi. Har o'zgarish auditda; hammasi bitta tranzaksiyada, parallel ishga tushishdan qulf bilan himoyalangan.
 /// </summary>
@@ -23,10 +23,10 @@ public class BirthrightService(IdmDbContext db, AuditLog audit, TimeProvider tim
         await db.Database.ExecuteSqlAsync($"select pg_advisory_xact_lock({LockKey})", ct);
         var now = time.GetUtcNow();
 
-        var rules = await db.RoleRules.AsNoTracking().Select(r => new { r.RoleId, r.Department, r.JobTitle }).ToListAsync(ct);
+        var rules = await db.RoleRules.AsNoTracking().Select(r => new { r.RoleId, r.Branch, r.Department, r.JobTitle }).ToListAsync(ct);
         var roles = await db.Roles.AsNoTracking().ToDictionaryAsync(r => r.Id, r => r.Code, ct);
         var identities = await db.Identities.AsNoTracking()
-            .Select(i => new { i.Id, i.EmployeeNumber, i.Department, i.JobTitle, i.Status }).ToListAsync(ct);
+            .Select(i => new { i.Id, i.EmployeeNumber, i.Branch, i.Department, i.JobTitle, i.Status }).ToListAsync(ct);
         var current = await db.IdentityRoles.Where(r => r.Source == RoleAssignmentSource.Birthright && r.ValidTo == null).ToListAsync(ct);
         var currentByIdentity = current.ToLookup(r => r.IdentityId);
 
@@ -36,7 +36,8 @@ public class BirthrightService(IdmDbContext db, AuditLog audit, TimeProvider tim
         {
             // Ishdan ketgan xodimda avtomatik rol qolmaydi; kutilayotgan (Pending) xodimga birinchi ish kunigacha beriladi
             var desired = i.Status == IdentityStatus.Terminated ? new HashSet<Guid>()
-                : rules.Where(r => Matches(r.Department, i.Department) && Matches(r.JobTitle, i.JobTitle)).Select(r => r.RoleId).ToHashSet();
+                : rules.Where(r => Matches(r.Branch, i.Branch) && Matches(r.Department, i.Department) && Matches(r.JobTitle, i.JobTitle))
+                    .Select(r => r.RoleId).ToHashSet();
             var have = currentByIdentity[i.Id].ToList();
             foreach (var roleId in desired.Where(id => have.All(h => h.RoleId != id)))
             {
@@ -56,11 +57,13 @@ public class BirthrightService(IdmDbContext db, AuditLog audit, TimeProvider tim
         }
         // Ishdan ketganlar: ariza yoki qo'lda berilgan rollar ham tugaydi, ko'rib chiqilayotgan arizalar bekor qilinadi
         var terminated = identities.Where(i => i.Status == IdentityStatus.Terminated).ToDictionary(i => i.Id, i => i.EmployeeNumber);
-        var leftovers = await db.IdentityRoles.Where(r => r.Source != RoleAssignmentSource.Birthright && r.ValidTo == null && terminated.Keys.Contains(r.IdentityId))
+        // Muddatli rollar ham (tugash sanasi kelajakda): ishdan ketgan xodimda muddat tugashini kutib turmaydi
+        var leftovers = await db.IdentityRoles
+            .Where(r => r.Source != RoleAssignmentSource.Birthright && (r.ValidTo == null || r.ValidTo > now) && terminated.Keys.Contains(r.IdentityId))
             .ToListAsync(ct);
         foreach (var assignment in leftovers)
         {
-            assignment.ValidTo = now;
+            (assignment.ValidTo, assignment.MoverDueAt) = (now, null);
             removed++;
             entries.Add(new AuditEntry(actorId, actorName, "identity.role-removed", "identity", assignment.IdentityId.ToString(),
                 JsonSerializer.Serialize(new { role = roles.GetValueOrDefault(assignment.RoleId), employeeNumber = terminated[assignment.IdentityId],

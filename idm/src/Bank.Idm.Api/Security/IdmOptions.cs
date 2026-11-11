@@ -36,6 +36,8 @@ public class IdmOptions
     public RequestLimitOptions Limits { get; set; } = new();
     /// <summary>Rol tarkibi shuncha kunda bir egasi tomonidan tasdiqlanishi kerak (0 — talab yo'q).</summary>
     public int RoleCertificationDays { get; set; } = 365;
+    /// <summary>Boshqa filial yoki bo'limga o'tgan xodim rollari (mover).</summary>
+    public Bank.Idm.Infrastructure.Access.MoverOptions Mover { get; set; } = new();
 }
 
 public class SsoOptions

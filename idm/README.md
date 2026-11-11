@@ -69,6 +69,9 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
 ```
 - **Ustunlar:** `employeeNumber`, `lastName`, `firstName` majburiy; `middleName`, `email`, `department`, `jobTitle`,
   `managerEmployeeNumber`, `hireDate`, `terminationDate` (`dd.MM.yyyy` yoki `yyyy-MM-dd`), `status` (faol / ta'til / ishdan ketgan).
+  Filial — `Columns.Branch` (standart sozlanmagan: filial o'zgartirilmaydi). Sozlansa, ustun faylda bo'lishi shart, aks holda import
+  rad etiladi (yo'qolgan ustun hammani "boshqa filialga o'tgan" qilib qo'ymasligi uchun). Sinov fayli: `branch` ustuni,
+  stendda yoqish — `Idm__Connectors__HR__Csv__Columns__Branch=branch`.
 - **Qat'iylik:** majburiy ustun yo'q, tabel raqami takrorlangan, fayl UTF-8 emas yoki buzilgan bo'lsa — butun import rad etiladi.
   Noto'g'ri qator o'tkazib yuboriladi (ogohlantirishda faqat qator va tabel raqami, shaxsiy ma'lumot yo'q) va "yo'qolgan" hisoblanmaydi.
 - **Holat:** `terminationDate` kelgan (Toshkent vaqti bo'yicha, `TimeZone`) yoki status "ishdan ketgan" — Terminated; `hireDate` kelmagan — Pending.
@@ -80,10 +83,29 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
   (eksport to'liq ekaniga ishonch bo'lgandagina). Ko'p xodim birdan ketsa (`MaxDeletePercent`) — import to'xtatiladi.
 - **Hisobotlar:** ishdan ketgan, lekin akkaunti faol; egasiz akkauntlar; akkauntsiz xodimlar; HR'da yo'q xodimlar.
 
+### O'tish (mover): boshqa filial yoki bo'limga
+`Idm:Mover` — `{ "Enabled": true, "GraceDays": 7, "MaxMovePercent": 20, "IntervalSeconds": 300 }`.
+- **Qachon:** HR'da filial (manba bersa) yoki bo'lim o'zgarsa. Bo'shliq va katta-kichik harf farqi o'tish emas. Lavozim yoki rahbar
+  o'zgarishi o'tish emas: avtomatik rollar qoidadan o'zi yangilanadi.
+- **Nima bo'ladi** (HR importi bilan bitta tranzaksiyada): avtomatik rollar qayta hisoblanadi; ariza va qo'lda berilgan rollarga
+  `mover_due_at = hozir + GraceDays` qo'yiladi (shu orada o'zi tugaydigan muddatli rolga — yo'q; takroriy o'tish muddatni uzaytirmaydi);
+  xodimning hal qilinmagan arizalari bekor qilinadi (`beneficiary-moved`: tasdiqlash zanjiri eski rahbarniki). `GraceDays=0` — rollar darhol tugaydi.
+- **Qaror:** *Arizalar → O'tgan xodimlar*. Xodimning hozirgi (yangi) rahbari, uning amaldagi o'rinbosari yoki administrator: *Qoldirish*
+  (asos majburiy, ≥ 5 belgi) yoki *Olib tashlash* (darhol). Xodim o'z roli haqida qaror qilmaydi; qaror bir marta (shartli yangilash).
+  Rahbarga pochta xabari (o'rinbosarga ham). Rahbari yo'q xodim — administratorlar ro'yxatida (*Barcha o'tishlar*).
+- **Muddat o'tsa:** fon ishi (faqat HA yetakchisida) rolni tugatadi (`mover-grace-expired`); AD guruhlari tizimga yozish orqali olinadi
+  (faqat IdM qo'shgan a'zolik — G bosqichi qoidasi). IdM'dan tashqari berilgan eski guruhlar "Ortiqcha" bo'lib, attestatsiyada ko'rinadi.
+- **Himoya:** bitta importda `MaxMovePercent` dan ko'p xodim o'tsa — import to'xtatiladi (administrator tasdiqlab qayta ishga tushiradi).
+- **Audit:** `identity.role-mover-pending`, `identity.role-mover-kept`, `identity.role-removed` (`reason`: `mover`, `mover-revoked`,
+  `mover-grace-expired`), `request.cancelled` (`beneficiary-moved`).
+- **Cheklov:** o'tish faqat HR manbali xodimlarda aniqlanadi (AD manbali — HR ulanguncha — aniqlanmaydi).
+- API: `GET /api/mover-reviews?scope=mine|all` (`all` — admin, auditor), `POST /api/mover-reviews/{id}` `{ "decision": "keep"|"revoke", "comment" }`.
+
 ## Rollar va SoD (E bosqichi)
 - **Rol** — biznes roli: tizimlardagi ruxsatlar (AD guruhlari) to'plami. Kod, nom, xavf darajasi, ariza orqali so'rash mumkinligi.
-- **Avtomatik ("tug'ma") qoida:** bo'lim va/yoki lavozim (bo'sh — "har qanday", ikkalasi bo'sh — taqiqlangan). Qoidaga mos
+- **Avtomatik ("tug'ma") qoida:** filial, bo'lim va/yoki lavozim (bo'sh — "har qanday", hammasi bo'sh — taqiqlangan). Qoidaga mos
   ishlayotgan (va ishga kirishi kutilayotgan) xodimga rol beriladi, mos kelmay qolsa yoki ishdan ketsa — olib tashlanadi.
+  Ishdan ketganda ariza/qo'lda berilgan rollar ham tugaydi — muddatli (tugash sanasi kelajakda) rollar ham.
   Qayta hisoblash har muvaffaqiyatli sinxronlashdan keyin avtomatik va "Qayta hisoblash" tugmasi bilan; qoida qo'shilganda avval
   "N ta xodimga mos" ko'rinadi. Faqat avtomatik tayinlashlarga tegadi; olib tashlangan rol o'chirilmaydi (`valid_to`), har o'zgarish auditda.
   Parallel hisoblashdan advisory lock va `identity_roles` dagi noyob indeks himoya qiladi.

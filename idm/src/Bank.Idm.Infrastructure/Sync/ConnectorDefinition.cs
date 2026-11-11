@@ -37,7 +37,8 @@ public class ConnectorDefinition
     public bool IsHr => Type.Equals(ConnectorTypes.HrCsv, StringComparison.OrdinalIgnoreCase);
     public ApplicationKind Kind => IsHr ? ApplicationKind.HumanResources : ApplicationKind.Directory;
     public SyncSettings ToSettings() => new(MaxDeletePercent, CreateIdentities, PrivilegedGroups);
-    public HrSettings ToHrSettings() => new(MaxDeletePercent, TerminateMissing, TimeZone);
+    public HrSettings ToHrSettings(Access.MoverOptions? mover = null) => new(MaxDeletePercent, TerminateMissing, TimeZone,
+        mover is { Enabled: true } ? mover.GraceDays : null, mover?.MaxMovePercent ?? 20);
     public bool CanProvision => !IsHr && Provisioning.Mode != ProvisioningMode.Off;
     public Provisioning.ProvisioningSettings ToProvisioningSettings() => new(Provisioning.Mode, Provisioning.CreateAccounts,
         Provisioning.MaxAutoOperations, Provisioning.ProtectedLogins, Provisioning.DisableSuspended, Provisioning.MaxAttempts, Ldap.LoginMaxLength,

@@ -8,10 +8,11 @@ import { formatDateTime, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { Empty, ErrorBox, PageHead, Pager, Person, RiskBadge, SkeletonRows, Tabs, type TabDef } from '../components/ui'
 import { DelegationsPanel } from './DelegationsPanel'
+import { MoversPanel } from './MoversPanel'
 
 const q = t.requests
 const PAGE = 25
-type Scope = 'inbox' | 'mine' | 'all'
+type Scope = 'inbox' | 'mine' | 'all' | 'movers' | 'movers-all'
 const statusTone: Record<RequestStatus, string> = { Pending: 'warn', Approved: 'ok', Fulfilled: 'ok', Rejected: 'bad', Failed: 'bad', Cancelled: 'neutral' }
 
 export function RequestStatusBadge({ status }: { status: RequestStatus }) {
@@ -28,6 +29,9 @@ export function RequestsPage() {
     ...(approver ? [{ id: 'inbox' as const, label: q.tabInbox, count: me.data?.inboxCount, bad: true }] : []),
     { id: 'mine', label: q.tabMine },
     ...(reader ? [{ id: 'all' as const, label: q.tabAll }] : []),
+    // O'tgan xodimlar: rahbarga — o'z jamoasi, administrator/auditorga — hammasi (rahbari yo'qlar ham)
+    ...(approver || (me.data?.moverCount ?? 0) > 0 ? [{ id: 'movers' as const, label: t.movers.tab, count: me.data?.moverCount, bad: true }] : []),
+    ...(reader ? [{ id: 'movers-all' as const, label: t.movers.tabAll }] : []),
   ]
   const requested = params.get('tab') as Scope | null
   const scope: Scope = tabs.some(x => x.id === requested) ? requested! : (me.data?.inboxCount ? 'inbox' : 'mine')
@@ -36,7 +40,7 @@ export function RequestsPage() {
     queryKey: ['requests', scope, skip],
     queryFn: () => api<PagedResult<RequestListItem>>(`/api/requests${query({ scope, skip, take: PAGE })}`),
     placeholderData: keepPreviousData,
-    enabled: !!me.data,
+    enabled: !!me.data && (scope === 'inbox' || scope === 'mine' || scope === 'all'),
   })
   const empty = scope === 'inbox' ? <Empty icon="review" title={q.emptyInbox} /> : scope === 'mine'
     ? <Empty icon="request" title={q.emptyMine} text={q.emptyMineText} /> : <Empty icon="request" title={q.emptyAll} />
@@ -48,7 +52,7 @@ export function RequestsPage() {
       {me.data && !me.data.identityId && <div className="alert warn" style={{ marginBottom: 16 }}><Icon name="warning" size={18} /><span>{q.noIdentity}</span></div>}
       <section className="card">
         <Tabs tabs={tabs} current={scope} onSelect={x => { setSkip(0); setParams({ tab: x }, { replace: true }) }} />
-        {list.isError ? <ErrorBox error={list.error} onRetry={() => { void list.refetch() }} /> : (
+        {scope === 'movers' || scope === 'movers-all' ? <MoversPanel scope={scope === 'movers' ? 'mine' : 'all'} /> : list.isError ? <ErrorBox error={list.error} onRetry={() => { void list.refetch() }} /> : (
           <>
             <table className="data">
               <thead><tr><th>{q.colRole}</th><th>{q.colFor}</th><th>{t.identities.colStatus}</th><th>{q.colStep}</th><th>{q.colCreated}</th></tr></thead>

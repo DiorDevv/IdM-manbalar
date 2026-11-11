@@ -45,6 +45,7 @@ builder.Services.AddScoped<ProvisioningExecutor>();
 builder.Services.AddScoped<ProvisioningService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.AccessReviewService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.ReviewScheduler>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Access.MoverService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reports.ReportBuilder>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
 builder.Services.AddSingleton<ClusterMembership>();
@@ -62,6 +63,7 @@ builder.Services.AddScoped<Bank.Idm.Infrastructure.Notifications.INotificationSe
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<ReviewScheduleWorker>();
 builder.Services.AddHostedService<MetricSnapshotWorker>();
+builder.Services.AddHostedService<MoverWorker>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();

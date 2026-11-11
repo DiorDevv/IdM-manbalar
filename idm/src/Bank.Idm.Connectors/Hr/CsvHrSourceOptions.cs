@@ -25,6 +25,11 @@ public class CsvHrColumns
     public string LastName { get; set; } = "lastName";
     public string? MiddleName { get; set; } = "middleName";
     public string? Email { get; set; } = "email";
+    /// <summary>
+    /// Filial ustuni. Standart — sozlanmagan (filial o'zgartirilmaydi). Sozlansa, ustun faylda bo'lishi shart: aks holda import
+    /// rad etiladi — yo'qolgan ustun hamma xodimni "boshqa filialga o'tgan" qilib qo'ymasligi uchun.
+    /// </summary>
+    public string? Branch { get; set; }
     public string? Department { get; set; } = "department";
     public string? JobTitle { get; set; } = "jobTitle";
     public string? ManagerEmployeeNumber { get; set; } = "managerEmployeeNumber";

@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bank.Idm.Infrastructure.Sync;
 
-public record HrSettings(int MaxDeletePercent = 20, bool TerminateMissing = false, string TimeZone = "Asia/Tashkent");
+/// <param name="MoverGraceDays">Filial yoki bo'lim o'zgarganda ariza/qo'lda berilgan rollar shuncha kundan keyin tugaydi (yangi rahbar
+/// qoldirmasa); 0 — darhol; null — mover siyosati o'chiq.</param>
+public record HrSettings(int MaxDeletePercent = 20, bool TerminateMissing = false, string TimeZone = "Asia/Tashkent",
+    int? MoverGraceDays = null, int MaxMovePercent = 20);
 
 /// <summary>
 /// HR (haqiqat manbai) → IdM xodimlari. HR'dagi xodim IdM'da HR manbali bo'ladi (AD'dan yaratilgan bo'lsa ham egallanadi),
@@ -49,6 +52,17 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
                 "O'zgarishlar qo'llanmadi: HR faylini tekshiring yoki administrator tasdiqlab qayta ishga tushirsin.",
                 actor, ct, run.AccountsRead);
         }
+        // Xuddi shunday: ko'p xodimning birdaniga boshqa filial/bo'limga "o'tishi" — odatda noto'g'ri ustun yoki fayl (rollar tugab ketardi)
+        var moving = snapshot.Records.Count(r => Desired(r, today) != IdentityStatus.Terminated
+            && byNumber.TryGetValue(r.EmployeeNumber, out var i) && i.Status != IdentityStatus.Terminated && OrgMoved(i, r, snapshot.HasBranch));
+        if (!firstLoad && settings.MoverGraceDays is not null && working > 0 && moving * 100.0 / working > settings.MaxMovePercent && !allowMassDelete)
+        {
+            var percent = Math.Round(moving * 100.0 / working, 1);
+            return await FinishAsync(run.Id, ConnectorRunStatus.Aborted,
+                $"{working} ta ishlayotgan xodimdan {moving} tasi ({percent}%) boshqa filial yoki bo'limga o'tgan bo'lib chiqyapti, chegara {settings.MaxMovePercent}%. " +
+                "O'zgarishlar qo'llanmadi: HR faylini (filial va bo'lim ustunlarini) tekshiring yoki administrator tasdiqlab qayta ishga tushirsin.",
+                actor, ct, run.AccountsRead);
+        }
 
         var pending = new Dictionary<Guid, Pending>();
         Pending Track(Identity i, bool created = false) =>
@@ -60,6 +74,9 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
             apply(value);
         }
 
+        // Boshqa filial yoki bo'limga o'tganlar (rollari yangi rahbar qaroriga qo'yiladi)
+        var orgMoved = new List<Identity>();
+
         // 1. Xodimlar va holatlar
         foreach (var r in snapshot.Records)
         {
@@ -69,7 +86,7 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
                 i = new Identity
                 {
                     EmployeeNumber = r.EmployeeNumber, FirstName = r.FirstName, LastName = r.LastName, MiddleName = r.MiddleName, Email = r.Email,
-                    Department = r.Department, JobTitle = r.JobTitle, HireDate = r.HireDate, TerminationDate = r.TerminationDate,
+                    Branch = r.Branch, Department = r.Department, JobTitle = r.JobTitle, HireDate = r.HireDate, TerminationDate = r.TerminationDate,
                     Status = status, Source = IdentitySource.Hr, CreatedAt = now, UpdatedAt = now
                 };
                 Db.Identities.Add(i);
@@ -90,6 +107,8 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
             Set(i, "terminationDate", i.TerminationDate, status == IdentityStatus.Terminated ? r.TerminationDate ?? i.TerminationDate ?? today : r.TerminationDate,
                 v => i.TerminationDate = v);
             var moved = false;
+            if (OrgMoved(i, r, snapshot.HasBranch) && status != IdentityStatus.Terminated && i.Status != IdentityStatus.Terminated) orgMoved.Add(i);
+            if (snapshot.HasBranch && i.Branch != r.Branch) { Set(i, "branch", i.Branch, r.Branch, v => i.Branch = v); moved = true; }
             if (i.Department != r.Department) { Set(i, "department", i.Department, r.Department, v => i.Department = v); moved = true; }
             if (i.JobTitle != r.JobTitle) { Set(i, "jobTitle", i.JobTitle, r.JobTitle, v => i.JobTitle = v); moved = true; }
             if (Transition(i.Status, status) is { } kind) Track(i).Events.Add(kind);
@@ -161,6 +180,10 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
                 Db.IdentityEvents.Add(new IdentityEvent { IdentityId = i.Id, Kind = kind, OccurredAt = now, Source = app.Code, ConnectorRunId = run.Id, Details = details });
         }
 
+        // 5. O'tish (mover): ariza va qo'lda berilgan rollar yangi rahbar qaroriga, kutilayotgan arizalar bekor qilinadi
+        if (!firstLoad && settings.MoverGraceDays is { } grace)
+            events.AddRange(await ApplyMoverAsync(orgMoved.Where(i => i.Status != IdentityStatus.Terminated).ToList(), grace, now, actor, ct));
+
         run.Status = ConnectorRunStatus.Succeeded;
         run.FinishedAt = Time.GetUtcNow();
         if (warnings.Count > 0) run.Error = Truncate($"Ogohlantirishlar ({warnings.Count}): {string.Join("; ", warnings)}");
@@ -172,6 +195,52 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
             }, Json)));
         await AuditTrail.SaveChangesAsync(events, ct);
         return run;
+    }
+
+    /// <summary>
+    /// Filial (manba bersa) yoki bo'lim o'zgardimi. Bo'shliqlar va katta-kichik harf hisobga olinmaydi: HR'da yozilishi
+    /// tuzatilgani o'tish emas. Lavozim yoki rahbar o'zgarishi o'tish hisoblanmaydi (avtomatik rollar o'zi yangilanadi).
+    /// </summary>
+    internal static bool OrgMoved(Identity i, HrRecord r, bool hasBranch) =>
+        (hasBranch && !SameUnit(i.Branch, r.Branch)) || !SameUnit(i.Department, r.Department);
+
+    private static bool SameUnit(string? a, string? b) =>
+        string.Equals(a?.Trim() ?? "", b?.Trim() ?? "", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<List<AuditEntry>> ApplyMoverAsync(List<Identity> moved, int graceDays, DateTimeOffset now, Actor actor, CancellationToken ct)
+    {
+        var entries = new List<AuditEntry>();
+        if (moved.Count == 0) return entries;
+        var ids = moved.Select(i => i.Id).ToList();
+        var numbers = moved.ToDictionary(i => i.Id, i => i.EmployeeNumber);
+        var due = now.AddDays(graceDays);
+        var assignments = await Db.IdentityRoles.Include(r => r.Role)
+            .Where(r => ids.Contains(r.IdentityId) && r.Source != RoleAssignmentSource.Birthright && (r.ValidTo == null || r.ValidTo > now))
+            .ToListAsync(ct);
+        foreach (var a in assignments)
+        {
+            if (graceDays == 0)
+            {
+                (a.ValidTo, a.MoverDueAt) = (now, null);
+                entries.Add(actor.Entry("identity.role-removed", "identity", a.IdentityId.ToString(), JsonSerializer.Serialize(new
+                    { role = a.Role.Code, employeeNumber = numbers[a.IdentityId], source = a.Source.ToString().ToLowerInvariant(), reason = "mover" }, Json)));
+                continue;
+            }
+            // Muddati shu orada o'zi tugaydigan rolga qaror kerak emas; takroriy o'tishda muddat uzaytirilmaydi
+            if (a.ValidTo <= due || a.MoverDueAt <= due) continue;
+            a.MoverDueAt = due;
+            entries.Add(actor.Entry("identity.role-mover-pending", "identity", a.IdentityId.ToString(), JsonSerializer.Serialize(new
+                { role = a.Role.Code, employeeNumber = numbers[a.IdentityId], source = a.Source.ToString().ToLowerInvariant(), dueAt = due }, Json)));
+        }
+        // Eski bo'lim uchun berilgan, hali hal qilinmagan arizalar: tasdiqlash zanjiri (rahbar) endi boshqa
+        var requests = await Db.AccessRequests.Where(r => r.Status == AccessRequestStatus.Pending && ids.Contains(r.BeneficiaryId)).ToListAsync(ct);
+        foreach (var request in requests)
+        {
+            (request.Status, request.ClosedAt) = (AccessRequestStatus.Cancelled, now);
+            entries.Add(actor.Entry("request.cancelled", "access-request", request.Id.ToString(),
+                JsonSerializer.Serialize(new { reason = "beneficiary-moved", employeeNumber = numbers[request.BeneficiaryId] }, Json)));
+        }
+        return entries;
     }
 
     /// <summary>HR yozuvidan IdM holati: ishdan ketish sanasi kelgan yoki holat "ishdan ketgan" — Terminated; ishga kirish sanasi kelmagan — Pending.</summary>

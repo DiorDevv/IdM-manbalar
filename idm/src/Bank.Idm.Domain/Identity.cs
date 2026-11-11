@@ -13,6 +13,8 @@ public class Identity
     public string LastName { get; set; } = null!;
     public string? MiddleName { get; set; }
     public string? Email { get; set; }
+    /// <summary>Filial (masalan "Bosh ofis", "Chilonzor filiali"). Bo'lim kabi: o'zgarsa — "o'tish" (mover).</summary>
+    public string? Branch { get; set; }
     public string? Department { get; set; }
     public string? JobTitle { get; set; }
     public Guid? ManagerId { get; set; }

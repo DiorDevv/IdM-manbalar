@@ -52,6 +52,7 @@ public sealed class CsvHrSource(CsvHrSourceOptions options) : IHrSource
         var middle = Column(c.MiddleName); var email = Column(c.Email); var department = Column(c.Department);
         var title = Column(c.JobTitle); var manager = Column(c.ManagerEmployeeNumber); var hire = Column(c.HireDate);
         var termination = Column(c.TerminationDate); var status = Column(c.Status);
+        var branch = Column(c.Branch, required: true);
 
         var records = new List<HrRecord>();
         var warnings = new List<string>();
@@ -97,7 +98,8 @@ public sealed class CsvHrSource(CsvHrSourceOptions options) : IHrSource
                 Text(manager, "rahbar tabel raqami", 64),
                 Date(hire, "ishga kirgan sana"),
                 Date(termination, "ishdan ketgan sana"),
-                ParseStatus(Get(status), o, problems));
+                ParseStatus(Get(status), o, problems),
+                Text(branch, "filial", 256));
             if (record.Email is { } e && (!e.Contains('@') || e.Contains(' '))) problems.Add($"email noto'g'ri: \"{e}\"");
             if (record.ManagerEmployeeNumber == record.EmployeeNumber) problems.Add("xodim o'ziga o'zi rahbar");
             if (problems.Count > 0)
@@ -109,7 +111,7 @@ public sealed class CsvHrSource(CsvHrSourceOptions options) : IHrSource
             }
             records.Add(record);
         }
-        return new HrSnapshot(records) { Warnings = warnings, SkippedEmployeeNumbers = skipped };
+        return new HrSnapshot(records) { Warnings = warnings, SkippedEmployeeNumbers = skipped, HasBranch = branch is not null };
     }
 
     private static HrStatus? ParseStatus(string? value, CsvHrSourceOptions o, List<string> problems)
