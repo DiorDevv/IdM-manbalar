@@ -54,6 +54,8 @@ public class LdapConnectorOptions
     public string DepartmentAttribute { get; set; } = "department";
     public string JobTitleAttribute { get; set; } = "title";
     public string? ManagerAttribute { get; set; } = "manager";
+    /// <summary>Filial atributi (AD'da odatda physicalDeliveryOfficeName — "Office"). Bo'sh — filial o'qilmaydi va yozilmaydi.</summary>
+    public string? BranchAttribute { get; set; }
 
     public string GroupIdAttribute { get; set; } = "objectGUID";
     public string GroupNameAttribute { get; set; } = "cn";
@@ -97,4 +99,11 @@ public class LdapConnectorOptions
     /// </summary>
     public string? DisableAttribute { get; set; }
     public string DisableValue { get; set; } = "disabled";
+    /// <summary>
+    /// Filial → OU (UsersDn ichida): yangi akkaunt shu OU'da yaratiladi, boshqa filialga o'tganda shu yerga ko'chiriladi
+    /// (UpdateAccounts yoqilganda). Kalit — HR'dagi filial nomi (katta-kichik harf farqsiz). Xaritada yo'q filial — CreateDn/UsersDn.
+    /// </summary>
+    public Dictionary<string, string> BranchOus { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Ishdan ketganlar OU'si (UsersDn ichida): bloklangan akkaunt shu yerga ko'chiriladi; qayta ishga olinsa — filial OU'siga qaytadi.</summary>
+    public string? LeaversDn { get; set; }
 }

@@ -74,6 +74,16 @@ public sealed class FakeProvisioner : IProvisioningConnector
         Call("remove", $"{accountId} {groupId}");
         lock (Members) return Task.FromResult(Members.Remove((accountId, groupId)));
     }
+
+    /// <summary>Oxirgi yangilash har akkaunt bo'yicha (tekshirish uchun).</summary>
+    public Dictionary<string, AccountUpdate> Updates { get; } = new();
+
+    public Task<bool> UpdateAccountAsync(string accountId, AccountUpdate update, CancellationToken ct = default)
+    {
+        Call("update", accountId);
+        lock (Updates) Updates[accountId] = update;
+        return Task.FromResult(true);
+    }
 }
 
 public sealed class MutableTime(DateTimeOffset now) : TimeProvider

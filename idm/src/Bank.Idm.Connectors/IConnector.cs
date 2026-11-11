@@ -31,7 +31,9 @@ public record ExternalAccount(
     /// <summary>Rahbar akkauntining DN'i (AD "manager" atributi).</summary>
     string? ManagerDn = null,
     string? DistinguishedName = null,
-    IReadOnlyList<string>? GroupIds = null)
+    IReadOnlyList<string>? GroupIds = null,
+    /// <summary>Filial (AD: physicalDeliveryOfficeName, BranchAttribute sozlansa).</summary>
+    string? Branch = null)
 {
     /// <summary>Bevosita a'zo bo'lgan guruhlar.</summary>
     public IReadOnlyList<string> GroupIds { get; init; } = GroupIds ?? [];
@@ -70,7 +72,18 @@ public interface IProvisioningConnector : IDisposable
     Task<bool> AddMemberAsync(string accountId, string groupId, CancellationToken ct = default);
     /// <summary>true — olib tashlandi; false — a'zo emas edi.</summary>
     Task<bool> RemoveMemberAsync(string accountId, string groupId, CancellationToken ct = default);
+    /// <summary>
+    /// Akkauntni HR holatiga keltiradi: bo'lim, lavozim, filial, rahbar va joylashuv (OU). Faqat farqlar yoziladi.
+    /// true — nimadir o'zgardi; false — allaqachon shunday edi.
+    /// </summary>
+    Task<bool> UpdateAccountAsync(string accountId, AccountUpdate update, CancellationToken ct = default);
 }
 
 public record NewAccount(string Login, string FirstName, string LastName, string DisplayName, string EmployeeNumber,
-    string? Email = null, string? Department = null, string? JobTitle = null);
+    string? Email = null, string? Department = null, string? JobTitle = null, string? Branch = null, string? ManagerDn = null);
+
+/// <summary>Kerakli holat. Attributes: null — atributlarga tegilmaydi. Container: null — joyidan ko'chirilmaydi; aks holda shu OU'ga.</summary>
+public record AccountUpdate(AccountAttributes? Attributes, string? Container);
+
+/// <summary>Department/JobTitle/Branch: null — atribut tozalanadi (HR'da yo'q). ManagerDn: null — rahbarga tegilmaydi (rahbarning tizimda akkaunti bo'lmasligi mumkin).</summary>
+public record AccountAttributes(string? Department, string? JobTitle, string? Branch, string? ManagerDn);

@@ -48,7 +48,9 @@ public enum ProvisioningKind
     AddMembership = 2,
     RemoveMembership = 3,
     /// <summary>Qayta yoqish: faqat IdM o'zi bloklagan (ishdan ketish, to'xtatish) yoki IdM yaratgan akkaunt.</summary>
-    EnableAccount = 4
+    EnableAccount = 4,
+    /// <summary>Akkauntni HR holatiga keltirish: bo'lim, lavozim, filial, rahbar, OU (o'tish, ishdan ketish, qayta ishga olish).</summary>
+    UpdateAccount = 5
 }
 
 public enum ProvisioningStatus

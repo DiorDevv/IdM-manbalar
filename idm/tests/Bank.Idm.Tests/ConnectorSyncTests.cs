@@ -112,7 +112,8 @@ public class ConnectorSyncTests(PostgresFixture pg) : IClassFixture<PostgresFixt
         Assert.Equal("Katta mutaxassis", karimov.Identity.JobTitle);
 
         var actions = (await RunEventsAsync(db, run)).Select(e => e.Action).ToList();
-        Assert.Equal(["account.disabled", "account.entitlement-removed", "account.entitlement-added", "identity.updated", "connector.sync-completed"], actions);
+        // AD'dagi lavozim o'zgarishi akkauntda ham saqlanadi (o'tishda HR bilan solishtirish uchun)
+        Assert.Equal(["account.updated", "account.disabled", "account.entitlement-removed", "account.entitlement-added", "identity.updated", "connector.sync-completed"], actions);
         Assert.True((await new AuditLog(db, TimeProvider.System).VerifyChainAsync(Ct)).IsValid);
     }
 

@@ -104,6 +104,7 @@ public class ConnectorSync(IdmDbContext db, AuditLog audit, TimeProvider time) :
                     Audit("account.updated", "account", a.Id, new { application = app.Code, login = x.Login, changes });
                     Map(a, x);
                 }
+                else MapOrg(a, x);   // bo'lim/lavozim/filial/rahbar birinchi marta to'ldirilishi — auditda shovqin emas
                 if (a.Status != status)
                 {
                     var action = a.Status == AccountStatus.Deleted ? "account.restored" : status == AccountStatus.Disabled ? "account.disabled" : "account.enabled";
@@ -250,7 +251,11 @@ public class ConnectorSync(IdmDbContext db, AuditLog audit, TimeProvider time) :
         a.Email = x.Email;
         a.EmployeeNumber = x.EmployeeNumber;
         a.DistinguishedName = x.DistinguishedName;
+        MapOrg(a, x);
     }
+
+    private static void MapOrg(Account a, ExternalAccount x) =>
+        (a.Department, a.JobTitle, a.Branch, a.ManagerDn, a.OrgSynced) = (x.Department, x.JobTitle, x.Branch, x.ManagerDn, true);
 
     private static Dictionary<string, object?> Changes(Account a, ExternalAccount x)
     {
@@ -260,6 +265,12 @@ public class ConnectorSync(IdmDbContext db, AuditLog audit, TimeProvider time) :
         if (a.Email != x.Email) changes["email"] = new { from = a.Email, to = x.Email };
         if (a.EmployeeNumber != x.EmployeeNumber) changes["employeeNumber"] = new { from = a.EmployeeNumber, to = x.EmployeeNumber };
         if (a.DistinguishedName != x.DistinguishedName) changes["dn"] = new { from = a.DistinguishedName, to = x.DistinguishedName };
+        // Bu maydonlar hali hech qachon o'qilmagan (yangilangan versiyadan keyingi birinchi sinxronlash) — o'zgarish emas
+        if (!a.OrgSynced) return changes;
+        if (a.Department != x.Department) changes["department"] = new { from = a.Department, to = x.Department };
+        if (a.JobTitle != x.JobTitle) changes["jobTitle"] = new { from = a.JobTitle, to = x.JobTitle };
+        if (a.Branch != x.Branch) changes["branch"] = new { from = a.Branch, to = x.Branch };
+        if (!string.Equals(a.ManagerDn, x.ManagerDn, StringComparison.OrdinalIgnoreCase)) changes["manager"] = new { from = a.ManagerDn, to = x.ManagerDn };
         return changes;
     }
 

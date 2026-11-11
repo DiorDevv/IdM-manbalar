@@ -15,7 +15,8 @@ public sealed class LdapConnector(LdapConnectorOptions options) : IConnector
         using var connection = Connect();
         var o = options;
         string[] userAttributes = [o.UserIdAttribute, o.LoginAttribute, o.EmployeeNumberAttribute, o.FirstNameAttribute, o.LastNameAttribute,
-            o.DisplayNameAttribute, o.EmailAttribute, o.DepartmentAttribute, o.JobTitleAttribute, .. o.ManagerAttribute is null ? [] : new[] { o.ManagerAttribute }];
+            o.DisplayNameAttribute, o.EmailAttribute, o.DepartmentAttribute, o.JobTitleAttribute, .. o.ManagerAttribute is null ? [] : new[] { o.ManagerAttribute },
+            .. o.BranchAttribute is null ? [] : new[] { o.BranchAttribute }];
         var users = await SearchAsync(connection, o.UsersDn, o.UserFilter, userAttributes, ct);
         var disabled = string.IsNullOrWhiteSpace(o.DisabledFilter) ? []
             : (await SearchAsync(connection, o.UsersDn, $"(&{Wrap(o.UserFilter)}{Wrap(o.DisabledFilter)})", ["1.1"], ct)).Select(r => r.Dn).ToList();

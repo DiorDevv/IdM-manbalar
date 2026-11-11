@@ -1,14 +1,79 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Bank.Idm.Connectors;
 using Bank.Idm.Domain;
 using Bank.Idm.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bank.Idm.Infrastructure.Provisioning;
 
+/// <param name="UpdateAccounts">HR manbali xodim akkauntini yangilash: bo'lim, lavozim, filial, rahbar va OU (o'tish, ishdan ketish).</param>
+/// <param name="BranchContainers">Filial → OU. Filiali xaritada yo'q faol xodim akkaunti joyidan qo'zg'atilmaydi.</param>
+/// <param name="DefaultContainer">Qayta ishga olingan xodim (akkaunti ishdan ketganlar OU'sida), filiali xaritada bo'lmasa — shu yerga.</param>
+/// <param name="LeaversContainer">Ishdan ketganlar OU'si (bo'sh — ko'chirilmaydi).</param>
+/// <param name="ManageBranch">Tizimda filial atributi bor (yoziladi).</param>
 public record ProvisioningSettings(ProvisioningMode Mode, bool CreateAccounts = false, int MaxAutoOperations = 20,
     IReadOnlyCollection<string>? ProtectedLogins = null, bool DisableSuspended = true, int MaxAttempts = 5, int LoginMaxLength = 20,
-    bool EnableReturning = true, bool EnableNewAccounts = false);
+    bool EnableReturning = true, bool EnableNewAccounts = false, bool UpdateAccounts = false,
+    IReadOnlyDictionary<string, string>? BranchContainers = null, string? DefaultContainer = null, string? LeaversContainer = null, bool ManageBranch = false);
+
+/// <summary>Akkauntning kerakli joyi va atributlari (rejalashtiruvchi va bajaruvchi uchun bitta qoida).</summary>
+public static class AccountTargets
+{
+    /// <summary>Kerakli OU yoki null (joyidan qo'zg'atilmaydi).</summary>
+    public static string? Container(ProvisioningSettings s, IdentityStatus status, string? branch, string? currentDn)
+    {
+        if (status == IdentityStatus.Terminated) return s.LeaversContainer;
+        if (branch is not null && s.BranchContainers is { } map && map.TryGetValue(branch.Trim(), out var ou)) return ou;
+        // Qayta ishga olingan: ishdan ketganlar OU'sidan standart joyga
+        return s.LeaversContainer is { } leavers && currentDn is not null && ParentIs(currentDn, leavers) ? s.DefaultContainer : null;
+    }
+
+    public static AccountAttributes Attributes(ProvisioningSettings s, string? department, string? jobTitle, string? branch, string? managerDn) =>
+        new(Clean(department), Clean(jobTitle), s.ManageBranch ? Clean(branch) : null, managerDn);
+
+    /// <summary>Hozirgi holatdan farqi (ko'rsatish uchun); farq yo'q bo'lsa — bo'sh ro'yxat.</summary>
+    public record State(string? Dn, string? Department, string? JobTitle, string? Branch, string? ManagerDn);
+
+    public static List<string> Differences(ProvisioningSettings s, AccountAttributes? want, string? container, State a)
+    {
+        var diff = new List<string>();
+        void Check(string name, string? from, string? to, bool dn = false)
+        {
+            if (!string.Equals(Clean(from), Clean(to), dn ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                diff.Add($"{name}: {Clean(from) ?? "—"} → {Clean(to) ?? "—"}");
+        }
+        if (want is not null)
+        {
+            Check("bo'lim", a.Department, want.Department);
+            Check("lavozim", a.JobTitle, want.JobTitle);
+            if (s.ManageBranch) Check("filial", a.Branch, want.Branch);
+            if (want.ManagerDn is not null) Check("rahbar", a.ManagerDn, want.ManagerDn, dn: true);
+        }
+        if (container is not null && a.Dn is { } current && !ParentIs(current, container))
+            diff.Add($"OU: {Parent(current)} → {container}");
+        return diff;
+    }
+
+    public static bool ParentIs(string dn, string container) => Normalize(Parent(dn)) == Normalize(container);
+
+    private static string Parent(string dn) => Split(dn).Parent;
+    public static string Rdn(string dn) => Split(dn).Rdn;
+
+    /// <summary>DN → (birinchi komponent, ota-ona); ekranlangan vergul ("\\,") bo'lish emas.</summary>
+    private static (string Rdn, string Parent) Split(string dn)
+    {
+        for (var i = 0; i < dn.Length; i++)
+        {
+            if (dn[i] == '\\') { i++; continue; }
+            if (dn[i] == ',') return (dn[..i], dn[(i + 1)..].TrimStart());
+        }
+        return (dn, "");
+    }
+
+    private static string Normalize(string dn) => string.Join(',', dn.Split(',').Select(p => p.Trim())).ToLowerInvariant();
+    private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+}
 
 /// <param name="Skipped">Reja tuzilmadi: sababi (masalan oxirgi sinxronlash muvaffaqiyatsiz).</param>
 /// <param name="Held">Avtomatik rejimda amallar soni chegaradan oshdi: yangi amallar tasdiqqa to'xtatildi.</param>
@@ -36,7 +101,8 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
 
     /// <param name="Entitlements">Haqiqatda bor (bevosita va meros) — "kerak guruh bormi" uchun.</param>
     /// <param name="Direct">Faqat bevosita a'zolik — olib tashlash uchun (meros a'zolikni ichki guruhdan chiqmasdan olib bo'lmaydi).</param>
-    private record AccountRow(Guid Id, Guid? IdentityId, string Login, AccountStatus Status, AccountKind Kind, List<Guid> Entitlements, List<Guid> Direct);
+    private record AccountRow(Guid Id, Guid? IdentityId, string Login, AccountStatus Status, AccountKind Kind, List<Guid> Entitlements, List<Guid> Direct,
+        AccountTargets.State State, bool OrgSynced);
     private record Planned(ProvisioningKind Kind, Guid? IdentityId, Guid? AccountId, Guid? EntitlementId, string Reason, string? Summary);
 
     public static string DedupKey(Guid applicationId, ProvisioningKind kind, Guid? identityId, Guid? accountId, Guid? entitlementId) =>
@@ -62,7 +128,8 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
 
         var accounts = await db.Accounts.AsNoTracking().Where(a => a.ApplicationId == app.Id && a.Status != AccountStatus.Deleted)
             .Select(a => new AccountRow(a.Id, a.IdentityId, a.Login, a.Status, a.Kind, a.Entitlements.Select(e => e.EntitlementId).ToList(),
-                a.Entitlements.Where(e => e.ViaEntitlementId == null).Select(e => e.EntitlementId).ToList()))
+                a.Entitlements.Where(e => e.ViaEntitlementId == null).Select(e => e.EntitlementId).ToList(),
+                new AccountTargets.State(a.DistinguishedName, a.Department, a.JobTitle, a.Branch, a.ManagerDn), a.OrgSynced))
             .ToListAsync(ct);
         var entitlements = await db.Entitlements.AsNoTracking().Where(e => e.ApplicationId == app.Id && e.DeletedAt == null)
             .ToDictionaryAsync(e => e.Id, e => e.Name, ct);
@@ -75,7 +142,8 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
         var identityIds = accounts.Where(a => a.IdentityId is not null).Select(a => a.IdentityId!.Value)
             .Concat(expected.Select(e => e.IdentityId)).Distinct().ToList();
         var identities = await db.Identities.AsNoTracking().Where(i => identityIds.Contains(i.Id))
-            .Select(i => new { i.Id, i.Status, i.EmployeeNumber, i.FirstName, i.LastName }).ToListAsync(ct);
+            .Select(i => new { i.Id, i.Status, i.EmployeeNumber, i.FirstName, i.LastName, i.Source, i.Department, i.JobTitle, i.Branch, i.ManagerId })
+            .ToListAsync(ct);
 
         // IdM qo'shgan a'zoliklar: (akkaunt, guruh) bo'yicha oxirgi muvaffaqiyatli amal — qo'shish
         var history = await db.ProvisioningOperations.AsNoTracking()
@@ -106,10 +174,29 @@ public class ProvisioningPlanner(IdmDbContext db, AuditLog audit, TimeProvider t
         var plan = new List<Planned>();
         var warnings = new List<string>();
 
+        // Rahbarning shu tizimdagi akkaunti (DN) — "manager" atributi uchun; bir nechta bo'lsa faol shaxsiysi
+        var managerDn = accounts.Where(a => a.IdentityId is not null && a.Kind == AccountKind.Personal && a.State.Dn is not null)
+            .GroupBy(a => a.IdentityId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Status == AccountStatus.Enabled ? 0 : 1).First().State.Dn);
+
         foreach (var i in identities)
         {
             var mine = accountsBy[i.Id].ToList();
             var touchable = mine.Where(Touchable).ToList();
+
+            // HR holatiga keltirish (bo'lim, lavozim, filial, rahbar, OU). Faqat HR manbali xodim: AD manbalisida AD o'zi haqiqat
+            if (settings.UpdateAccounts && i.Source == IdentitySource.Hr)
+                // Tizimdagi holati hali o'qilmagan akkaunt bilan solishtirib bo'lmaydi (yolg'on "— → X" takliflari bo'lardi)
+                foreach (var a in touchable.Where(a => a.Kind == AccountKind.Personal && a.OrgSynced))
+                {
+                    var container = AccountTargets.Container(settings, i.Status, i.Branch, a.State.Dn);
+                    var attributes = i.Status == IdentityStatus.Terminated ? null : AccountTargets.Attributes(settings, i.Department, i.JobTitle, i.Branch,
+                        i.ManagerId is { } m ? managerDn.GetValueOrDefault(m) : null);
+                    var diff = AccountTargets.Differences(settings, attributes, container, a.State);
+                    if (diff.Count > 0)
+                        plan.Add(new(ProvisioningKind.UpdateAccount, i.Id, a.Id, null,
+                            i.Status == IdentityStatus.Terminated ? "leaver" : "mover", $"{a.Login}: {string.Join("; ", diff)}"));
+                }
             var want = expectedBy[i.Id].GroupBy(e => e.EntitlementId)
                 .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(e => e.Code).Distinct().Order()));
 

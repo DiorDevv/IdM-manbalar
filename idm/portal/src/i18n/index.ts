@@ -119,6 +119,7 @@ const actions: Record<string, [label: string, icon: string, tone: Tone]> = {
   'provisioning.account-created': ['Tizimda akkaunt yaratildi', 'user', 'ok'],
   'provisioning.account-disabled': ['Tizimda akkaunt bloklandi', 'lock', 'warn'],
   'provisioning.account-enabled': ['Tizimda akkaunt qayta yoqildi', 'unlock', 'ok'],
+  'provisioning.account-updated': ['Tizimda akkaunt yangilandi', 'sync', 'sky'],
   'provisioning.membership-added': ['Tizimda guruhga qo\'shildi', 'people', 'violet'],
   'provisioning.membership-removed': ['Tizimda guruhdan chiqarildi', 'people', 'warn'],
   'provisioning.failed': ['Tizimga yozib bo\'lmadi', 'warning', 'bad'],
@@ -153,7 +154,7 @@ const actionsRu: Record<string, string> = {
   'provisioning.planned': 'Запись в системы запланирована', 'provisioning.held': 'Много действий: остановлено до подтверждения',
   'provisioning.approved': 'Запись в системы подтверждена', 'provisioning.retried': 'Назначена повторная попытка', 'provisioning.dismissed': 'Ошибочное действие закрыто',
   'provisioning.account-created': 'В системе создана учётная запись', 'provisioning.account-disabled': 'В системе заблокирована учётная запись',
-  'provisioning.account-enabled': 'В системе снова включена учётная запись', 'provisioning.membership-added': 'В системе добавлен в группу',
+  'provisioning.account-enabled': 'В системе снова включена учётная запись', 'provisioning.account-updated': 'В системе обновлена учётная запись', 'provisioning.membership-added': 'В системе добавлен в группу',
   'provisioning.membership-removed': 'В системе исключён из группы', 'provisioning.failed': 'Не удалось записать в систему', 'provisioning.obsolete': 'Действие стало ненужным',
 }
 

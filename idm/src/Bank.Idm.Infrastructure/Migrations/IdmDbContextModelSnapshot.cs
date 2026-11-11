@@ -311,9 +311,19 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("application_id");
 
+                    b.Property<string>("Branch")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("branch");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("department");
 
                     b.Property<string>("DisplayName")
                         .HasMaxLength(256)
@@ -345,6 +355,11 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("identity_id");
 
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("job_title");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -360,6 +375,15 @@ namespace Bank.Idm.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("login");
+
+                    b.Property<string>("ManagerDn")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("manager_dn");
+
+                    b.Property<bool>("OrgSynced")
+                        .HasColumnType("boolean")
+                        .HasColumnName("org_synced");
 
                     b.Property<string>("Status")
                         .IsRequired()

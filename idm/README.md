@@ -198,6 +198,30 @@ Rejalashtiruvchi "bo'lishi kerak" (rollar, xodim holati) va tizimdan o'qilgan ho
 - Aylanish oralig'i: `Idm:ProvisioningIntervalSeconds` (standart 30, 0 — o'chiq). OpenLDAP uchun: `CreateObjectClasses: ["inetOrgPerson"]`,
   `RdnAttribute: "uid"`, `DisableAttribute: "employeeType"` (`DisabledFilter` bilan mos).
 
+### O'tish va ishdan ketishda akkauntni HR holatiga keltirish (`UpdateAccounts`)
+```json
+"AD": { "Provisioning": { "UpdateAccounts": true },
+        "Ldap": { "BranchAttribute": "physicalDeliveryOfficeName", "LeaversDn": "OU=Ishdan ketganlar,OU=Xodimlar,DC=bank,DC=uz",
+                  "BranchOus": { "Bosh ofis": "OU=Bosh ofis,OU=Xodimlar,DC=bank,DC=uz", "Chilonzor filiali": "OU=Chilonzor filiali,OU=Xodimlar,DC=bank,DC=uz" } } }
+```
+- Standart — o'chiq (bankdagi mavjud jarayonlar bilan kelishilgach yoqiladi). Faqat **HR manbali** xodimlar: AD manbalisida AD o'zi haqiqat.
+- **O'tish:** bo'lim, lavozim, filial (`BranchAttribute`), rahbar (rahbarning shu tizimdagi akkaunti bo'lsa) va OU (`BranchOus`) HR bo'yicha
+  yangilanadi — amal `UpdateAccount` ("Akkauntni yangilash"), xulosasida aynan nima o'zgarishi ("bo'lim: A → B; OU: X → Y").
+  Filiali xaritada yo'q faol xodim akkaunti **joyidan qo'zg'atilmaydi** (bank administratorlari qo'ygan joy saqlanadi).
+- **Ishdan ketish:** bloklangach `LeaversDn`ga ko'chiriladi (atributlarga tegilmaydi). **Qayta ishga olish:** filial OU'siga, xaritada
+  bo'lmasa — `CreateDn`/`UsersDn`ga qaytadi. **Yangi akkaunt** filial OU'sida, filial va rahbar atributlari bilan yaratiladi.
+- Xavfsizlik: barcha OU'lar `UsersDn` ichida bo'lishi shart (aks holda konnektor rad etadi — IdM akkauntni boshqa topa olmay qolardi);
+  faqat farqlar yoziladi; bajarish paytidagi HR holati bo'yicha (tasdiqdan keyin o'zgargan bo'lsa ham). Tizimdagi holati hali o'qilmagan
+  akkaunt (yangi versiyadan keyingi birinchi sinxronlashgacha) bilan solishtirilmaydi. Bajarilgach IdM nusxasi darhol yangilanadi (takror taklif yo'q).
+- Jonli sinov (2026-11-11, Windows Server 2025 AD, LDAP signing + channel binding majburiy, eng kam huquqli `svc-idm-write`):
+  o'tish (atributlar + OU), ishdan ketish (bloklash + ko'chirish), teskari o'tish, takror taklif yo'qligi.
+
+### Sinov Windows AD (`sinov-ad-win/`)
+Haqiqiy Windows Server 2025 domen kontrolleri (QEMU/KVM, root kerak emas): `./sinov-ad-win/vm.sh create` (bir marta, ~10 daqiqa: avtomatik
+o'rnatish, domen `BANK.TEST`, filial OU'lari, HR sinov xodimlari, `svc-idm` (o'qish) va `svc-idm-write` (delegatsiya), LDAPS sertifikati,
+**LDAP signing va channel binding majburiy**), keyin `start|stop|status|screenshot`. Sirlar `.secrets/ad.env` (start-all.sh shuni o'qiydi),
+VM fayllari `~/VMs/win2025`. ISO — Microsoft Evaluation Center (180 kunlik baholash litsenziyasi). Kerak: `qemu-system-x86 qemu-utils xorriso`.
+
 ### Bank AD'sida yozish akkaunti huquqlari (sinovda tekshirilgan)
 Samba AD DC'da (`AdLiveTests`) `svc-idm-write` faqat quyidagi topshirilgan huquqlar bilan barcha IdM amallarini bajardi
 (yaratish, bloklash, yoqish, guruh a'zoligi), boshqa xodimning parolini almashtira olmadi:

@@ -42,7 +42,8 @@ public class ConnectorDefinition
     public bool CanProvision => !IsHr && Provisioning.Mode != ProvisioningMode.Off;
     public Provisioning.ProvisioningSettings ToProvisioningSettings() => new(Provisioning.Mode, Provisioning.CreateAccounts,
         Provisioning.MaxAutoOperations, Provisioning.ProtectedLogins, Provisioning.DisableSuspended, Provisioning.MaxAttempts, Ldap.LoginMaxLength,
-        Provisioning.EnableReturning, Provisioning.EnableNewAccounts);
+        Provisioning.EnableReturning, Provisioning.EnableNewAccounts, Provisioning.UpdateAccounts,
+        Ldap.BranchOus, Ldap.CreateDn ?? Ldap.UsersDn, Ldap.LeaversDn, Ldap.BranchAttribute is not null);
 }
 
 public enum ProvisioningMode
@@ -75,6 +76,11 @@ public class ProvisioningDefinition
     /// parol berib o'zi yoqadi. Yoqilsa, helpdesk parol bermaguncha hech kim kira olmaydi; katalog rad etsa — tushunarli xato.
     /// </summary>
     public bool EnableNewAccounts { get; set; }
+    /// <summary>
+    /// HR manbali xodim akkauntini HR holatiga keltirish: bo'lim, lavozim, filial (Ldap:BranchAttribute), rahbar va OU (Ldap:BranchOus,
+    /// Ldap:LeaversDn). Standart — yo'q: bankdagi mavjud jarayonlar bilan kelishilgandan keyin yoqiladi.
+    /// </summary>
+    public bool UpdateAccounts { get; set; }
 }
 
 public static class ConnectorTypes

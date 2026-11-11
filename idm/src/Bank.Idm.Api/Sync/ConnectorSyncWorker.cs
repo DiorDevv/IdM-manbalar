@@ -25,7 +25,7 @@ public class ConnectorSyncWorker(ConnectorSyncCoordinator coordinator, IServiceS
                 try
                 {
                     if (await IsDueAsync(code, definition.IntervalMinutes, stoppingToken))
-                        await coordinator.RunAsync(code, ConnectorRunTrigger.Schedule, ConnectorSync.SystemActor, stoppingToken);
+                        await coordinator.RunAsync(code, ConnectorRunTrigger.Schedule, ConnectorSync.SystemActor, stoppingToken, TimeSpan.FromSeconds(45));
                 }
                 catch (Exception e) when (!stoppingToken.IsCancellationRequested)
                 {

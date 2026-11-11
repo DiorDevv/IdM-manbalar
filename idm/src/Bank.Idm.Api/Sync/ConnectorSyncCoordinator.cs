@@ -55,18 +55,23 @@ public class ConnectorSyncCoordinator(IServiceScopeFactory scopes, IOptionsMonit
         }
     }
 
-    /// <summary>Jadval bo'yicha: tugashini kutadi.</summary>
-    public async Task<ConnectorRun?> RunAsync(string code, ConnectorRunTrigger trigger, string actor, CancellationToken ct)
+    /// <summary>
+    /// Jadval bo'yicha: tugashini kutadi. Tizimga yozish (qisqa amal) shu payt qulfni ushlab turgan bo'lsa — <paramref name="wait"/> gacha
+    /// kutadi: aks holda jadvaldagi taymerlar bir xil soniyaga to'g'ri kelganda sinxronlash har safar jim o'tkazib yuborilardi.
+    /// </summary>
+    public async Task<ConnectorRun?> RunAsync(string code, ConnectorRunTrigger trigger, string actor, CancellationToken ct, TimeSpan wait = default)
     {
-        var (status, runId, gate) = await BeginAsync(code, trigger, actor);
+        var (status, runId, gate) = await BeginAsync(code, trigger, actor, wait, ct);
+        if (status == SyncStartStatus.AlreadyRunning) logger.LogWarning("{Code}: sinxronlash boshlanmadi — tizim band (sinxronlash yoki tizimga yozish davom etmoqda)", code);
         return status == SyncStartStatus.Started ? await ExecuteAsync(code, runId!.Value, gate!, null, false, ct) : null;
     }
 
-    private async Task<(SyncStartStatus, Guid?, SemaphoreSlim?)> BeginAsync(string code, ConnectorRunTrigger trigger, string actor)
+    private async Task<(SyncStartStatus, Guid?, SemaphoreSlim?)> BeginAsync(string code, ConnectorRunTrigger trigger, string actor,
+        TimeSpan wait = default, CancellationToken ct = default)
     {
         if (Definition(code) is null) return (SyncStartStatus.NotConfigured, null, null);
         var gate = _locks.GetOrAdd(code, _ => new SemaphoreSlim(1, 1));
-        if (!await gate.WaitAsync(0)) return (SyncStartStatus.AlreadyRunning, null, null);
+        if (!await gate.WaitAsync(wait, ct)) return (SyncStartStatus.AlreadyRunning, null, null);
         try
         {
             await using var scope = scopes.CreateAsyncScope();

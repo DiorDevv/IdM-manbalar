@@ -48,7 +48,8 @@ public static class LdapSnapshotBuilder
                 Department: ReadString(u, o.DepartmentAttribute),
                 JobTitle: ReadString(u, o.JobTitleAttribute),
                 ManagerDn: o.ManagerAttribute is null ? null : ReadString(u, o.ManagerAttribute),
-                DistinguishedName: u.Dn);
+                DistinguishedName: u.Dn,
+                Branch: o.BranchAttribute is null ? null : ReadString(u, o.BranchAttribute));
             byDn[u.Dn] = accounts.Count;
             byLogin.TryAdd(login, accounts.Count);
             accounts.Add((account, []));

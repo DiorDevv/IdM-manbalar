@@ -30,7 +30,7 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
         var due = await db.ProvisioningOperations.AsNoTracking()
             .Where(o => o.ApplicationId == applicationId && o.Status == ProvisioningStatus.Queued && (o.NextAttemptAt == null || o.NextAttemptAt <= now))
             .OrderBy(o => o.Kind == ProvisioningKind.DisableAccount ? 0 : o.Kind == ProvisioningKind.RemoveMembership ? 1
-                : o.Kind == ProvisioningKind.CreateAccount ? 2 : o.Kind == ProvisioningKind.AddMembership ? 3 : 4)
+                : o.Kind == ProvisioningKind.UpdateAccount ? 2 : o.Kind == ProvisioningKind.CreateAccount ? 3 : o.Kind == ProvisioningKind.AddMembership ? 4 : 5)
             .ThenBy(o => o.CreatedAt).Select(o => o.Id).Take(batchSize).ToListAsync(ct);
         int succeeded = 0, retrying = 0, failed = 0, skipped = 0;
         foreach (var id in due)
@@ -163,11 +163,38 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
                 // Ichma-ich guruh orqali meros qolishi mumkin: keyingi sinxronlash uni meros sifatida qaytaradi
                 if (!add && link is not null) db.AccountEntitlements.Remove(link);
                 break;
+            case ProvisioningKind.UpdateAccount:
+                // Bajarish paytidagi holat bo'yicha (tasdiqdan keyin HR yana o'zgargan bo'lishi mumkin)
+                var identity = op.Identity;
+                if (!settings.UpdateAccounts || identity is not { Source: IdentitySource.Hr } || account.IdentityId != identity.Id)
+                    return (ProvisioningStatus.Obsolete, false, account);
+                var container = AccountTargets.Container(settings, identity.Status, identity.Branch, account.DistinguishedName);
+                var attributes = identity.Status == IdentityStatus.Terminated ? null : AccountTargets.Attributes(settings, identity.Department,
+                    identity.JobTitle, identity.Branch, await ManagerDnAsync(op.ApplicationId, identity.ManagerId, ct));
+                var state = new AccountTargets.State(account.DistinguishedName, account.Department, account.JobTitle, account.Branch, account.ManagerDn);
+                if (AccountTargets.Differences(settings, attributes, container, state).Count == 0) return (ProvisioningStatus.Obsolete, false, account);
+                changed = await connector.UpdateAccountAsync(account.ExternalId, new AccountUpdate(attributes, container), ct);
+                // IdM'dagi nusxa darhol (keyingi rejalashda shu amal qayta taklif qilinmasligi uchun); sinxronlash tasdiqlaydi
+                if (attributes is not null)
+                {
+                    (account.Department, account.JobTitle) = (attributes.Department, attributes.JobTitle);
+                    if (settings.ManageBranch) account.Branch = attributes.Branch;
+                    if (attributes.ManagerDn is not null) account.ManagerDn = attributes.ManagerDn;
+                }
+                if (container is not null && account.DistinguishedName is { } dn && !AccountTargets.ParentIs(dn, container))
+                    account.DistinguishedName = $"{AccountTargets.Rdn(dn)},{container}";
+                break;
             default:
                 throw new InvalidOperationException($"Noma'lum amal: {op.Kind}");
         }
         return (ProvisioningStatus.Succeeded, changed, account);
     }
+
+    /// <summary>Rahbarning shu tizimdagi shaxsiy akkaunti DN'i (faolini afzal ko'radi); yo'q bo'lsa — null (rahbar atributiga tegilmaydi).</summary>
+    private async Task<string?> ManagerDnAsync(Guid applicationId, Guid? managerId, CancellationToken ct) => managerId is null ? null
+        : await db.Accounts.Where(a => a.ApplicationId == applicationId && a.IdentityId == managerId && a.Kind == AccountKind.Personal
+                && a.Status != AccountStatus.Deleted && a.DistinguishedName != null)
+            .OrderBy(a => a.Status).Select(a => a.DistinguishedName).FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Akkaunt yaratish. Oldingi urinishda yaratilgan bo'lishi mumkin (javob yo'qolgan): avval tabel raqami bo'yicha qidiriladi.
@@ -195,7 +222,8 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
             }
             if (login is null) throw new ConnectorException($"{identity.LastName} {identity.FirstName}: bo'sh login topilmadi (ism lotin harflarida emas yoki hammasi band)");
             external = await connector.CreateAccountAsync(new NewAccount(login, identity.FirstName, identity.LastName, $"{identity.LastName} {identity.FirstName}",
-                identity.EmployeeNumber, identity.Email, identity.Department, identity.JobTitle), ct);
+                identity.EmployeeNumber, identity.Email, identity.Department, identity.JobTitle, settings.ManageBranch ? identity.Branch : null,
+                await ManagerDnAsync(op.ApplicationId, identity.ManagerId, ct)), ct);
             created = true;
         }
 
@@ -212,6 +240,8 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
         }
         (account.IdentityId, account.EmployeeNumber, account.DistinguishedName, account.Email) =
             (identity.Id, external.EmployeeNumber ?? identity.EmployeeNumber, external.DistinguishedName, external.Email);
+        (account.Department, account.JobTitle, account.Branch, account.ManagerDn, account.OrgSynced) =
+            (external.Department, external.JobTitle, external.Branch, external.ManagerDn, true);
         account.DisplayName = external.DisplayName ?? $"{identity.LastName} {identity.FirstName}";
         op.AccountId = account.Id;
         op.Summary = external.Login;
@@ -224,6 +254,7 @@ public class ProvisioningExecutor(IdmDbContext db, AuditLog audit, TimeProvider 
         ProvisioningKind.DisableAccount => "provisioning.account-disabled",
         ProvisioningKind.EnableAccount => "provisioning.account-enabled",
         ProvisioningKind.AddMembership => "provisioning.membership-added",
+        ProvisioningKind.UpdateAccount => "provisioning.account-updated",
         _ => "provisioning.membership-removed"
     };
 

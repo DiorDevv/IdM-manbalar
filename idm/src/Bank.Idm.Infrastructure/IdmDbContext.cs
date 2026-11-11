@@ -60,6 +60,10 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
         });
         b.Entity<Account>(e =>
         {
+            e.Property(x => x.Department).HasMaxLength(256);
+            e.Property(x => x.JobTitle).HasMaxLength(256);
+            e.Property(x => x.Branch).HasMaxLength(256);
+            e.Property(x => x.ManagerDn).HasMaxLength(1024);
             e.HasIndex(x => new { x.ApplicationId, x.ExternalId }).IsUnique();
             e.HasIndex(x => new { x.ApplicationId, x.Login });
             e.HasIndex(x => x.IdentityId);

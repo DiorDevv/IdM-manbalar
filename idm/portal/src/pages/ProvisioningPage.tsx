@@ -17,7 +17,7 @@ const tabStatuses: Record<Tab, ProvisioningStatus[]> = {
 const statusTone: Record<ProvisioningStatus, string> = {
   Proposed: 'warn', Queued: 'info', Running: 'info live', Succeeded: 'ok', Failed: 'bad', Obsolete: 'neutral', Cancelled: 'neutral',
 }
-const kindIcon: Record<ProvisioningKind, string> = { CreateAccount: 'user', DisableAccount: 'lock', EnableAccount: 'unlock', AddMembership: 'people', RemoveMembership: 'x' }
+const kindIcon: Record<ProvisioningKind, string> = { CreateAccount: 'user', DisableAccount: 'lock', EnableAccount: 'unlock', AddMembership: 'people', RemoveMembership: 'x', UpdateAccount: 'sync' }
 /** Xavfli amallar (kirishni olib qo'yadi) tasdiqlash oynasida qizil tugma bilan. */
 const dangerous: ProvisioningKind[] = ['DisableAccount', 'RemoveMembership']
 

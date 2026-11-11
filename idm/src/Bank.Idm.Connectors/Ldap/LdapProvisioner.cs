@@ -31,9 +31,9 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
 
     public async Task<ExternalAccount> CreateAccountAsync(NewAccount a, CancellationToken ct = default)
     {
-        var parent = options.CreateDn ?? options.UsersDn;
+        var parent = ContainerFor(a.Branch);
         if (!IsWithin(parent, options.UsersDn))
-            throw new ConnectorException($"CreateDn ({parent}) UsersDn ({options.UsersDn}) ichida emas");
+            throw new ConnectorException($"Yangi akkaunt OU'si ({parent}) UsersDn ({options.UsersDn}) ichida emas");
         var dn = $"{options.RdnAttribute}={LdapSession.EscapeDnValue(a.Login)},{parent}";
 
         var attributes = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase) { ["objectClass"] = options.EffectiveObjectClasses };
@@ -51,6 +51,8 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
         Set(options.EmailAttribute, a.Email);
         Set(options.DepartmentAttribute, a.Department);
         Set(options.JobTitleAttribute, a.JobTitle);
+        Set(options.BranchAttribute, a.Branch);
+        if (a.ManagerDn is not null && IsWithin(a.ManagerDn, options.UsersDn)) Set(options.ManagerAttribute, a.ManagerDn);
         if (!string.IsNullOrWhiteSpace(options.UpnSuffix)) Set("userPrincipalName", $"{a.Login}@{options.UpnSuffix}");
         // Bloklangan: kirish faqat helpdesk parol bergandan keyin (AD'da pastda tasodifiy noma'lum parol qo'yiladi, IdM'da saqlanmaydi)
         if (options.DisableAttribute is { } disable) Set(disable, options.DisableValue);
@@ -152,6 +154,75 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
         }
     }
 
+    /// <summary>Filial OU'si (xaritada bo'lsa), aks holda CreateDn yoki UsersDn.</summary>
+    public string ContainerFor(string? branch) =>
+        branch is not null && options.BranchOus.TryGetValue(branch.Trim(), out var ou) ? ou : options.CreateDn ?? options.UsersDn;
+
+    public async Task<bool> UpdateAccountAsync(string accountId, AccountUpdate update, CancellationToken ct = default)
+    {
+        string?[] wanted = [options.DepartmentAttribute, options.JobTitleAttribute, options.BranchAttribute, options.ManagerAttribute];
+        var user = await FindByIdAsync(options.UsersDn, options.UserIdAttribute, accountId, wanted.OfType<string>().ToArray(), "akkaunt", ct);
+        var dn = user.DistinguishedName;
+        var changes = new List<DirectoryAttributeModification>();
+        void Want(string? attribute, string? value, bool isDn = false)
+        {
+            if (attribute is null) return;
+            var current = Read(user, attribute);
+            value = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (string.Equals(current, value, isDn ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return;
+            if (value is null && current is null) return;
+            var change = new DirectoryAttributeModification
+            { Name = attribute, Operation = value is null ? DirectoryAttributeOperation.Delete : DirectoryAttributeOperation.Replace };
+            if (value is not null) change.Add(value);
+            changes.Add(change);
+        }
+        if (update.Attributes is { } a)
+        {
+            Want(options.DepartmentAttribute, a.Department);
+            Want(options.JobTitleAttribute, a.JobTitle);
+            Want(options.BranchAttribute, a.Branch);
+            // Rahbar faqat shu katalog ichidagi akkaunt bo'lishi mumkin (boshqa joyga havola yozilmaydi)
+            if (a.ManagerDn is not null && IsWithin(a.ManagerDn, options.UsersDn)) Want(options.ManagerAttribute, a.ManagerDn, isDn: true);
+        }
+        if (changes.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var request = new ModifyRequest(dn);
+            request.Modifications.AddRange(changes.ToArray());
+            await LdapSession.SendAsync<ModifyResponse>(Connection, request, $"yangilash {dn}");
+        }
+
+        var moved = false;
+        if (update.Container is { } target)
+        {
+            // Faqat yozish qamrovi ichida: UsersDn tashqarisiga ko'chirilsa, IdM akkauntni boshqa topa olmaydi
+            if (!IsWithin(target, options.UsersDn))
+                throw new ConnectorException($"Ko'chirish manzili ({target}) UsersDn ({options.UsersDn}) ichida emas");
+            var (rdn, parent) = SplitDn(dn);
+            if (!SameDn(parent, target))
+            {
+                ct.ThrowIfCancellationRequested();
+                await LdapSession.SendAsync<ModifyDNResponse>(Connection, new ModifyDNRequest(dn, target, rdn) { DeleteOldRdn = true },
+                    $"ko'chirish {dn} → {target}");
+                moved = true;
+            }
+        }
+        return changes.Count > 0 || moved;
+    }
+
+    /// <summary>DN → (birinchi komponent, ota-ona). Ekranlangan vergul ("\,") bo'lish emas.</summary>
+    internal static (string Rdn, string Parent) SplitDn(string dn)
+    {
+        for (var i = 0; i < dn.Length; i++)
+        {
+            if (dn[i] == '\\') { i++; continue; }
+            if (dn[i] == ',') return (dn[..i], dn[(i + 1)..].TrimStart());
+        }
+        throw new ConnectorException($"DN'da ota-ona yo'q: {dn}");
+    }
+
+    private static bool SameDn(string a, string b) => IsWithin(a, b) && IsWithin(b, a);
+
     private async Task<SearchResultEntry> FindByIdAsync(string baseDn, string idAttribute, string id, string[] attributes, string what, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -183,7 +254,8 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
     private string[] AccountAttributes =>
     [
         options.UserIdAttribute, options.LoginAttribute, options.EmployeeNumberAttribute, options.FirstNameAttribute, options.LastNameAttribute,
-        options.DisplayNameAttribute, options.EmailAttribute, options.DepartmentAttribute, options.JobTitleAttribute, options.DisableAttribute ?? "userAccountControl"
+        options.DisplayNameAttribute, options.EmailAttribute, options.DepartmentAttribute, options.JobTitleAttribute, options.DisableAttribute ?? "userAccountControl",
+        .. options.BranchAttribute is null ? [] : new[] { options.BranchAttribute }, .. options.ManagerAttribute is null ? [] : new[] { options.ManagerAttribute }
     ];
 
     private ExternalAccount? ToAccount(SearchResultEntry entry)
@@ -205,7 +277,9 @@ public sealed class LdapProvisioner(LdapConnectorOptions options) : IProvisionin
             Email: LdapSnapshotBuilder.ReadString(record, options.EmailAttribute),
             Department: LdapSnapshotBuilder.ReadString(record, options.DepartmentAttribute),
             JobTitle: LdapSnapshotBuilder.ReadString(record, options.JobTitleAttribute),
-            DistinguishedName: entry.DistinguishedName);
+            ManagerDn: options.ManagerAttribute is null ? null : LdapSnapshotBuilder.ReadString(record, options.ManagerAttribute),
+            DistinguishedName: entry.DistinguishedName,
+            Branch: options.BranchAttribute is null ? null : LdapSnapshotBuilder.ReadString(record, options.BranchAttribute));
     }
 
     /// <summary>40 belgi, katta-kichik harf, raqam va belgi (AD murakkablik siyosatiga mos), kriptografik tasodifiy.</summary>

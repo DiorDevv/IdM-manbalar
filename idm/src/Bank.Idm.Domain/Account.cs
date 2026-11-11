@@ -21,6 +21,13 @@ public class Account
     public string? EmployeeNumber { get; set; }
     /// <summary>LDAP tizimlarida to'liq nom (DN): rahbar va a'zolik havolalari shu orqali.</summary>
     public string? DistinguishedName { get; set; }
+    /// <summary>Tizimdagi bo'lim, lavozim, filial va rahbar (DN): HR bilan solishtirib, o'tishda tizimni yangilash uchun.</summary>
+    public string? Department { get; set; }
+    public string? JobTitle { get; set; }
+    public string? Branch { get; set; }
+    public string? ManagerDn { get; set; }
+    /// <summary>Yuqoridagi to'rt maydon tizimdan o'qilgan (false — yangilangan versiyadan keyin hali sinxronlanmagan: solishtirib bo'lmaydi).</summary>
+    public bool OrgSynced { get; set; }
     public AccountStatus Status { get; set; } = AccountStatus.Enabled;
     public AccountKind Kind { get; set; } = AccountKind.Personal;
     public DateTimeOffset? LastSyncedAt { get; set; }

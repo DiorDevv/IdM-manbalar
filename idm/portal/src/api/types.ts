@@ -112,7 +112,7 @@ export interface RequestDetails {
   approvals: ApprovalItem[]; sodConflicts: SodConflictInfo[]; canDecide: boolean; canCancel: boolean
 }
 
-export type ProvisioningKind = 'CreateAccount' | 'DisableAccount' | 'EnableAccount' | 'AddMembership' | 'RemoveMembership'
+export type ProvisioningKind = 'CreateAccount' | 'DisableAccount' | 'EnableAccount' | 'AddMembership' | 'RemoveMembership' | 'UpdateAccount'
 export type ProvisioningStatus = 'Proposed' | 'Queued' | 'Running' | 'Succeeded' | 'Failed' | 'Obsolete' | 'Cancelled'
 export type ProvisioningMode = 'Off' | 'Approval' | 'Automatic'
 export interface ProvisioningOperationItem {

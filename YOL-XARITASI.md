@@ -172,6 +172,10 @@ Bank uchun kerakli OIM funksiyalari (SAP, PAM, bulut konnektorlari — kerak ema
 - [x] 1. Ikki kishilik tasdiq va portal vakolatlarini boshqarish (2026-11-11): xavfli administrator amallari ikkinchi administrator tasdig'i bilan.
   Jonli sinovda topildi: SSO'dan chiqishda SimpleIdServer inglizcha "Revoke session" tasdiq sahifasini ko'rsatadi — bosilmasa SSO sessiyasi ochiq
   qoladi (ochiq: sahifani o'tkazib yuborish yoki bank dizayniga moslash).
+- [x] AD to'liqligi (2026-11-11): haqiqiy Windows Server 2025 AD'da (LDAP signing + channel binding majburiy) o'qish va yozish sinovdan
+  o'tdi (`sinov-ad-win/`); o'tishda akkauntni yangilash va OU'ga ko'chirish, filial OU'lari, ishdan ketganlar OU'si (`UpdateAccounts`).
+  Topilgan va tuzatilgan: yangilangan versiyadan keyingi birinchi rejada yolg'on takliflar; jadvaldagi sinxronlash band bo'lsa jim o'tkazib yuborilardi.
+  Ochiq: bir nechta domen/forest, Exchange pochta qutisi, yangi xodimga parol yetkazish jarayoni (bank qarori).
 - [ ] 2. Universal SQL/REST konnektor, ustida iABS va 1C (bank ma'lumoti kerak: iABS 7 servis shinasi yoki Oracle view).
 - [ ] 3. Tashkilot daraxti: filial → bo'lim → sho''ba, rollar daraxt bo'ylab meros.
 - [ ] 4. Dinamik rollar: shartli qoidalar va istisnolar.
