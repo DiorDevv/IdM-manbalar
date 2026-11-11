@@ -108,7 +108,8 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
                 v => i.TerminationDate = v);
             var moved = false;
             if (OrgMoved(i, r, snapshot.HasBranch) && status != IdentityStatus.Terminated && i.Status != IdentityStatus.Terminated) orgMoved.Add(i);
-            if (snapshot.HasBranch && i.Branch != r.Branch) { Set(i, "branch", i.Branch, r.Branch, v => i.Branch = v); moved = true; }
+            // Filial bo'shdan to'ldirilsa (ustun birinchi marta ulanganda) — faqat ma'lumot yangilanadi, JML hodisasi emas
+            if (snapshot.HasBranch && i.Branch != r.Branch) { moved |= Changed(i.Branch, r.Branch); Set(i, "branch", i.Branch, r.Branch, v => i.Branch = v); }
             if (i.Department != r.Department) { Set(i, "department", i.Department, r.Department, v => i.Department = v); moved = true; }
             if (i.JobTitle != r.JobTitle) { Set(i, "jobTitle", i.JobTitle, r.JobTitle, v => i.JobTitle = v); moved = true; }
             if (Transition(i.Status, status) is { } kind) Track(i).Events.Add(kind);

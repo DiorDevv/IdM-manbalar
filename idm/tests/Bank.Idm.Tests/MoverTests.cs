@@ -152,6 +152,7 @@ public class MoverTests : IAsyncLifetime
             var k = await GetAsync(db, "1");
             Assert.Equal(("Chilonzor", (string?)null), (k.Branch, k.Department));
             Assert.Null((await db.IdentityRoles.SingleAsync(r => r.Id == request, Ct)).MoverDueAt);
+            Assert.False(await db.IdentityEvents.AnyAsync(e => e.IdentityId == k.Id && e.Kind == IdentityEventKind.Mover && !e.Details!.Contains("department"), Ct));
         }
     }
 
