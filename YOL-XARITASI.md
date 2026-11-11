@@ -167,6 +167,19 @@ Har bosqich kichik va tugallangan: oxirida ishlaydigan natija va "tayyor" mezoni
 - [ ] Bank tomonida: haqiqiy TLS sertifikatlari va proksi, Vault, SSO'da MFA (ACR) sozlash, bank AD'sida sinov, pentest,
   axborot xavfsizligi bo'limi tekshiruvi va tasdig'i, RTO/RPO kelishuvi.
 
+### J. One Identity Manager darajasiga chiqish (2026-11-11 dan)
+Bank uchun kerakli OIM funksiyalari (SAP, PAM, bulut konnektorlari — kerak emas). Taxminan 3–4 oy.
+- [x] 1. Ikki kishilik tasdiq va portal vakolatlarini boshqarish (2026-11-11): xavfli administrator amallari ikkinchi administrator tasdig'i bilan.
+- [ ] 2. Universal SQL/REST konnektor, ustida iABS va 1C (bank ma'lumoti kerak: iABS 7 servis shinasi yoki Oracle view).
+- [ ] 3. Tashkilot daraxti: filial → bo'lim → sho''ba, rollar daraxt bo'ylab meros.
+- [ ] 4. Dinamik rollar: shartli qoidalar va istisnolar.
+- [ ] 5. Sozlanadigan tasdiqlash siyosatlari (xavf, tizim, rolga qarab; parallel va ketma-ket).
+- [ ] 6. Risk indeksi: rol, ruxsat, xodim.
+- [ ] 7. Tarixiy holat: "sanada kimda nima bor edi" hisoboti.
+- [ ] 8. Peer-group tahlili: bo'limdoshlarida yo'q huquq — attestatsiyada belgi.
+- [ ] 9. Account definitions: tizim bo'yicha akkaunt shabloni va boshqaruv darajasi.
+- [ ] Keyinroq: role mining, konnektorlarni UI'dan sozlash, parolni o'zi tiklash (bankda mavjudligi aniqlanadi).
+
 ## 4. Bajarilgan ishlar
 
 **2026-10-19 — 2026-10-20: SSO va AD poydevori**

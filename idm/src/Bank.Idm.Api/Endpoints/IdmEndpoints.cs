@@ -26,9 +26,12 @@ public static class IdmEndpoints
             var inbox = await RequestEndpoints.Inbox(db.AccessRequests, actor).CountAsync(ct);
             var reviews = await ReviewEndpoints.Inbox(db.AccessReviewItems, actor).CountAsync(ct);
             var owned = await AccessEndpoints.OwnedRolesAsync(db, actor, DateTimeOffset.UtcNow, options.Value.RoleCertificationDays, ct);
-            var moverCount = actor.IdentityId is null ? 0 : await MoverEndpoints.Mine(movers.Pending(time.GetUtcNow()), actor).CountAsync(ct);
+            var now = time.GetUtcNow();
+            var moverCount = actor.IdentityId is null ? 0 : await MoverEndpoints.Mine(movers.Pending(now), actor).CountAsync(ct);
+            // Boshqa administratorlarning tasdiqimni kutayotgan so'rovlari
+            var changes = !user.IsAdmin ? 0 : await db.ChangeRequests.CountAsync(r => r.Status == ChangeRequestStatus.Pending && r.ExpiresAt > now && r.RequestedBy != user.Login, ct);
             return new MeResponse(user.Login, user.Name, user.PortalRoleClaims, actor.IdentityId, hasTeam, inbox, reviews, user.MfaRequiredFor,
-                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due), moverCount);
+                user.MfaRequiredFor.Count > 0 ? options.Value.Sso.AdminMfa.StepUpAcr : null, owned.Count, owned.Count(r => r.Due), moverCount, changes);
         });
 
         // Bosh sahifa: butun bank bo'yicha hisoblar (SoD buzilishlari ham) har ochilishda emas — umumiy keshdan (Idm:DashboardCacheSeconds);
@@ -149,6 +152,7 @@ public static class IdmEndpoints
         api.MapInsightEndpoints();
         api.MapRequestEndpoints();
         api.MapMoverEndpoints();
+        api.MapChangeRequestEndpoints();
         api.MapProvisioningEndpoints();
         api.MapReviewEndpoints();
 

@@ -38,6 +38,16 @@ public class IdmOptions
     public int RoleCertificationDays { get; set; } = 365;
     /// <summary>Boshqa filial yoki bo'limga o'tgan xodim rollari (mover).</summary>
     public Bank.Idm.Infrastructure.Access.MoverOptions Mover { get; set; } = new();
+    /// <summary>Ikki kishilik tasdiq ("to'rt ko'z"): xavfli administrator amallari ikkinchi administrator tasdig'i bilan.</summary>
+    public FourEyesOptions FourEyes { get; set; } = new();
+}
+
+public class FourEyesOptions
+{
+    /// <summary>Standart — yoqilgan. Ishlab chiqarishda o'chirib bo'lmaydi (ProductionGuard).</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Tasdiqlanmagan so'rov shuncha soatdan keyin eskiradi.</summary>
+    public int ExpiryHours { get; set; } = 72;
 }
 
 public class SsoOptions

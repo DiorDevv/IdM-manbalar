@@ -112,23 +112,20 @@ public static class ApplicationEndpoints
         });
 
         // Qo'lda sinxronlash: fonda boshlanadi, natija /runs da. allowMassDelete — xavfsizlik chegarasini administrator tasdiqlagan
-        apps.MapPost("/{code}/sync", async Task<Results<Accepted<SyncStarted>, NotFound, ProblemHttpResult>> (string code, bool? allowMassDelete,
-            IdmDbContext db, ConnectorSyncCoordinator sync, AuditLog audit, CurrentUser user, CancellationToken ct) =>
+        apps.MapPost("/{code}/sync", async (string code, bool? allowMassDelete, IdmDbContext db, ConnectorSyncCoordinator sync, AdminChanges changes,
+            CurrentUser user, CancellationToken ct) =>
         {
+            // Xavfsizlik chegarasini chetlab o'tish (ommaviy o'chirish) — ikki kishilik tasdiq bilan
+            if (allowMassDelete == true) return await changes.SubmitAsync(ChangeKinds.ConnectorMassDelete, new MassDeleteChange(code), ct);
             var app = await db.Applications.AsNoTracking().FirstOrDefaultAsync(a => a.Code == code, ct);
             if (app is null) return TypedResults.NotFound();
-            var started = await sync.StartAsync(app.Code, ConnectorRunTrigger.Manual, user.Login, user.Name, allowMassDelete == true);
-            switch (started.Status)
+            var started = await sync.StartAsync(app.Code, ConnectorRunTrigger.Manual, user.Login, user.Name);
+            return started.Status switch
             {
-                case SyncStartStatus.NotConfigured:
-                    return TypedResults.Problem($"{app.Code} uchun konnektor sozlanmagan", statusCode: StatusCodes.Status400BadRequest);
-                case SyncStartStatus.AlreadyRunning:
-                    return TypedResults.Problem($"{app.Code} sinxronlanmoqda, tugashini kuting", statusCode: StatusCodes.Status409Conflict);
-            }
-            if (allowMassDelete == true)
-                await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "connector.mass-delete-approved", "application", app.Id.ToString(),
-                    $$"""{"application":"{{app.Code}}","runId":"{{started.RunId}}"}""", user.IpAddress, user.CorrelationId), ct);
-            return TypedResults.Accepted($"/api/applications/{app.Code}/runs", new SyncStarted(started.RunId!.Value));
+                SyncStartStatus.NotConfigured => TypedResults.Problem($"{app.Code} uchun konnektor sozlanmagan", statusCode: StatusCodes.Status400BadRequest),
+                SyncStartStatus.AlreadyRunning => TypedResults.Problem($"{app.Code} sinxronlanmoqda, tugashini kuting", statusCode: StatusCodes.Status409Conflict),
+                _ => TypedResults.Accepted($"/api/applications/{app.Code}/runs", new SyncStarted(started.RunId!.Value))
+            };
         }).RequireAuthorization(IdmEndpoints.CanAdminister).WithHeavyLimit();
     }
 

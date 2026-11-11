@@ -27,6 +27,7 @@ avtomatik test uni tekshiradi. Sozlamalar tafsiloti: [README.md](README.md).
 | Soxta yoki boshqa ilova token'i | JWT imzo, issuer, audience `idm-portal`, `idm` scope majburiy | `ApiTests` |
 | SSO token'idagi soxta `idm.admin` roli | Vakolat faqat IdM bazasidan, SSO'dagi `idm.*` rollar o'chiriladi | `ApiTests` (X-Test-Forged-Role) |
 | Admin paroli o'g'irlangan | Admin/auditor vakolati faqat ikkinchi omil bilan (`AdminMfa`, `amr`/`acr`); portal step-up | `HardeningApiTests` |
+| Bitta administrator (yoki o'g'irlangan admin sessiyasi) yolg'iz o'zi kirishni kengaytiradi yoki nazoratni o'chiradi | Ikki kishilik tasdiq (`Idm:FourEyes`, production'da o'chirib bo'lmaydi): portal vakolati, rol ruxsatlari va avtomatik qoidalari, rolni o'chirish, SoD qoidasi va istisnosi, ommaviy o'chirish — boshqa administrator tasdig'i bilan; so'rovchi va o'zgarish tegishli bo'lgan administrator tasdiqlay olmaydi; tasdiqda amal qayta tekshiriladi; 72 soatda eskiradi; ikkitadan kam administrator qoldirib bo'lmaydi | `FourEyesTests` |
 | O'z ruxsatini o'zi tasdiqlash | Ariza va attestatsiyada o'zini tasdiqlash taqiqi; tekshiruvchi — rahbar yoki administrator navbati | `RequestTests`, `ReviewTests` |
 | Bir vaqtda ikki qaror (poyga) | PostgreSQL `xmin` optimistik qulfi, advisory lock'lar | `RequestTests`, `ProvisioningTests` |
 | Noto'g'ri HR fayli / OU — ommaviy bloklash | Sinxronlashda `MaxDeletePercent`, tizimga yozishda `MaxAutoOperations` (oshsa — tasdiqqa), standart rejim `Off`/`Approval` | `HrSyncTests`, `ConnectorSyncTests`, `ProvisioningTests` |
@@ -53,6 +54,8 @@ Rollar: oddiy xodim, rahbar (xodimlari bor), administrator, auditor — har biri
 
 - [ ] **Vakolat (IDOR):** boshqa xodimning arizasi, attestatsiya yozuvi, tizimga yozish amali, hisobot — ID almashtirib (`/api/requests/{id}`,
   `/api/reviews/decide`, `/api/provisioning/operations/approve`, `/api/reports/export/*`).
+- [ ] **Ikki kishilik tasdiq:** so'rovchi o'z so'rovini tasdiqlashi, o'ziga vakolat so'rovini tasdiqlash, ikki admin bir vaqtda tasdiqlashi,
+  eskirgan so'rov, tasdiqdan oldin obyekt o'zgargan holat (403/409 kutiladi; hech narsa qo'llanmasligi).
 - [ ] **Vertikal:** oddiy xodim bilan `/api/identities`, `/api/provisioning/*`, `/api/reviews/campaigns` (403 kutiladi).
 - [ ] **MFA chetlab o'tish:** `AdminMfa` yoqilganda faqat parol bilan olingan token'da admin amallari (403 kutiladi); refresh token'dan keyin.
 - [ ] **Token:** boshqa audience/klient token'i, scope'siz token, muddati o'tgan, imzosi buzilgan, `alg=none`.
@@ -78,6 +81,7 @@ Rollar: oddiy xodim, rahbar (xodimlari bor), administrator, auditor — har biri
 - [ ] Monitoring: `/metrics` (token), README'dagi ogohlantirish qoidalari; `/health` yuk taqsimlagichda.
 - [ ] HA: kamida 2 nusxa, `idm_leader` yig'indisi = 1 ogohlantirishi.
 - [ ] Zaxira: `deploy/backup.sh` (shifrlangan, boshqa saqlovchiga), `deploy/restore-verify.sh` haftada; tiklash vaqti (RTO) va yo'qotish oralig'i (RPO) kelishilgan.
+- [ ] Kamida 2 ta IdM administratori (ikki kishilik tasdiq uchun), `Idm:FourEyes:Enabled=true` (standart).
 - [ ] `BootstrapAdmins` birinchi ishga tushishdan keyin olib tashlangan; admin va auditor vakolatlari ro'yxati axborot xavfsizligi bilan tasdiqlangan.
 
 ## 5. Ma'lum cheklovlar va ochiq xavflar

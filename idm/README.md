@@ -101,6 +101,22 @@ HR — xodimlar haqidagi yagona haqiqat manbai. Hozircha eksport fayli (CSV, UTF
 - **Cheklov:** o'tish faqat HR manbali xodimlarda aniqlanadi (AD manbali — HR ulanguncha — aniqlanmaydi).
 - API: `GET /api/mover-reviews?scope=mine|all` (`all` — admin, auditor), `POST /api/mover-reviews/{id}` `{ "decision": "keep"|"revoke", "comment" }`.
 
+## Ikki kishilik tasdiq ("to'rt ko'z")
+`Idm:FourEyes` — `{ "Enabled": true, "ExpiryHours": 72 }`; production'da o'chirib bo'lmaydi (ProductionGuard).
+- **Qaysi amallar:** portal vakolatini berish/olish (*Nazorat → Portal vakolatlari*), rol ruxsatlarini o'zgartirish, avtomatik qoida
+  qo'shish/olib tashlash, rolni o'chirish, SoD qoidasini yaratish/o'chirish, SoD istisnosini berish, ommaviy o'chirishni tasdiqlab
+  sinxronlash. Rolni yaratish, tahrirlash, SoD istisnosini bekor qilish, attestatsiya va boshqalar — darhol (nazoratni kuchaytiradi yoki kam xavfli).
+- **Qanday:** amal xuddi shu kod bilan bekor qilinadigan tranzaksiyada sinab ko'riladi — xato bo'lsa darhol qaytadi, aks holda so'rov
+  saqlanadi (HTTP 202, `changeRequest`) va unda aynan nima o'zgarishi (audit yozuvlari) ko'rinadi. Boshqa administrator *Nazorat → Tasdiqlar*da
+  tasdiqlasa, amal so'rovchi nomidan qayta tekshirilib bajariladi (`change.approved` bilan bitta tranzaksiyada); shu orada sharoit o'zgargan
+  bo'lsa — hech narsa o'zgarmaydi, so'rov "Bajarib bo'lmadi". Rad etish — sabab bilan; bekor qilish — faqat so'rovchi.
+- **Taqiqlar:** o'z so'rovini tasdiqlash; o'ziga tegishli o'zgarishni (o'ziga vakolat, o'ziga SoD istisnosi) tasdiqlash; administratorlikdan
+  chiqarilgan xodimning so'rovini bajarish; ikkitadan kam administrator qoldirish. Holat o'tishlari shartli yangilash bilan (ikki bosish — bir natija).
+- Boshqa administratorlarga pochta xabari; menyuda kutilayotganlar soni. Audit: `change.requested`, `change.approved`, `change.rejected`,
+  `change.cancelled`, `change.failed`, `portal-role.granted`, `portal-role.revoked`.
+- API: `GET /api/change-requests[?status=pending]`, `POST /api/change-requests/{id}/approve|reject|cancel`, `GET /api/portal-roles`,
+  `POST /api/portal-roles`, `POST /api/portal-roles/revoke`.
+
 ## Rollar va SoD (E bosqichi)
 - **Rol** — biznes roli: tizimlardagi ruxsatlar (AD guruhlari) to'plami. Kod, nom, xavf darajasi, ariza orqali so'rash mumkinligi.
 - **Avtomatik ("tug'ma") qoida:** filial, bo'lim va/yoki lavozim (bo'sh — "har qanday", hammasi bo'sh — taqiqlangan). Qoidaga mos

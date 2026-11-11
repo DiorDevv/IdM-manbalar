@@ -4,7 +4,7 @@ using Bank.Idm.Domain;
 namespace Bank.Idm.Api.Security;
 
 /// <summary>Joriy foydalanuvchi: login, ism va portal vakolatlari (audit va ruxsat tekshiruvi uchun).</summary>
-public class CurrentUser(IHttpContextAccessor accessor, Microsoft.Extensions.Options.IOptions<IdmOptions> options)
+public class CurrentUser(IHttpContextAccessor accessor, Microsoft.Extensions.Options.IOptions<IdmOptions> options) : IAuditActor
 {
     private ClaimsPrincipal Principal => accessor.HttpContext?.User ?? new ClaimsPrincipal();
     public string Login => Principal.FindFirstValue(options.Value.Sso.LoginClaim) ?? Principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";

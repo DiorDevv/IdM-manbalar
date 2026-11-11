@@ -62,6 +62,8 @@ public static class ProductionGuard
         if (options.MetricsToken is { Length: > 0 and < 32 }) errors.Add("Idm:MetricsToken kamida 32 belgi bo'lishi kerak");
         if (options.MigrateOnStartup) warnings.Add("Idm:MigrateOnStartup yoqilgan: ishlab chiqarishda migratsiya alohida, nazorat ostida qo'llanadi");
         if (options.BootstrapAdmins.Length > 0) warnings.Add("Idm:BootstrapAdmins berilgan: birinchi ishga tushishdan keyin olib tashlang");
+        if (!options.FourEyes.Enabled) errors.Add("Idm:FourEyes:Enabled o'chiq: xavfli administrator amallari ikkinchi administrator tasdig'isiz bajariladi");
+        if (options.FourEyes.ExpiryHours is < 1 or > 720) errors.Add("Idm:FourEyes:ExpiryHours 1–720 soat bo'lishi kerak");
         if (!options.Sso.AdminMfa.Required) warnings.Add("Idm:Sso:AdminMfa:Required o'chiq: administratorlar ikki bosqichli kirishsiz ishlaydi");
         return new Result(errors, warnings);
     }

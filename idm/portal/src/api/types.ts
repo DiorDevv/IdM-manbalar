@@ -6,7 +6,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Aborted'
 
 export interface PagedResult<T> { items: T[]; total: number; skip: number; take: number }
-export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null; ownedRoles?: number; ownedRolesDue?: number; moverCount?: number }
+export interface Me { login: string; name: string | null; roles: string[]; identityId: string | null; hasTeam: boolean; inboxCount: number; reviewCount: number; mfaRequiredFor: string[] | null; mfaStepUpAcr: string | null; ownedRoles?: number; ownedRolesDue?: number; moverCount?: number; pendingChanges?: number }
 export interface DashboardSummary {
   identities: number; activeIdentities: number; suspendedIdentities: number; terminatedIdentities: number
   applications: number; accounts: number; disabledAccounts: number; orphanAccounts: number; leaversWithActiveAccounts: number; sodViolations: number
@@ -155,3 +155,19 @@ export interface DayValue { day: string; value: number }
 export interface TrendsResponse { days: string[]; flows: Record<'requests' | 'jml' | 'provisioned' | 'provisioningFailed', number[]>; levels: Record<string, DayValue[]> }
 export interface RiskCell { department: string; application: string; excess: number; privileged: number; identities: number }
 export interface RiskMatrixResponse { departments: string[]; applications: string[]; cells: RiskCell[]; maxExcess: number }
+
+// ---------- Ikki kishilik tasdiq va portal vakolatlari ----------
+export type ChangeStatus = 'Pending' | 'Applied' | 'Rejected' | 'Cancelled' | 'Failed' | 'Expired'
+export interface PreviewEntry { action: string; details: string | null }
+export interface ChangeRequestItem {
+  id: string; kind: string; status: ChangeStatus; preview: PreviewEntry[]; requestedBy: string; requestedByName: string | null; requestedAt: string
+  expiresAt: string; decidedBy: string | null; decidedByName: string | null; decidedAt: string | null; decisionComment: string | null; error: string | null
+  canDecide: boolean; canCancel: boolean
+}
+/** Server javobi (202): o'zgarish qo'llanmadi, ikkinchi administrator tasdig'ini kutmoqda. */
+export interface ChangePending { changeRequest: ChangeRequestItem }
+export function isPendingChange(x: unknown): x is ChangePending {
+  return typeof x === 'object' && x !== null && 'changeRequest' in x
+}
+export type PortalRoleName = 'Admin' | 'Auditor' | 'HrOperator'
+export interface PortalRoleItem { id: string; login: string; role: PortalRoleName; name: string | null; createdAt: string; createdBy: string }

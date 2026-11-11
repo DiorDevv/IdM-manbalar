@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useIsAdmin } from '../api/me'
-import type { AttributeValues, BirthrightResult, EntitlementPick, RoleDetails } from '../api/types'
+import type { AttributeValues, BirthrightResult, ChangePending, EntitlementPick, RoleDetails } from '../api/types'
+import { isPendingChange } from '../api/types'
 import { formatDate, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { EntitlementPicker, Field, Modal, fieldError, formError } from '../components/forms'
@@ -26,14 +27,15 @@ export function RoleDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const key = ['role', id]
   const role = useQuery({ queryKey: key, queryFn: () => api<RoleDetails>(`/api/roles/${id}`), enabled: !!id })
-  const update = (data: RoleDetails) => { client.setQueryData(key, data); void client.invalidateQueries({ queryKey: ['roles'] }) }
+  // Ikki kishilik tasdiqda javob — so'rov (rol o'zgarmagan): keshga yozilmaydi
+  const update = (data: RoleDetails | ChangePending) => { if (isPendingChange(data)) return; client.setQueryData(key, data); void client.invalidateQueries({ queryKey: ['roles'] }) }
 
   const setEntitlements = useMutation({
-    mutationFn: (ids: string[]) => api<RoleDetails>(`/api/roles/${id}/entitlements`, { method: 'PUT', body: JSON.stringify({ entitlementIds: ids }) }),
+    mutationFn: (ids: string[]) => api<RoleDetails | ChangePending>(`/api/roles/${id}/entitlements`, { method: 'PUT', body: JSON.stringify({ entitlementIds: ids }) }),
     onSuccess: update,
   })
   const removeRule = useMutation({
-    mutationFn: (ruleId: string) => api<RoleDetails>(`/api/roles/${id}/rules/${ruleId}`, { method: 'DELETE' }),
+    mutationFn: (ruleId: string) => api<RoleDetails | ChangePending>(`/api/roles/${id}/rules/${ruleId}`, { method: 'DELETE' }),
     onSuccess: update,
   })
   const recalc = useMutation({
@@ -41,8 +43,8 @@ export function RoleDetailPage() {
     onSuccess: () => client.invalidateQueries(),
   })
   const remove = useMutation({
-    mutationFn: () => api<void>(`/api/roles/${id}`, { method: 'DELETE' }),
-    onSuccess: () => { void client.invalidateQueries({ queryKey: ['roles'] }); navigate('/roles') },
+    mutationFn: () => api<void | ChangePending>(`/api/roles/${id}`, { method: 'DELETE' }),
+    onSuccess: x => { if (isPendingChange(x)) return; void client.invalidateQueries({ queryKey: ['roles'] }); navigate('/roles') },
   })
 
   const crumbs = <><Link to="/roles">{r.title}</Link><Icon name="chevron" size={13} /></>
@@ -158,7 +160,7 @@ function AddEntitlements({ open, current, pending, onClose, onSave }: { open: bo
   )
 }
 
-function AddRule({ open, roleId, onClose, onSaved }: { open: boolean; roleId: string; onClose: () => void; onSaved: (role: RoleDetails) => void }) {
+function AddRule({ open, roleId, onClose, onSaved }: { open: boolean; roleId: string; onClose: () => void; onSaved: (role: RoleDetails | ChangePending) => void }) {
   const [branch, setBranch] = useState('')
   const [department, setDepartment] = useState('')
   const [jobTitle, setJobTitle] = useState('')
@@ -166,7 +168,7 @@ function AddRule({ open, roleId, onClose, onSaved }: { open: boolean; roleId: st
   useEffect(() => { if (open) { setBranch(''); setDepartment(''); setJobTitle(''); save.reset() } }, [open])
   const values = useQuery({ queryKey: ['identity-attributes'], queryFn: () => api<AttributeValues>('/api/identity-attributes'), enabled: open, staleTime: 60_000 })
   const save = useMutation({
-    mutationFn: () => api<RoleDetails>(`/api/roles/${roleId}/rules`, { method: 'POST', body: JSON.stringify({ branch: branch || null, department: department || null, jobTitle: jobTitle || null }) }),
+    mutationFn: () => api<RoleDetails | ChangePending>(`/api/roles/${roleId}/rules`, { method: 'POST', body: JSON.stringify({ branch: branch || null, department: department || null, jobTitle: jobTitle || null }) }),
     onSuccess: x => { setBranch(''); setDepartment(''); setJobTitle(''); onSaved(x) },
   })
   const general = formError(save.error, ['branch', 'department', 'jobTitle'])

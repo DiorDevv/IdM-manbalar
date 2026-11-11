@@ -44,6 +44,7 @@ public class AccessApiTests : IAsyncLifetime
             b.UseSetting("Idm:Sso:Authority", "https://sso.invalid/master");
             b.UseSetting("Idm:ProvisioningIntervalSeconds", "0");   // fon ishlovchisi testga aralashmasin
             b.UseSetting("Idm:BootstrapAdmins:0", "boss");
+            b.UseSetting("Idm:FourEyes:Enabled", "false");   // amallarning o'zi tekshiriladi; ikki kishilik tasdiq — FourEyesTests
             b.ConfigureTestServices(s => s.AddAuthentication(o =>
             {
                 o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;

@@ -100,70 +100,17 @@ public static partial class AccessEndpoints
             return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
         });
 
-        admin.MapDelete("/roles/{id:guid}", async Task<Results<NoContent, NotFound, Conflict<string>>> (Guid id, IdmDbContext db, AuditLog audit, CurrentUser user, CancellationToken ct) =>
-        {
-            var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct);
-            if (role is null) return TypedResults.NotFound();
-            // Tarixni yo'qotmaslik uchun: kimgadir berilgan yoki arizada qatnashgan rol o'chirilmaydi
-            if (await db.IdentityRoles.AnyAsync(r => r.RoleId == id, ct) || await db.AccessRequests.AnyAsync(r => r.RoleId == id, ct))
-                return TypedResults.Conflict("Rol xodimlarga berilgan yoki arizalarda bor: o'chirib bo'lmaydi. Avval qoidalarini olib tashlang va qayta hisoblang.");
-            db.Roles.Remove(role);
-            await audit.SaveChangesAsync(Entry(user, "role.deleted", role.Id, new { role.Code, role.Name }), ct);
-            return TypedResults.NoContent();
-        });
+        admin.MapDelete("/roles/{id:guid}", (Guid id, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.RoleDelete, new RoleDeleteChange(id), ct));
 
-        admin.MapPut("/roles/{id:guid}/entitlements", async Task<Results<Ok<RoleDetails>, NotFound, ValidationProblem>> (Guid id, SetRoleEntitlementsRequest request,
-            IdmDbContext db, AuditLog audit, CurrentUser user, AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct) =>
-        {
-            var role = await db.Roles.Include(r => r.Entitlements).FirstOrDefaultAsync(r => r.Id == id, ct);
-            if (role is null) return TypedResults.NotFound();
-            var wanted = request.EntitlementIds.Distinct().ToList();
-            if (wanted.Count > 500) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entitlementIds"] = ["Ko'pi bilan 500 ta ruxsat"] });
-            var existing = await db.Entitlements.Where(e => wanted.Contains(e.Id) && e.DeletedAt == null).Select(e => new { e.Id, e.Name, e.Application.Code }).ToListAsync(ct);
-            if (existing.Count != wanted.Count)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entitlementIds"] = ["Ruxsat topilmadi yoki tizimda o'chirilgan"] });
-            var names = existing.ToDictionary(e => e.Id, e => $"{e.Code}: {e.Name}");
-            var current = role.Entitlements.Select(e => e.EntitlementId).ToHashSet();
-            var added = wanted.Where(e => !current.Contains(e)).ToList();
-            var removed = role.Entitlements.Where(e => !wanted.Contains(e.EntitlementId)).ToList();
-            if (added.Count == 0 && removed.Count == 0) return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
-            foreach (var e in removed) role.Entitlements.Remove(e);
-            foreach (var e in added) role.Entitlements.Add(new RoleEntitlement { RoleId = id, EntitlementId = e });
-            var removedNames = await db.Entitlements.Where(e => removed.Select(r => r.EntitlementId).Contains(e.Id)).Select(e => e.Application.Code + ": " + e.Name).ToListAsync(ct);
-            await audit.SaveChangesAsync(Entry(user, "role.entitlements-changed", id, new { role.Code, added = added.Select(a => names[a]), removed = removedNames }), ct);
-            return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
-        });
+        admin.MapPut("/roles/{id:guid}/entitlements", (Guid id, SetRoleEntitlementsRequest request, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.RoleEntitlements, new RoleEntitlementsChange(id, request.EntitlementIds), ct));
 
-        admin.MapPost("/roles/{id:guid}/rules", async Task<Results<Ok<RoleDetails>, NotFound, ValidationProblem, Conflict<string>>> (Guid id, AddRoleRuleRequest request,
-            IdmDbContext db, AuditLog audit, CurrentUser user, AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct) =>
-        {
-            var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct);
-            if (role is null) return TypedResults.NotFound();
-            var (branch, department, title) = (Clean(request.Branch), Clean(request.Department), Clean(request.JobTitle));
-            // Hammasi bo'sh qoida — butun bankka rol: xato bilan berilmasligi uchun taqiqlanadi
-            if (branch is null && department is null && title is null)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Filial, bo'lim yoki lavozimdan kamida bittasi kerak"] });
-            if (branch?.Length > 256 || department?.Length > 256 || title?.Length > 256)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Ko'pi bilan 256 belgi"] });
-            static bool Same(string? a, string? b) => BirthrightService.Matches(a, b) && BirthrightService.Matches(b, a);
-            var rules = await db.RoleRules.Where(r => r.RoleId == id).ToListAsync(ct);
-            if (rules.Any(r => Same(r.Branch, branch) && Same(r.Department, department) && Same(r.JobTitle, title)))
-                return TypedResults.Conflict("Bunday qoida allaqachon bor");
-            var rule = new RoleRule { RoleId = id, Branch = branch, Department = department, JobTitle = title, CreatedAt = time.GetUtcNow(), CreatedBy = user.Login };
-            db.RoleRules.Add(rule);
-            await audit.SaveChangesAsync(Entry(user, "role.rule-added", id, new { role.Code, branch, department, jobTitle = title }), ct);
-            return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
-        });
+        admin.MapPost("/roles/{id:guid}/rules", (Guid id, AddRoleRuleRequest request, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.RoleRuleAdd, new RoleRuleAddChange(id, request.Branch, request.Department, request.JobTitle), ct));
 
-        admin.MapDelete("/roles/{id:guid}/rules/{ruleId:guid}", async Task<Results<Ok<RoleDetails>, NotFound>> (Guid id, Guid ruleId, IdmDbContext db, AuditLog audit,
-            CurrentUser user, AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct) =>
-        {
-            var rule = await db.RoleRules.Include(r => r.Role).FirstOrDefaultAsync(r => r.Id == ruleId && r.RoleId == id, ct);
-            if (rule is null) return TypedResults.NotFound();
-            db.RoleRules.Remove(rule);
-            await audit.SaveChangesAsync(Entry(user, "role.rule-removed", id, new { rule.Role.Code, rule.Branch, rule.Department, rule.JobTitle }), ct);
-            return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
-        });
+        admin.MapDelete("/roles/{id:guid}/rules/{ruleId:guid}", (Guid id, Guid ruleId, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.RoleRuleRemove, new RoleRuleRemoveChange(id, ruleId), ct));
 
         // Qoidalar o'zgargach: kimga rol berilishi va kimdan olinishi darhol hisoblanadi (keyingi sinxronlashda ham avtomatik)
         admin.MapPost("/roles/recalculate", async (BirthrightService birthright, CurrentUser user, CancellationToken ct) =>
@@ -243,13 +190,8 @@ public static partial class AccessEndpoints
                 i.x.CreatedAt, i.x.CreatedByName ?? i.x.CreatedBy, i.x.RevokedAt, i.x.RevokedByName ?? i.x.RevokedBy)).ToList();
         });
 
-        admin.MapPost("/sod/exceptions", async Task<Results<Ok<Guid>, ProblemHttpResult>> (SodExceptionBody body, IdmDbContext db, SodExceptionService service,
-            CurrentUser user, CancellationToken ct) =>
-        {
-            var result = await service.CreateAsync(await RequestEndpoints.ActorAsync(db, user, ct),
-                new NewSodException(body.RuleId, body.IdentityId, body.Reason, body.CompensatingControl, body.ValidUntil), ct);
-            return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.Ok(result.Value.Id);
-        });
+        admin.MapPost("/sod/exceptions", (SodExceptionBody body, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.SodExceptionGrant, body, ct));
 
         admin.MapPost("/sod/exceptions/{id:guid}/revoke", async Task<Results<NoContent, ProblemHttpResult>> (Guid id, SodExceptionRevokeBody body, IdmDbContext db,
             SodExceptionService service, CurrentUser user, CancellationToken ct) =>
@@ -258,44 +200,11 @@ public static partial class AccessEndpoints
             return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.NoContent();
         });
 
-        admin.MapPost("/sod/rules", async Task<Results<Created<SodRuleItem>, ValidationProblem, Conflict<string>>> (SaveSodRuleRequest request, IdmDbContext db,
-            AuditLog audit, CurrentUser user, TimeProvider time, CancellationToken ct) =>
-        {
-            var errors = Validate(request.Code, request.Name, request.Description);
-            var left = request.Left.Distinct().ToList();
-            var right = request.Right.Distinct().ToList();
-            if (left.Count == 0 || right.Count == 0) errors["left"] = ["Ikkala tomonda kamida bittadan ruxsat bo'lishi kerak"];
-            else if (left.Intersect(right).Any()) errors["right"] = ["Bir ruxsat ikkala tomonda bo'lishi mumkin emas"];
-            else if (left.Count + right.Count > 200) errors["left"] = ["Ko'pi bilan 200 ta ruxsat"];
-            if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
-            var all = left.Concat(right).ToList();
-            var found = await db.Entitlements.Include(e => e.Application).Where(e => all.Contains(e.Id) && e.DeletedAt == null).ToListAsync(ct);
-            if (found.Count != all.Count) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["left"] = ["Ruxsat topilmadi yoki tizimda o'chirilgan"] });
-            var code = request.Code.Trim();
-            if (await db.SodRules.AnyAsync(r => r.Code == code, ct)) return TypedResults.Conflict($"{code} kodli SoD qoidasi allaqachon bor");
-            var rule = new SodRule { Code = code, Name = request.Name.Trim(), Description = Clean(request.Description), Risk = request.Risk, CreatedAt = time.GetUtcNow(), CreatedBy = user.Login };
-            rule.Entitlements.AddRange(left.Select(e => new SodRuleEntitlement { EntitlementId = e, Side = SodSide.Left }));
-            rule.Entitlements.AddRange(right.Select(e => new SodRuleEntitlement { EntitlementId = e, Side = SodSide.Right }));
-            db.SodRules.Add(rule);
-            var byId = found.ToDictionary(e => e.Id);
-            await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "sod.rule-created", "sod-rule", rule.Id.ToString(), JsonSerializer.Serialize(new
-            {
-                rule.Code, rule.Name, risk = rule.Risk.ToString(),
-                left = left.Select(e => $"{byId[e].Application.Code}: {byId[e].Name}"), right = right.Select(e => $"{byId[e].Application.Code}: {byId[e].Name}")
-            }, Json), user.IpAddress, user.CorrelationId), ct);
-            return TypedResults.Created($"/api/sod/rules/{rule.Id}", new SodRuleItem(rule.Id, rule.Code, rule.Name, rule.Description, rule.Risk,
-                left.Select(e => Pick(byId[e])).ToList(), right.Select(e => Pick(byId[e])).ToList(), 0, rule.CreatedAt, rule.CreatedBy));
-        });
+        admin.MapPost("/sod/rules", (SaveSodRuleRequest request, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.SodRuleCreate, request, ct));
 
-        admin.MapDelete("/sod/rules/{id:guid}", async Task<Results<NoContent, NotFound>> (Guid id, IdmDbContext db, AuditLog audit, CurrentUser user, CancellationToken ct) =>
-        {
-            var rule = await db.SodRules.FirstOrDefaultAsync(r => r.Id == id, ct);
-            if (rule is null) return TypedResults.NotFound();
-            db.SodRules.Remove(rule);
-            await audit.SaveChangesAsync(new AuditEntry(user.Login, user.Name, "sod.rule-deleted", "sod-rule", id.ToString(),
-                JsonSerializer.Serialize(new { rule.Code, rule.Name }, Json), user.IpAddress, user.CorrelationId), ct);
-            return TypedResults.NoContent();
-        });
+        admin.MapDelete("/sod/rules/{id:guid}", (Guid id, AdminChanges changes, CancellationToken ct) =>
+            changes.SubmitAsync(ChangeKinds.SodRuleDelete, new SodRuleDeleteChange(id), ct));
     }
 
     /// <summary>Men (yoki o'rinbosarim bo'lgan xodim) egasi bo'lgan rollar; administratorga — egasiz rollar ham.</summary>
@@ -315,6 +224,121 @@ public static partial class AccessEndpoints
                 members.GetValueOrDefault(r.Id), r.Entitlements.Select(e => e.Entitlement).OrderBy(e => e.Application.Code).ThenBy(e => e.Name).Select(Pick).ToList(),
                 r.Rules.Select(x => $"{x.Branch ?? "*"} / {x.Department ?? "*"} / {x.JobTitle ?? "*"}").ToList(), r.CertifiedAt, r.CertifiedByName ?? r.CertifiedBy, Due(r)))
             .OrderByDescending(r => r.Due).ThenBy(r => r.Code).ToList();
+    }
+
+    // ---------- Ikki kishilik tasdiq ostidagi amallar: endpoint ham, tasdiqlash ham shu metodlarni chaqiradi ----------
+
+    internal static async Task<IResult> DeleteRoleAsync(Guid id, IAuditActor actor, IdmDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (role is null) return TypedResults.NotFound();
+        // Tarixni yo'qotmaslik uchun: kimgadir berilgan yoki arizada qatnashgan rol o'chirilmaydi
+        if (await db.IdentityRoles.AnyAsync(r => r.RoleId == id, ct) || await db.AccessRequests.AnyAsync(r => r.RoleId == id, ct))
+            return TypedResults.Conflict("Rol xodimlarga berilgan yoki arizalarda bor: o'chirib bo'lmaydi. Avval qoidalarini olib tashlang va qayta hisoblang.");
+        db.Roles.Remove(role);
+        await audit.SaveChangesAsync(Entry(actor, "role.deleted", role.Id, new { role.Code, role.Name }), ct);
+        return TypedResults.NoContent();
+    }
+
+    internal static async Task<IResult> SetRoleEntitlementsAsync(Guid id, IReadOnlyList<Guid> entitlementIds, IAuditActor actor, IdmDbContext db, AuditLog audit,
+        AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct)
+    {
+        var role = await db.Roles.Include(r => r.Entitlements).FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (role is null) return TypedResults.NotFound();
+        var wanted = entitlementIds.Distinct().ToList();
+        if (wanted.Count > 500) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entitlementIds"] = ["Ko'pi bilan 500 ta ruxsat"] });
+        var existing = await db.Entitlements.Where(e => wanted.Contains(e.Id) && e.DeletedAt == null).Select(e => new { e.Id, e.Name, e.Application.Code }).ToListAsync(ct);
+        if (existing.Count != wanted.Count)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entitlementIds"] = ["Ruxsat topilmadi yoki tizimda o'chirilgan"] });
+        var names = existing.ToDictionary(e => e.Id, e => $"{e.Code}: {e.Name}");
+        var current = role.Entitlements.Select(e => e.EntitlementId).ToHashSet();
+        var added = wanted.Where(e => !current.Contains(e)).ToList();
+        var removed = role.Entitlements.Where(e => !wanted.Contains(e.EntitlementId)).ToList();
+        if (added.Count == 0 && removed.Count == 0)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entitlementIds"] = ["Rol ruxsatlari o'zgarmadi"] });
+        foreach (var e in removed) role.Entitlements.Remove(e);
+        foreach (var e in added) role.Entitlements.Add(new RoleEntitlement { RoleId = id, EntitlementId = e });
+        var removedNames = await db.Entitlements.Where(e => removed.Select(r => r.EntitlementId).Contains(e.Id)).Select(e => e.Application.Code + ": " + e.Name).ToListAsync(ct);
+        await audit.SaveChangesAsync(Entry(actor, "role.entitlements-changed", id, new { role.Code, added = added.Select(a => names[a]), removed = removedNames }), ct);
+        return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
+    }
+
+    internal static async Task<IResult> AddRoleRuleAsync(RoleRuleAddChange request, IAuditActor actor, IdmDbContext db, AuditLog audit,
+        AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct)
+    {
+        var id = request.RoleId;
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (role is null) return TypedResults.NotFound();
+        var (branch, department, title) = (Clean(request.Branch), Clean(request.Department), Clean(request.JobTitle));
+        // Hammasi bo'sh qoida — butun bankka rol: xato bilan berilmasligi uchun taqiqlanadi
+        if (branch is null && department is null && title is null)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Filial, bo'lim yoki lavozimdan kamida bittasi kerak"] });
+        if (branch?.Length > 256 || department?.Length > 256 || title?.Length > 256)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["department"] = ["Ko'pi bilan 256 belgi"] });
+        static bool Same(string? a, string? b) => BirthrightService.Matches(a, b) && BirthrightService.Matches(b, a);
+        var rules = await db.RoleRules.Where(r => r.RoleId == id).ToListAsync(ct);
+        if (rules.Any(r => Same(r.Branch, branch) && Same(r.Department, department) && Same(r.JobTitle, title)))
+            return TypedResults.Conflict("Bunday qoida allaqachon bor");
+        var rule = new RoleRule { RoleId = id, Branch = branch, Department = department, JobTitle = title, CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login };
+        db.RoleRules.Add(rule);
+        await audit.SaveChangesAsync(Entry(actor, "role.rule-added", id, new { role.Code, branch, department, jobTitle = title }), ct);
+        return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
+    }
+
+    internal static async Task<IResult> RemoveRoleRuleAsync(Guid id, Guid ruleId, IAuditActor actor, IdmDbContext db, AuditLog audit,
+        AccessAnalyzer analyzer, TimeProvider time, CancellationToken ct)
+    {
+        var rule = await db.RoleRules.Include(r => r.Role).FirstOrDefaultAsync(r => r.Id == ruleId && r.RoleId == id, ct);
+        if (rule is null) return TypedResults.NotFound();
+        db.RoleRules.Remove(rule);
+        await audit.SaveChangesAsync(Entry(actor, "role.rule-removed", id, new { rule.Role.Code, rule.Branch, rule.Department, rule.JobTitle }), ct);
+        return TypedResults.Ok((await LoadRoleAsync(db, analyzer, time, id, ct))!);
+    }
+
+    internal static async Task<IResult> CreateSodRuleAsync(SaveSodRuleRequest request, IAuditActor actor, IdmDbContext db, AuditLog audit, TimeProvider time,
+        CancellationToken ct)
+    {
+        var errors = Validate(request.Code, request.Name, request.Description);
+        var left = (request.Left ?? []).Distinct().ToList();
+        var right = (request.Right ?? []).Distinct().ToList();
+        if (left.Count == 0 || right.Count == 0) errors["left"] = ["Ikkala tomonda kamida bittadan ruxsat bo'lishi kerak"];
+        else if (left.Intersect(right).Any()) errors["right"] = ["Bir ruxsat ikkala tomonda bo'lishi mumkin emas"];
+        else if (left.Count + right.Count > 200) errors["left"] = ["Ko'pi bilan 200 ta ruxsat"];
+        if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
+        var all = left.Concat(right).ToList();
+        var found = await db.Entitlements.Include(e => e.Application).Where(e => all.Contains(e.Id) && e.DeletedAt == null).ToListAsync(ct);
+        if (found.Count != all.Count) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["left"] = ["Ruxsat topilmadi yoki tizimda o'chirilgan"] });
+        var code = request.Code.Trim();
+        if (await db.SodRules.AnyAsync(r => r.Code == code, ct)) return TypedResults.Conflict($"{code} kodli SoD qoidasi allaqachon bor");
+        var rule = new SodRule { Code = code, Name = request.Name.Trim(), Description = Clean(request.Description), Risk = request.Risk, CreatedAt = time.GetUtcNow(), CreatedBy = actor.Login };
+        rule.Entitlements.AddRange(left.Select(e => new SodRuleEntitlement { EntitlementId = e, Side = SodSide.Left }));
+        rule.Entitlements.AddRange(right.Select(e => new SodRuleEntitlement { EntitlementId = e, Side = SodSide.Right }));
+        db.SodRules.Add(rule);
+        var byId = found.ToDictionary(e => e.Id);
+        await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "sod.rule-created", "sod-rule", rule.Id.ToString(), JsonSerializer.Serialize(new
+        {
+            rule.Code, rule.Name, risk = rule.Risk.ToString(),
+            left = left.Select(e => $"{byId[e].Application.Code}: {byId[e].Name}"), right = right.Select(e => $"{byId[e].Application.Code}: {byId[e].Name}")
+        }, Json), actor.IpAddress, actor.CorrelationId), ct);
+        return TypedResults.Created($"/api/sod/rules/{rule.Id}", new SodRuleItem(rule.Id, rule.Code, rule.Name, rule.Description, rule.Risk,
+            left.Select(e => Pick(byId[e])).ToList(), right.Select(e => Pick(byId[e])).ToList(), 0, rule.CreatedAt, rule.CreatedBy));
+    }
+
+    internal static async Task<IResult> DeleteSodRuleAsync(Guid id, IAuditActor actor, IdmDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var rule = await db.SodRules.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (rule is null) return TypedResults.NotFound();
+        db.SodRules.Remove(rule);
+        await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "sod.rule-deleted", "sod-rule", id.ToString(),
+            JsonSerializer.Serialize(new { rule.Code, rule.Name }, Json), actor.IpAddress, actor.CorrelationId), ct);
+        return TypedResults.NoContent();
+    }
+
+    internal static async Task<IResult> GrantSodExceptionAsync(SodExceptionBody body, Bank.Idm.Infrastructure.Requests.RequestActor actor,
+        SodExceptionService service, CancellationToken ct)
+    {
+        var result = await service.CreateAsync(actor, new NewSodException(body.RuleId, body.IdentityId, body.Reason, body.CompensatingControl, body.ValidUntil), ct);
+        return result.Value is null ? TypedResults.Problem(result.Error, statusCode: result.Status) : TypedResults.Ok(result.Value.Id);
     }
 
     /// <summary>Rol egasi: mavjud va ishdan ketmagan xodim (bo'sh — egasiz).</summary>
@@ -366,7 +390,7 @@ public static partial class AccessEndpoints
 
     private static EntitlementPick Pick(Entitlement e) => new(e.Id, e.Application.Code, e.Name, e.IsPrivileged, e.Risk);
 
-    private static AuditEntry Entry(CurrentUser user, string action, Guid roleId, object details) =>
+    private static AuditEntry Entry(IAuditActor user, string action, Guid roleId, object details) =>
         new(user.Login, user.Name, action, "role", roleId.ToString(), JsonSerializer.Serialize(details, Json), user.IpAddress, user.CorrelationId);
 
     private static Dictionary<string, string[]> Validate(string? code, string? name, string? description)

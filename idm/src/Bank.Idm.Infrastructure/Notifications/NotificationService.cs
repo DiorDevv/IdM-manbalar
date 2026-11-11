@@ -175,8 +175,26 @@ public class NotificationService(IdmDbContext db, TimeProvider time)
                          $"остальные будут отозваны автоматически после {due}.", $"{portal}/requests?tab=movers")));
         }
 
+        // 5. Ikki kishilik tasdiq: yangi so'rov haqida qolgan administratorlarga (so'rovchining o'ziga emas)
+        var changes = await db.ChangeRequests.AsNoTracking().Where(r => r.Status == ChangeRequestStatus.Pending && r.ExpiresAt > now)
+            .Select(r => new { r.Id, r.Kind, r.RequestedBy, r.RequestedByName }).ToListAsync(ct);
+        if (changes.Count > 0)
+        {
+            var adminLogins = await db.PortalRoleAssignments.AsNoTracking().Where(p => p.Role == PortalRole.Admin).Select(p => p.Login).ToListAsync(ct);
+            var admins = await db.Accounts.AsNoTracking()
+                .Where(a => adminLogins.Contains(a.Login) && a.IdentityId != null && a.Status != AccountStatus.Deleted && a.Application.Kind == ApplicationKind.Directory)
+                .Select(a => new { a.Login, IdentityId = a.IdentityId!.Value }).ToListAsync(ct);
+            foreach (var c in changes)
+                foreach (var a in admins.Where(a => !string.Equals(a.Login, c.RequestedBy, StringComparison.OrdinalIgnoreCase)).DistinctBy(a => a.IdentityId))
+                    planned.Add(new($"change:{c.Id:N}:{a.IdentityId:N}", "change-request", a.IdentityId,
+                        $"Tasdiq kerak / Требуется подтверждение: {c.Kind}",
+                        Text($"{c.RequestedByName ?? c.RequestedBy} administrator o'zgarishini ({c.Kind}) yubordi: u ikkinchi administrator tasdig'isiz qo'llanmaydi.",
+                             $"{c.RequestedByName ?? c.RequestedBy} отправил(а) административное изменение ({c.Kind}): без подтверждения второго администратора оно не применяется.",
+                             $"{portal}/changes")));
+        }
+
         if (planned.Count == 0) return 0;
-        var keys =planned.Select(p => p.Key).Distinct().ToList();
+        var keys = planned.Select(p => p.Key).Distinct().ToList();
         var existing = (await db.Notifications.AsNoTracking().Where(n => keys.Contains(n.DedupKey)).Select(n => n.DedupKey).ToListAsync(ct)).ToHashSet();
         var fresh = planned.Where(p => !existing.Contains(p.Key)).DistinctBy(p => p.Key).ToList();
         if (fresh.Count == 0) return 0;

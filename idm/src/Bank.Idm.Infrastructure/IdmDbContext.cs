@@ -32,6 +32,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<ApproverDelegation> ApproverDelegations => Set<ApproverDelegation>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<MetricSnapshot> MetricSnapshots => Set<MetricSnapshot>();
+    public DbSet<ChangeRequest> ChangeRequests => Set<ChangeRequest>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -172,6 +173,20 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<ChangeRequest>(e =>
+        {
+            e.HasIndex(x => new { x.Status, x.RequestedAt });
+            e.Property(x => x.Kind).HasMaxLength(64);
+            e.Property(x => x.Payload).HasColumnType("jsonb");
+            e.Property(x => x.Preview).HasColumnType("jsonb");
+            e.Property(x => x.RequestedBy).HasMaxLength(256);
+            e.Property(x => x.RequestedByName).HasMaxLength(256);
+            e.Property(x => x.RequestedIp).HasMaxLength(64);
+            e.Property(x => x.DecidedBy).HasMaxLength(256);
+            e.Property(x => x.DecidedByName).HasMaxLength(256);
+            e.Property(x => x.DecisionComment).HasMaxLength(1000);
+            e.Property(x => x.Error).HasMaxLength(2000);
         });
         b.Entity<MetricSnapshot>(e =>
         {

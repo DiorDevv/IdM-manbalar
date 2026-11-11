@@ -10,6 +10,8 @@ import { IdentityDetailPage } from './pages/IdentityDetailPage'
 import { ApplicationsPage } from './pages/ApplicationsPage'
 import { ApplicationDetailPage } from './pages/ApplicationDetailPage'
 import { AuditPage } from './pages/AuditPage'
+import { ChangesPage } from './pages/ChangesPage'
+import { PortalRolesPage } from './pages/PortalRolesPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { EventsPage } from './pages/EventsPage'
 import { RolesPage } from './pages/RolesPage'
@@ -60,6 +62,8 @@ createRoot(document.getElementById('root')!).render(
               <Route path="reviews/campaigns/:id" element={<CampaignPage />} />
               <Route path="reports/print/:key" element={<PrintReportPage />} />
               <Route path="audit" element={<AuditPage />} />
+              <Route path="changes" element={<ChangesPage />} />
+              <Route path="portal-roles" element={<PortalRolesPage />} />
               <Route path="callback" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

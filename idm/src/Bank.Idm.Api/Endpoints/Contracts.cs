@@ -5,7 +5,8 @@ namespace Bank.Idm.Api.Endpoints;
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
 public record MeResponse(string Login, string? Name, IReadOnlyList<string> Roles, Guid? IdentityId, bool HasTeam = false, int InboxCount = 0, int ReviewCount = 0,
-    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null, int OwnedRoles = 0, int OwnedRolesDue = 0, int MoverCount = 0);
+    IReadOnlyList<string>? MfaRequiredFor = null, string? MfaStepUpAcr = null, int OwnedRoles = 0, int OwnedRolesDue = 0, int MoverCount = 0,
+    int PendingChanges = 0);
 
 public record CertifyRoleBody(IReadOnlyList<Guid> Keep, string? Comment);
 
@@ -205,3 +206,18 @@ public record ReviewItemDto(Guid Id, Guid CampaignId, string CampaignName, DateO
 public record ReviewDecisionBody(IReadOnlyList<Guid> Ids, bool Keep, string? Comment);
 
 public record CloseCampaignBody(bool Cancel);
+
+/// <summary>Ikki kishilik tasdiq: o'zgarish qo'llanmadi, boshqa administrator tasdig'ini kutmoqda (HTTP 202).</summary>
+public record ChangePending(ChangeRequestItem ChangeRequest);
+
+/// <param name="Status">Pending, Applied, Rejected, Cancelled, Failed yoki Expired (muddati o'tgan, hal qilinmagan).</param>
+/// <param name="Preview">Tasdiqlansa yoziladigan audit yozuvlari: aynan nima o'zgaradi.</param>
+public record ChangeRequestItem(Guid Id, string Kind, string Status, IReadOnlyList<Bank.Idm.Api.Security.PreviewEntry> Preview, string RequestedBy,
+    string? RequestedByName, DateTimeOffset RequestedAt, DateTimeOffset ExpiresAt, string? DecidedBy, string? DecidedByName, DateTimeOffset? DecidedAt,
+    string? DecisionComment, string? Error, bool CanDecide, bool CanCancel);
+
+public record ChangeDecisionBody(string? Comment);
+
+public record PortalRoleItem(Guid Id, string Login, PortalRole Role, string? Name, DateTimeOffset CreatedAt, string CreatedBy);
+
+public record PortalRoleBody(string Login, PortalRole Role);

@@ -1,5 +1,9 @@
 import { currentUser, signIn } from '../auth/oidc'
 import { t } from '../i18n'
+import { isPendingChange } from './types'
+
+/** Ikki kishilik tasdiq: o'zgarish tasdiqqa yuborilganda (202) — Layout ogohlantirish ko'rsatadi. */
+export const CHANGE_PENDING_EVENT = 'idm:change-pending'
 
 export class ApiError extends Error {
   /** Validatsiya xatolari: maydon → xabarlar (ASP.NET ValidationProblem). */
@@ -28,7 +32,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(response.status, message || `HTTP ${response.status}`, fieldErrors)
   }
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  const body = (await response.json()) as T
+  if (response.status === 202 && isPendingChange(body)) window.dispatchEvent(new CustomEvent(CHANGE_PENDING_EVENT, { detail: body.changeRequest }))
+  return body
 }
 
 /** So'rovlar chegarasi (429) yoki vaqt tugadi (504): tanlangan tilda tushunarli xabar (server xabari faqat o'zbekcha). */

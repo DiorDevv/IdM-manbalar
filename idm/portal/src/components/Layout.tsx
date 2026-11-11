@@ -1,8 +1,8 @@
 import { signInWithMfa } from '../auth/oidc'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../api/client'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, CHANGE_PENDING_EVENT } from '../api/client'
 import type { DashboardSummary } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
 import { useMe } from '../api/me'
@@ -40,6 +40,15 @@ export function Layout() {
   const current = NAV.flatMap(s => s.items).filter(i => !i.soon && (i.to === '/' ? location.pathname === '/' : location.pathname.startsWith(i.to)))[0]
 
   useEffect(() => { setNavOpen(false) }, [location.pathname])
+  // Ikki kishilik tasdiq: o'zgarish qo'llanmadi, tasdiqqa yuborildi — buni administrator aniq ko'rishi kerak
+  const client = useQueryClient()
+  const [sent, setSent] = useState(false)
+  useEffect(() => {
+    const onPending = () => { setSent(true); void client.invalidateQueries({ queryKey: ['me'] }); void client.invalidateQueries({ queryKey: ['change-requests'] }) }
+    window.addEventListener(CHANGE_PENDING_EVENT, onPending)
+    return () => window.removeEventListener(CHANGE_PENDING_EVENT, onPending)
+  }, [client])
+  useEffect(() => { if (!sent) return; const timer = setTimeout(() => setSent(false), 15_000); return () => clearTimeout(timer) }, [sent])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setCmdOpen(o => !o) }
@@ -61,7 +70,7 @@ export function Layout() {
           <div key={section.title}>
             <div className="nav-section">{section.title}</div>
             {section.items.map(item => <NavItem key={item.to} item={item} count={item.to === '/reports' ? risks : item.to === '/sod' ? dashboard.data?.sodViolations
-              : item.to === '/requests' ? me.data?.inboxCount : item.to === '/reviews' ? (me.data?.reviewCount ?? 0) + (me.data?.ownedRolesDue ?? 0) : undefined} />)}
+              : item.to === '/requests' ? me.data?.inboxCount : item.to === '/changes' ? me.data?.pendingChanges : item.to === '/reviews' ? (me.data?.reviewCount ?? 0) + (me.data?.ownedRolesDue ?? 0) : undefined} />)}
           </div>
         ))}
         <div className="sidebar-foot">
@@ -96,6 +105,14 @@ export function Layout() {
           </button>
         </header>
         <main id="main" className="content" key={location.pathname}>
+          {sent && (
+            <div className="alert info no-print" role="status" style={{ marginBottom: 16 }}>
+              <Icon name="shield" size={18} />
+              <span className="grow"><strong>{t.changes.sentTitle}</strong> {t.changes.sentText}</span>
+              <Link to="/changes" className="btn secondary sm">{t.changes.open}</Link>
+              <button className="icon-btn" onClick={() => setSent(false)} aria-label={t.cancel}><Icon name="x" size={15} /></button>
+            </div>
+          )}
           {!!me.data?.mfaRequiredFor?.length && (
             <div className="alert warn no-print" role="alert" style={{ marginBottom: 16 }}>
               <Icon name="lock" size={18} />

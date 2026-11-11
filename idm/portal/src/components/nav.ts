@@ -27,6 +27,8 @@ export const NAV: NavSection[] = [
       { to: '/reports', icon: 'reports', label: t.nav.reports },
       { to: '/sod', icon: 'shield', label: t.nav.sod },
       { to: '/audit', icon: 'audit', label: t.nav.audit },
+      { to: '/changes', icon: 'check', label: t.nav.changes },
+      { to: '/portal-roles', icon: 'lock', label: t.nav.portalAccess },
     ],
   },
 ]
