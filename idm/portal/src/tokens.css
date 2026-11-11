@@ -1,0 +1,72 @@
+/* Bank IdM tokenlari: yagona manba. Rang va shrift faqat shu yerda e'lon qilinadi. */
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.857rem; --text-sm: 0.929rem; --text-md: 1rem; --text-lg: 1.143rem; --text-xl: 1.429rem; --text-2xl: 1.714rem; --text-3xl: 2rem;
+  --text-display-s: 1.429rem; --text-display: 1.429rem; --text-section: 1.143rem; --text-title: 1rem; --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --container: 1360px; --gutter: 32px; --gap-columns: 16px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+  --radius-sm: 4px; --radius: 6px; --radius-lg: 8px; --radius-card: 8px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: none;
+  --tracking-display: -0.012em; --display-weight: 600;
+  --sidebar-w: 256px; --header-h: 56px; --control-h: 32px; --control-h-sm: 32px;
+
+  --font-display: "Inter Variable", "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --font-body: var(--font-display);
+  --font-outlier: var(--font-body);
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Och mavzu */
+  --color-paper: #f5f6f8; --color-paper-2: #ffffff; --color-paper-3: #edeff3;
+  --color-hover: #f0f2f5; --color-selected: #e6e9ef;
+  --color-ink: #10151f; --color-ink-2: #39414e; --color-muted: #5b6472; --color-faint: #606977;
+  --color-rule: #e0e3e9; --color-rule-strong: #c7ccd5; --color-field: #868e9c;
+  --color-accent: #1f56d1; --color-accent-hover: #1947b3; --color-accent-soft: #e9effc; --color-accent-text: #1a46a8; --color-accent-ink: #ffffff;
+  --color-focus: #1f56d1;
+  --color-ok: #0b6e44; --color-ok-soft: #e4f3ec;
+  --color-warn: #8a5204; --color-warn-soft: #fbf0dc;
+  --color-bad: #b9271f; --color-bad-soft: #fbeae8; --color-bad-hover: #9c1f18; --color-on-bad: #ffffff;
+  --color-neutral-soft: #eceef2;
+  --color-scrim: #10151f8c;
+  --color-print-paper: #ffffff; --color-print-ink: #10151f;
+  --color-error: var(--color-bad); --color-success: var(--color-ok);
+  --shadow-pop: 0 8px 24px #10151f24;
+
+  /* Grafiklar (dataviz: bitta tus, ramp validator bilan tekshirilgan) */
+  --viz-1: #2a78d6; --viz-muted: #c4cad3; --viz-grid: #eceef2; --viz-cross: #9aa2ae;
+  --heat-0: var(--color-hover); --heat-1: #86b6ef; --heat-2: #5598e7; --heat-3: #2a78d6; --heat-4: #1c5cab; --heat-5: #104281;
+  --heat-ink-1: #0b1a33; --heat-ink-2: #0b1a33; --heat-ink-3: #ffffff; --heat-ink-4: #ffffff; --heat-ink-5: #ffffff;
+
+  /* Komponentlar va sahifalar ishlatadigan rol nomlari */
+  --bg: var(--color-paper); --panel: var(--color-paper-2); --panel-2: var(--color-hover); --sidebar: var(--color-paper-3);
+  --hover: var(--color-hover); --selected: var(--color-selected);
+  --text: var(--color-ink); --text-2: var(--color-ink-2); --muted: var(--color-muted); --faint: var(--color-faint);
+  --border: var(--color-rule); --border-strong: var(--color-rule-strong);
+  --accent: var(--color-accent); --accent-hover: var(--color-accent-hover); --accent-soft: var(--color-accent-soft); --accent-text: var(--color-accent-text);
+  --ok: var(--color-ok); --ok-soft: var(--color-ok-soft); --warn: var(--color-warn); --warn-soft: var(--color-warn-soft);
+  --bad: var(--color-bad); --bad-soft: var(--color-bad-soft); --neutral-soft: var(--color-neutral-soft);
+  --violet: var(--color-ink-2); --violet-soft: var(--color-neutral-soft);
+  --teal: var(--color-ink-2); --teal-soft: var(--color-neutral-soft);
+  --sky: var(--color-accent); --sky-soft: var(--color-accent-soft);
+  --font: var(--font-body); --mono: var(--font-mono);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --color-paper: #0d1016; --color-paper-2: #14181f; --color-paper-3: #101319;
+  --color-hover: #1b2029; --color-selected: #232a36;
+  --color-ink: #e9ecf1; --color-ink-2: #c5cbd6; --color-muted: #9aa3b1; --color-faint: #8a93a1;
+  --color-rule: #252b36; --color-rule-strong: #353d4b; --color-field: #6f7787;
+  --color-accent: #5b8cff; --color-accent-hover: #7aa2ff; --color-accent-soft: #5b8cff24; --color-accent-text: #93b4ff; --color-accent-ink: #0b1220;
+  --color-focus: #93b4ff;
+  --color-ok: #4fd39a; --color-ok-soft: #4fd39a1f;
+  --color-warn: #f0b44c; --color-warn-soft: #f0b44c1f;
+  --color-bad: #ff7f77; --color-bad-soft: #ff7f771f; --color-bad-hover: #ff9a93; --color-on-bad: #1c0705;
+  --color-neutral-soft: #ffffff12;
+  --color-scrim: #05070bb3;
+  --shadow-pop: 0 12px 32px #00000099;
+  --viz-1: #3987e5; --viz-muted: #3a4250; --viz-grid: #1d222b; --viz-cross: #5d6574;
+  --heat-1: #184f95; --heat-2: #256abf; --heat-3: #3987e5; --heat-4: #6da7ec; --heat-5: #9ec5f4;
+  --heat-ink-1: #ffffff; --heat-ink-2: #ffffff; --heat-ink-3: #0b1a33; --heat-ink-4: #0b1a33; --heat-ink-5: #0b1a33;
+  color-scheme: dark;
+}

@@ -63,7 +63,7 @@ export function RequestDetailPage() {
         <div className="grid">
           <section className="card">
             <div className="facts" style={{ borderTop: 0 }}>
-              <Fact icon="user" label={q.colFor}><Person name={r.beneficiary.name} sub={<span className="mono">{r.beneficiary.employeeNumber}{r.beneficiary.department ? ` · ${r.beneficiary.department}` : ''}</span>} to={`/identities/${r.beneficiary.id}`} /></Fact>
+              <Fact icon="user" label={q.colFor}><Person name={r.beneficiary.name} sub={<span className="mono">{r.beneficiary.employeeNumber}{r.beneficiary.department ? `, ${r.beneficiary.department}` : ''}</span>} to={`/identities/${r.beneficiary.id}`} /></Fact>
               <Fact icon="request" label={q.requester}>{r.requester.name}</Fact>
               <Fact icon="calendar" label={q.created}>{formatDateTime(r.createdAt)}</Fact>
               <Fact icon="clock" label={q.validUntil}>{r.validTo ? formatDate(r.validTo) : q.forever}</Fact>
@@ -74,7 +74,7 @@ export function RequestDetailPage() {
             </div>
             <div className="card-body" style={{ borderTop: '1px solid var(--border)' }}>
               <div className="field"><span className="label">{q.entitlements}</span>
-                <div className="chips">{r.entitlements.length ? r.entitlements.map(e => <span key={e} className="chip">{e}</span>) : <span className="muted">—</span>}</div>
+                <div className="chips">{r.entitlements.length ? r.entitlements.map(e => <span key={e} className="chip">{e}</span>) : <span className="muted">{t.noValue}</span>}</div>
               </div>
             </div>
           </section>
@@ -117,7 +117,7 @@ function ChainStep({ a, current }: { a: ApprovalItem; current: boolean }) {
       <div>
         <div className="who">{q.step[a.kind]}</div>
         <div className="meta">{a.approverName ?? q.adminPool}
-          {a.decidedAt ? ` · ${auto ? q.auto : a.decidedByName ?? a.decidedBy} · ${formatDateTime(a.decidedAt)}` : current ? ` · ${q.waiting}` : ''}</div>
+          {a.decidedAt ? `, ${auto ? q.auto : a.decidedByName ?? a.decidedBy}, ${formatDateTime(a.decidedAt)}` : current ? `, ${q.waiting}` : ''}</div>
         {a.comment && <div className="note">{a.comment}</div>}
       </div>
     </li>

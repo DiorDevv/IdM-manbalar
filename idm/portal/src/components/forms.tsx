@@ -114,7 +114,7 @@ export function IdentityPicker({ value, valueName, onChange }: {
           {items.map(i => (
             <button type="button" key={i.id} className="picker-item" role="option" aria-selected={i.id === value}
               onClick={() => { onChange(i.id, i.displayName); setSearch('') }} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}>
-              <span className="name">{i.displayName}</span><span className="app-code">{i.employeeNumber}{i.department ? ` · ${i.department}` : ''}</span>
+              <span className="name">{i.displayName}</span><span className="app-code">{i.employeeNumber}{i.department ? `, ${i.department}` : ''}</span>
             </button>
           ))}
         </div>

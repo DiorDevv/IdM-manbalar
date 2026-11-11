@@ -90,7 +90,7 @@ export function GroupChips({ groups, max = 6 }: { groups: EntitlementRef[]; max?
     <div className="chips">
       {shown.map(g => (
         <span key={g.id} className={`chip${g.isPrivileged ? ' privileged' : ''}${g.via ? ' inherited' : ''}`}
-          title={[g.isPrivileged ? t.applications.privileged : null, g.via ? t.identities.inheritedVia(g.via) : null].filter(Boolean).join(' · ') || undefined}>
+          title={[g.isPrivileged ? t.applications.privileged : null, g.via ? t.identities.inheritedVia(g.via) : null].filter(Boolean).join(', ') || undefined}>
           {g.isPrivileged && <Icon name="lock" size={12} />}{g.name}{g.via && <span className="chip-via">↳ {g.via}</span>}
         </span>
       ))}
@@ -115,12 +115,13 @@ export function Pager({ skip, page, total, onChange }: { skip: number; page: num
 /** Statistika kartasi. `to` bo'lsa butun karta havola; `attention` — faqat haqiqiy xavf (qiymat > 0) uchun. */
 export type Tone = 'accent' | 'violet' | 'teal' | 'sky' | 'warn' | 'bad' | 'ok'
 
-export function Stat({ icon, label, value, hint, attention, to, small, tone }: { icon?: string; label: string; value: ReactNode; hint?: ReactNode; attention?: boolean; to?: string; small?: boolean; tone?: Tone }) {
+export function Stat({ label, value, hint, attention, to, small, tone, trend }: { icon?: string; label: string; value: ReactNode; hint?: ReactNode; attention?: boolean; to?: string; small?: boolean; tone?: Tone; trend?: ReactNode }) {
   const body = (
     <>
-      <div className="label">{icon && <span className="chip-icon"><Icon name={icon} size={15} /></span>}{label}</div>
+      <div className="label">{label}</div>
       <div className={`value${small ? ' small' : ''}`}>{value}</div>
       {hint && <div className="hint">{hint}</div>}
+      {trend && <div className="trend">{trend}</div>}
       {to && <span className="arrow"><Icon name="arrow" size={15} /></span>}
     </>
   )
@@ -197,7 +198,7 @@ export function ActivityFeed({ items, showDetails = true }: { items: AuditItem[]
           <div className="feed-item" key={e.id} data-tone={d.tone}>
             <span className="feed-icon"><Icon name={d.icon} size={14} /></span>
             <div className="feed-text">
-              {d.label} <span className="who">· {e.actorName ?? e.actorId}</span>
+              {d.label} <span className="who">({e.actorName ?? e.actorId})</span>
               {showDetails && d.summary && <div className="sub">{d.summary}</div>}
             </div>
             <time className="feed-time" dateTime={e.occurredAt} title={formatDateTime(e.occurredAt)}>{t.ago(e.occurredAt)}</time>

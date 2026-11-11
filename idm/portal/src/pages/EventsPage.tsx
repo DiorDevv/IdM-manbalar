@@ -38,7 +38,7 @@ export function EventsPage() {
                     <tr key={x.id}>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(x.occurredAt)}<div className="cell-sub">{x.source}</div></td>
                       <td><span className={`badge ${tone[x.kind]}`}>{e.kind[x.kind]}</span></td>
-                      <td><Person name={x.identityName} sub={<><span className="mono">{x.employeeNumber}</span>{x.department ? ` · ${x.department}` : ''}</>} to={`/identities/${x.identityId}`} /></td>
+                      <td><Person name={x.identityName} sub={<><span className="mono">{x.employeeNumber}</span>{x.department ? `, ${x.department}` : ''}</>} to={`/identities/${x.identityId}`} /></td>
                       <td className="cell-sub" style={{ maxWidth: 480 }}>{describeChanges(x.details).map(line => <div key={line} style={{ overflowWrap: 'anywhere' }}>{line}</div>)}</td>
                     </tr>
                   ))}

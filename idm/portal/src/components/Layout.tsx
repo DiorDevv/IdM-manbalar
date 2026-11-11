@@ -51,6 +51,7 @@ export function Layout() {
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
   return (
     <div className={`app${navOpen ? ' nav-open' : ''}`} onClick={e => { if (navOpen && e.target === e.currentTarget) setNavOpen(false) }}>
+      <a className="skip" href="#main">{t.skipToContent}</a>
       <nav className="sidebar" aria-label={t.nav.label}>
         <div className="brand">
           <span className="mark"><BrandMark /></span>
@@ -94,7 +95,7 @@ export function Layout() {
             <Icon name={themeIcon[theme]} size={17} />
           </button>
         </header>
-        <main className="content" key={location.pathname}>
+        <main id="main" className="content" key={location.pathname}>
           {!!me.data?.mfaRequiredFor?.length && (
             <div className="alert warn no-print" role="alert" style={{ marginBottom: 16 }}>
               <Icon name="lock" size={18} />

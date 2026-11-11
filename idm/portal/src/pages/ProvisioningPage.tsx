@@ -105,10 +105,10 @@ export function ProvisioningPage() {
                   </div>
                   <div className="cell-sub">
                     {p.modeHelp[a.mode]}
-                    {a.mode === 'Automatic' && <> · {p.limit(a.maxAutoOperations)}</>}
-                    {a.createAccounts && <> · {p.createAccounts}</>}
-                    {a.enableReturning && <> · {p.enableReturning}</>}
-                    {a.enableNewAccounts && <> · {p.enableNewAccounts}</>}
+                    {a.mode === 'Automatic' && <>, {p.limit(a.maxAutoOperations)}</>}
+                    {a.createAccounts && <>, {p.createAccounts}</>}
+                    {a.enableReturning && <>, {p.enableReturning}</>}
+                    {a.enableNewAccounts && <>, {p.enableNewAccounts}</>}
                   </div>
                   {result && (
                     <div className={`alert ${result.skipped || result.held ? 'warn' : 'info'}`} style={{ marginTop: 10 }}>
@@ -185,12 +185,12 @@ export function ProvisioningPage() {
                           <div className="cell-main" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <Icon name={kindIcon[o.kind]} size={15} />{p.kind[o.kind]}
                           </div>
-                          <div className="cell-sub"><span className="mono">{o.applicationCode}</span> · {p.reason[o.reason] ?? o.reason}</div>
+                          <div className="cell-sub"><span className="mono">{o.applicationCode}</span>, {p.reason[o.reason] ?? o.reason}</div>
                         </td>
                         <td>
                           {o.identityName
                             ? <Person name={o.identityName} to={o.identityId ? `/identities/${o.identityId}` : undefined} sub={<span className="mono">{o.employeeNumber}</span>} />
-                            : <span className="muted">—</span>}
+                            : <span className="muted">{t.noValue}</span>}
                         </td>
                         <td>
                           <div className="mono">{o.login ?? (o.kind === 'CreateAccount' && o.summary ? p.newLogin(o.summary) : '—')}</div>

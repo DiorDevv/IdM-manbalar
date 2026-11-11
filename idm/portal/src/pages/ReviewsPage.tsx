@@ -87,7 +87,7 @@ function Inbox() {
   return (
     <>
       <div className="toolbar">
-        <span className="muted">{chosen.length > 0 ? v.selected(chosen.length) : `${v.items(page.data.totalItems)} · ${v.people(page.data.totalPeople)}`}</span>
+        <span className="muted">{chosen.length > 0 ? v.selected(chosen.length) : `${v.items(page.data.totalItems)}, ${v.people(page.data.totalPeople)}`}</span>
         {chosen.length > 0 && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
             <button className="btn secondary sm" onClick={() => setConfirm({ keep: true, ids: chosen })}><Icon name="check" size={15} />{v.keep}</button>
@@ -100,7 +100,7 @@ function Inbox() {
         <div key={campaignId}>
           <div className="card-head">
             <h2>{c.name}</h2>
-            <span className={`badge ${isOverdue(c.due) ? 'bad' : 'neutral'}`}>{v.due}: {formatDate(c.due)}{isOverdue(c.due) && ` · ${v.overdue}`}</span>
+            <span className={`badge ${isOverdue(c.due) ? 'bad' : 'neutral'}`}>{v.due}: {formatDate(c.due)}{isOverdue(c.due) && `, ${v.overdue}`}</span>
           </div>
           {[...c.people.values()].map(list => {
             const p = list[0]!
@@ -108,7 +108,7 @@ function Inbox() {
               <div key={p.identityId} className="review-group">
                 <div className="review-group-head">
                   <div className="grow">
-                    <Person name={p.identityName} sub={<><span className="mono">{p.employeeNumber}</span>{p.department && <> · {p.department}</>}{p.jobTitle && <> · {p.jobTitle}</>}</>} />
+                    <Person name={p.identityName} sub={<><span className="mono">{p.employeeNumber}</span>{p.department && <>, {p.department}</>}{p.jobTitle && <>, {p.jobTitle}</>}</>} />
                   </div>
                   <button className="btn ghost sm" onClick={() => setConfirm({ keep: true, ids: list.map(i => i.id) })}><Icon name="check" size={15} />{v.keepAll}</button>
                 </div>
@@ -122,7 +122,7 @@ function Inbox() {
                             <div className="cell-main" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               {i.isPrivileged && <Icon name="lock" size={14} />}{i.title}
                             </div>
-                            <div className="cell-sub"><span className="mono">{i.subtitle}</span> · {i.applicationCode}</div>
+                            <div className="cell-sub"><span className="mono">{i.subtitle}</span>, {i.applicationCode}</div>
                           </td>
                           <td title={v.kindHelp[i.kind]}>
                             <span className={`badge plain ${i.kind === 'Entitlement' ? 'warn' : 'info'}`}>{v.kind[i.kind]}</span>
@@ -186,9 +186,9 @@ function Campaigns() {
                     <tr key={c.id} className="clickable" onClick={() => navigate(`/reviews/campaigns/${c.id}`)}>
                       <td>
                         <Link to={`/reviews/campaigns/${c.id}`} className="cell-main" onClick={e => e.stopPropagation()}>{c.name}</Link>
-                        <div className="cell-sub">{c.createdByName ?? c.createdBy} · {formatDate(c.createdAt)}</div>
+                        <div className="cell-sub">{c.createdByName ?? c.createdBy}, {formatDate(c.createdAt)}</div>
                       </td>
-                      <td>{[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(' · ')}</td>
+                      <td>{[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(', ')}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {formatDate(c.dueDate)}
                         {c.status === 'Active' && isOverdue(c.dueDate) && <div className="cell-sub" style={{ color: 'var(--bad)' }}>{v.overdue}</div>}

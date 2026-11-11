@@ -25,7 +25,7 @@ export function ApplicationsPage() {
                 <tbody>
                   {q.data?.map(a => (
                     <tr key={a.id} className="clickable" onClick={() => navigate(`/applications/${encodeURIComponent(a.code)}`)}>
-                      <td><div className="cell-main">{a.name}</div><div className="cell-sub">{a.code}{a.description ? ` · ${a.description}` : ''}</div></td>
+                      <td><div className="cell-main">{a.name}</div><div className="cell-sub">{a.code}{a.description ? `, ${a.description}` : ''}</div></td>
                       <td>{t.kind[a.kind] ?? a.kind}</td>
                       <td><RiskBadge risk={a.risk} /></td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{a.accountCount}</td>

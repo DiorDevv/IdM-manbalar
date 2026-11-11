@@ -51,8 +51,8 @@ export function ApplicationDetailPage() {
     <>
       <PageHead crumbs={<>{crumbs}{d.name}</>} title={d.name}
         subtitle={<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="mono">{d.code}</span> · {t.kind[d.kind] ?? d.kind} · <RiskBadge risk={d.risk} />
-          {d.hasConnector && <> · {d.intervalMinutes ? a.every(d.intervalMinutes) : a.manualOnly}</>}
+          <span className="mono">{d.code}</span> {t.kind[d.kind] ?? d.kind} <RiskBadge risk={d.risk} />
+          {d.hasConnector && <> {d.intervalMinutes ? a.every(d.intervalMinutes) : a.manualOnly}</>}
         </span>}
         actions={isAdmin && d.hasConnector && (
           <button className="btn primary" disabled={running} onClick={() => sync.mutate(false)}>
@@ -211,7 +211,7 @@ function RunsTab({ path, code, live, hr = false }: { path: string; code: string;
                 <td><RunStatusBadge status={r.status} /></td>
                 <td style={{ maxWidth: 520 }}>
                   {r.status !== 'Running' && <div>{a.runSummary(r, hr)}</div>}
-                  {r.status === 'Succeeded' && <div className="cell-sub">{hr ? a.hrChanges(r) : a.runChanges(r)}{!hr && r.orphanAccounts ? ` · ${r.orphanAccounts} ${a.orphans.toLowerCase()}` : ''}</div>}
+                  {r.status === 'Succeeded' && <div className="cell-sub">{hr ? a.hrChanges(r) : a.runChanges(r)}{!hr && r.orphanAccounts ? `, ${r.orphanAccounts} ${a.orphans.toLowerCase()}` : ''}</div>}
                   {r.error && <div className="run-error">{r.error}</div>}
                 </td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>

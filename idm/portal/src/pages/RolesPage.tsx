@@ -42,7 +42,7 @@ export function RolesPage() {
                       <td>
                         <div className="person">
                           <span className="chip-icon" style={{ ['--tone' as string]: 'var(--violet)', ['--tone-soft' as string]: 'var(--violet-soft)' }}><Icon name="role" size={15} /></span>
-                          <div><div className="cell-main">{x.name}</div><div className="cell-sub"><span className="mono">{x.code}</span>{x.description ? ` · ${x.description}` : ''}</div></div>
+                          <div><div className="cell-main">{x.name}</div><div className="cell-sub"><span className="mono">{x.code}</span>{x.description ? `, ${x.description}` : ''}</div></div>
                         </div>
                       </td>
                       <td><RiskBadge risk={x.risk} /></td>

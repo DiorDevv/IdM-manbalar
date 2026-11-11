@@ -62,7 +62,7 @@ export function NewRequestPage() {
                 </div>
                 {beneficiary !== '' && (
                   <select className="select" value={beneficiary} onChange={e => setBeneficiary(e.target.value)} aria-label={q.forWhom} style={{ minWidth: 260 }}>
-                    {team.data?.map(m => <option key={m.id} value={m.id}>{m.name} · {m.employeeNumber}{m.jobTitle ? ` · ${m.jobTitle}` : ''}</option>)}
+                    {team.data?.map(m => <option key={m.id} value={m.id}>{m.name}, {m.employeeNumber}{m.jobTitle ? `, ${m.jobTitle}` : ''}</option>)}
                   </select>
                 )}
               </div>
@@ -79,7 +79,7 @@ export function NewRequestPage() {
             {catalog.isError ? <ErrorBox error={catalog.error} /> : catalog.data?.length === 0 ? <Empty icon="role" title={q.noRoles} /> : (
               <div className="role-grid" role="radiogroup" aria-label={q.pickRole}>
                 {catalog.data?.map(r => (
-                  <button key={r.id} className="role-card" role="radio" aria-checked={r.id === roleId} onClick={() => setRoleId(r.id)}>
+                  <button key={r.id} className="role-option" role="radio" aria-checked={r.id === roleId} onClick={() => setRoleId(r.id)}>
                     <span className="check-dot">{r.id === roleId && <Icon name="check" size={12} strokeWidth={3} />}</span>
                     <span className="title"><Icon name="role" size={15} />{r.name}</span>
                     <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className="mono muted" style={{ fontSize: 11.5 }}>{r.code}</span><RiskBadge risk={r.risk} /></span>
@@ -115,7 +115,7 @@ export function NewRequestPage() {
                   {p.steps.map((s, i) => (
                     <li key={s.kind} className={s.auto ? 'done' : i === p.steps.findIndex(x => !x.auto) ? 'current' : ''}>
                       <span className="node">{s.auto ? <Icon name="check" size={14} strokeWidth={2.5} /> : i + 1}</span>
-                      <div><div className="who">{q.step[s.kind]}</div><div className="meta">{s.approverName ?? q.adminPool}{s.auto ? ` · ${q.auto}` : ''}</div></div>
+                      <div><div className="who">{q.step[s.kind]}</div><div className="meta">{s.approverName ?? q.adminPool}{s.auto ? `, ${q.auto}` : ''}</div></div>
                     </li>
                   ))}
                 </ol>

@@ -7,6 +7,7 @@ import type { AuditItem, ConnectorStatus, DashboardSummary, PagedResult } from '
 import { formatDate, formatDateTime, isQuietSync, t } from '../i18n'
 import { Icon } from '../components/Icon'
 import { ActivityFeed, Empty, ErrorBox, RunSummary, Stat } from '../components/ui'
+import { ControlCenter, TrendFooter, useTrends } from './ControlCenter'
 
 const dash = t.dashboard
 
@@ -18,6 +19,8 @@ export function DashboardPage() {
     queryFn: () => api<DashboardSummary>('/api/dashboard'),
     refetchInterval: q => q.state.data?.connectors.some(c => c.isRunning) ? 3000 : 60_000,
   })
+  const trends = useTrends(30)
+  const levels = trends.data?.levels
   const audit = useQuery({ queryKey: ['audit', 'recent'], queryFn: () => api<PagedResult<AuditItem>>('/api/audit?take=40') })
   const d = summary.data
   const firstName = (me.data?.name ?? (user.profile.name as string | undefined) ?? '').split(' ')[0] ?? ''
@@ -27,43 +30,50 @@ export function DashboardPage() {
 
   return (
     <>
-      <section className="hero">
+      <header className="brief">
         <div>
-          <div className="eyebrow"><Icon name="calendar" size={14} />{formatDate(now.toISOString())} · {dash.weekday[now.getDay()]}</div>
           <h1>{firstName ? t.greeting(firstName, now.getHours()) : dash.title}</h1>
           <p>{dash.subtitle}</p>
-          {d && (
-            <div className="insights">
-              {d.leaversWithActiveAccounts > 0
-                ? <Link to="/reports?tab=leavers" className="insight bad"><Icon name="warning" size={14} />{dash.insightLeavers(d.leaversWithActiveAccounts)}</Link>
-                : <span className="insight ok"><Icon name="shield" size={14} />{dash.insightClean}</span>}
-              {d.pendingRequests > 0 && <Link to="/requests?tab=all" className="insight"><Icon name="request" size={14} />{dash.insightRequests(d.pendingRequests)}</Link>}
-              {d.sodViolations > 0 && <Link to="/sod" className="insight bad"><Icon name="shield" size={14} />{dash.insightSod(d.sodViolations)}</Link>}
-              {d.orphanAccounts > 0 && <Link to="/reports?tab=orphans" className="insight"><Icon name="user" size={14} />{dash.insightOrphans(d.orphanAccounts)}</Link>}
-              {failing.length > 0
-                ? <Link to={`/applications/${encodeURIComponent(failing[0]!.code)}`} className="insight bad"><Icon name="sync" size={14} />{dash.insightSyncFailed(failing[0]!.name)}</Link>
-                : d.connectors.length > 0 && <span className="insight ok"><Icon name="sync" size={14} />{dash.insightSyncOk(d.connectors.length)}</span>}
-            </div>
-          )}
         </div>
-        <div className="hero-side">
-          <span>{dash.lastSync}</span>
-          <b>{lastSync ? t.ago(lastSync) : dash.never}</b>
-        </div>
-      </section>
+        <dl className="brief-meta">
+          <div><dt>{dash.weekday[now.getDay()]}</dt><dd>{formatDate(now.toISOString())}</dd></div>
+          <div><dt>{dash.lastSync}</dt><dd>{lastSync ? t.ago(lastSync) : dash.never}</dd></div>
+        </dl>
+      </header>
 
       {summary.isError ? <div className="card" style={{ marginBottom: 16 }}><ErrorBox error={summary.error} onRetry={() => { void summary.refetch() }} /></div> : (
-        <div className="grid stats">
-          <Stat icon="people" label={dash.identities} value={d?.identities ?? '…'} to="/identities"
-            hint={d ? `${d.activeIdentities} ${dash.active} · ${d.terminatedIdentities} ${dash.terminated}` : undefined} />
-          <Stat icon="apps" tone="violet" label={dash.accounts} value={d?.accounts ?? '…'} to="/applications"
-            hint={d ? `${d.applications} ${dash.systems} · ${dash.disabledHint(d.disabledAccounts)}` : undefined} />
-          <Stat icon="warning" tone="bad" label={dash.leavers} value={d?.leaversWithActiveAccounts ?? '…'} hint={dash.leaversHint}
-            attention={(d?.leaversWithActiveAccounts ?? 0) > 0} to="/reports?tab=leavers" />
-          <Stat icon="user" tone="warn" label={dash.orphan} value={d?.orphanAccounts ?? '…'} hint={dash.orphanHint}
-            attention={(d?.orphanAccounts ?? 0) > 0} to="/reports?tab=orphans" />
+        <div className="overview">
+          <section className="card queue" aria-label={dash.subtitle}>
+            {d ? (
+              <div className="insights">
+                {d.leaversWithActiveAccounts > 0
+                  ? <Insight to="/reports?tab=leavers" tone="bad" icon="warning" text={dash.insightLeavers(d.leaversWithActiveAccounts)} />
+                  : <Insight tone="ok" icon="shield" text={dash.insightClean} />}
+                {d.pendingRequests > 0 && <Insight to="/requests?tab=all" icon="request" text={dash.insightRequests(d.pendingRequests)} />}
+                {d.sodViolations > 0 && <Insight to="/sod" tone="bad" icon="shield" text={dash.insightSod(d.sodViolations)} />}
+                {d.orphanAccounts > 0 && <Insight to="/reports?tab=orphans" icon="user" text={dash.insightOrphans(d.orphanAccounts)} />}
+                {failing.length > 0
+                  ? <Insight to={`/applications/${encodeURIComponent(failing[0]!.code)}`} tone="bad" icon="sync" text={dash.insightSyncFailed(failing[0]!.name)} />
+                  : d.connectors.length > 0 && <Insight tone="ok" icon="sync" text={dash.insightSyncOk(d.connectors.length)} />}
+              </div>
+            ) : <div className="card-body"><div className="skeleton" style={{ width: '60%' }} /></div>}
+          </section>
+          <div className="grid stats">
+            <Stat label={dash.identities} value={d?.identities ?? '…'} to="/identities"
+              hint={d ? `${d.activeIdentities} ${dash.active}, ${d.terminatedIdentities} ${dash.terminated}` : undefined} />
+            <Stat label={dash.accounts} value={d?.accounts ?? '…'} to="/applications"
+              hint={d ? `${d.applications} ${dash.systems}, ${dash.disabledHint(d.disabledAccounts)}` : undefined} />
+            <Stat tone="bad" label={dash.leavers} value={d?.leaversWithActiveAccounts ?? '…'} hint={dash.leaversHint}
+              attention={(d?.leaversWithActiveAccounts ?? 0) > 0} to="/reports?tab=leavers"
+              trend={levels?.leavers_active && levels.leavers_active.length > 1 ? <TrendFooter series={levels.leavers_active} label={dash.leavers} /> : undefined} />
+            <Stat tone="warn" label={dash.orphan} value={d?.orphanAccounts ?? '…'} hint={dash.orphanHint}
+              attention={(d?.orphanAccounts ?? 0) > 0} to="/reports?tab=orphans"
+              trend={levels?.orphan_accounts && levels.orphan_accounts.length > 1 ? <TrendFooter series={levels.orphan_accounts} label={dash.orphan} /> : undefined} />
+          </div>
         </div>
       )}
+
+      <ControlCenter />
 
       <div className="grid two-col">
         <section className="card">
@@ -90,9 +100,14 @@ export function DashboardPage() {
   )
 }
 
+/** Diqqat navbatining bir qatori: xavfli qatorlar (`bad`) CSS orqali doim tepada. Havola bo'lmasa — shunchaki holat. */
+function Insight({ to, tone, icon, text }: { to?: string; tone?: 'bad' | 'ok'; icon: string; text: string }) {
+  const body = <><Icon name={icon} size={18} /><span className="grow">{text}</span>{to && <span className="go"><Icon name="chevron" size={16} /></span>}</>
+  const className = `insight${tone ? ` ${tone}` : ''}`
+  return to ? <Link to={to} className={className}>{body}</Link> : <div className={className}>{body}</div>
+}
+
 function ConnectorRow({ c }: { c: ConnectorStatus }) {
-  const status = c.isRunning ? 'live' : c.lastRun?.status
-  const tone = status === 'Failed' ? 'var(--bad)' : status === 'Aborted' ? 'var(--warn)' : status === 'live' ? 'var(--accent)' : 'var(--ok)'
   const hr = c.kind === 'HumanResources'
   return (
     <div className="connector-row">
@@ -102,7 +117,6 @@ function ConnectorRow({ c }: { c: ConnectorStatus }) {
       <div className="grow">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Link to={`/applications/${encodeURIComponent(c.code)}`} className="cell-main">{c.name}</Link>
-          <span className={`health${c.isRunning ? ' live' : ''}`} style={{ ['--tone' as string]: tone }} aria-hidden="true" />
         </div>
         <div style={{ marginTop: 4 }}>{c.isRunning ? <span className="badge info live">{t.applications.syncing}</span> : <RunSummary run={c.lastRun} hr={hr} />}</div>
       </div>

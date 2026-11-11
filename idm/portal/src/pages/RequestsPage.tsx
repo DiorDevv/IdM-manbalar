@@ -65,7 +65,7 @@ export function RequestsPage() {
                       </td>
                       <td><Person name={r.beneficiaryName} sub={<span className="mono">{r.beneficiaryNumber}</span>} /></td>
                       <td><RequestStatusBadge status={r.status} /></td>
-                      <td>{r.currentStep ? <><div>{q.step[r.currentStep]}</div><div className="cell-sub">{r.currentApprover ?? q.adminPool}</div></> : <span className="muted">—</span>}</td>
+                      <td>{r.currentStep ? <><div>{q.step[r.currentStep]}</div><div className="cell-sub">{r.currentApprover ?? q.adminPool}</div></> : <span className="muted">{t.noValue}</span>}</td>
                       <td style={{ whiteSpace: 'nowrap' }} title={formatDateTime(r.createdAt)}>{t.ago(r.createdAt)}<div className="cell-sub">{r.requesterName}</div></td>
                     </tr>
                   ))}

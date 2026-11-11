@@ -145,3 +145,7 @@ export interface ReviewInbox { items: ReviewItem[]; totalItems: number; totalPeo
 export type ReportKey = 'access' | 'privileged' | 'sod' | 'orphans' | 'leavers' | 'campaign'
 export interface ReportTable { key: ReportKey; title: string; subtitle: string | null; columns: string[]; rows: (string | null)[][]; generatedAt: string }
 
+export interface DayValue { day: string; value: number }
+export interface TrendsResponse { days: string[]; flows: Record<'requests' | 'jml' | 'provisioned' | 'provisioningFailed', number[]>; levels: Record<string, DayValue[]> }
+export interface RiskCell { department: string; application: string; excess: number; privileged: number; identities: number }
+export interface RiskMatrixResponse { departments: string[]; applications: string[]; cells: RiskCell[]; maxExcess: number }

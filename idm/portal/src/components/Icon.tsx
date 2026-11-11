@@ -49,7 +49,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.75 }: { name: IconName |
 
 export function BrandMark() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 2.8 4.5 5.6v5.9c0 4.6 3.1 8.6 7.5 9.7 4.4-1.1 7.5-5.1 7.5-9.7V5.6L12 2.8Z" /><circle cx="12" cy="10.2" r="2.3" /><path d="M12 12.5v4.1M12 14.6h1.7" />
     </svg>
   )

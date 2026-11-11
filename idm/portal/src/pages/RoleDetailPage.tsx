@@ -54,7 +54,7 @@ export function RoleDetailPage() {
     <>
       <PageHead crumbs={<>{crumbs}{d.name}</>} title={d.name}
         subtitle={<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="mono">{d.code}</span> · <RiskBadge risk={d.risk} />{d.isRequestable && <> · {r.requestable}</>} · {d.ownerName ? r.owner(d.ownerName) : r.noOwner} · {d.certifiedAt ? t.reviews.certified(formatDate(d.certifiedAt), d.certifiedBy ?? '') : t.reviews.neverCertified}{d.description && <> · {d.description}</>}
+          <span className="mono">{d.code}</span> <RiskBadge risk={d.risk} />{d.isRequestable && <> {r.requestable}</>} {d.ownerName ? r.owner(d.ownerName) : r.noOwner}, {d.certifiedAt ? t.reviews.certified(formatDate(d.certifiedAt), d.certifiedBy ?? '') : t.reviews.neverCertified}{d.description && <>, {d.description}</>}
         </span>}
         actions={isAdmin && <>
           <button className="btn ghost" onClick={() => setConfirmDelete(true)}><Icon name="x" size={16} />{r.delete}</button>
@@ -85,7 +85,7 @@ export function RoleDetailPage() {
               <span className="chip-icon" style={e.isPrivileged ? { ['--tone' as string]: 'var(--warn)', ['--tone-soft' as string]: 'var(--warn-soft)' } : undefined}>
                 <Icon name={e.isPrivileged ? 'lock' : 'people'} size={14} />
               </span>
-              <div className="grow"><div className="cell-main">{e.name}</div><div className="cell-sub">{e.applicationCode}{e.isPrivileged ? ` · ${t.applications.privileged}` : ''}</div></div>
+              <div className="grow"><div className="cell-main">{e.name}</div><div className="cell-sub">{e.applicationCode}{e.isPrivileged ? `, ${t.applications.privileged}` : ''}</div></div>
               <RiskBadge risk={e.risk} />
               {isAdmin && <button className="icon-btn" aria-label={r.remove} title={r.remove} disabled={setEntitlements.isPending}
                 onClick={() => setEntitlements.mutate(d.entitlements.filter(x => x.id !== e.id).map(x => x.id))}><Icon name="x" size={15} /></button>}
@@ -108,7 +108,7 @@ export function RoleDetailPage() {
                 <span className="rule-chip">{r.department}: <b>{x.department ?? r.any}</b></span>
                 <span className="muted">+</span>
                 <span className="rule-chip">{r.jobTitle}: <b>{x.jobTitle ?? r.any}</b></span>
-                <span className="muted" style={{ fontSize: 12.5, marginLeft: 6 }}>{r.matches(x.matchCount)} · {x.createdBy}, {formatDate(x.createdAt)}</span>
+                <span className="muted" style={{ fontSize: 12.5, marginLeft: 6 }}>{r.matches(x.matchCount)}, {x.createdBy}, {formatDate(x.createdAt)}</span>
               </div>
               {isAdmin && <button className="icon-btn" aria-label={r.remove} title={r.remove} disabled={removeRule.isPending} onClick={() => removeRule.mutate(x.id)}><Icon name="x" size={15} /></button>}
             </div>

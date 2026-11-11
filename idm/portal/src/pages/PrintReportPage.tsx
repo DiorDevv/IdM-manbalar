@@ -36,7 +36,7 @@ export function PrintReportPage() {
           <h1 style={{ margin: '4px 0', fontSize: 20 }}>{r.title}</h1>
           {r.subtitle && <div className="muted">{r.subtitle}</div>}
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            {x.generated}: {formatDateTime(r.generatedAt)} · {x.by}: {me.data?.name ?? me.data?.login} · {x.rows(r.rows.length)}
+            {x.generated}: {formatDateTime(r.generatedAt)}, {x.by}: {me.data?.name ?? me.data?.login}, {x.rows(r.rows.length)}
           </div>
         </div>
         {r.rows.length === 0 ? <Empty icon="reports" title={x.empty} /> : (

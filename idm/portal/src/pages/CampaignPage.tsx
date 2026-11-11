@@ -48,9 +48,9 @@ export function CampaignPage() {
       <PageHead crumbs={<>{crumbs}{c.name}</>} title={c.name}
         subtitle={<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`badge ${active ? 'info' : c.status === 'Completed' ? 'ok' : 'neutral'}`}>{v.status[c.status]}</span>
-          {[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(' · ')}
-          <span>· {v.due}: {formatDate(c.dueDate)}{active && isOverdue(c.dueDate) && <b style={{ color: 'var(--bad)' }}> ({v.overdue})</b>}</span>
-          <span>· {v.createdBy}: {c.createdByName ?? c.createdBy}</span>
+          {[c.department ?? v.scopeAll, c.applicationCode, c.privilegedOnly ? v.privilegedOnly : null, c.revokeUnreviewed ? v.policy : null].filter(Boolean).join(', ')}
+          <span>{v.due}: {formatDate(c.dueDate)}{active && isOverdue(c.dueDate) && <b style={{ color: 'var(--bad)' }}> ({v.overdue})</b>}</span>
+          <span>{v.createdBy}: {c.createdByName ?? c.createdBy}</span>
         </span>}
         actions={<>
           <ExportButtons report="campaign" campaignId={id} />
@@ -94,12 +94,12 @@ export function CampaignPage() {
                           <td><Person name={i.identityName} to={`/identities/${i.identityId}`} sub={<span className="mono">{i.employeeNumber}</span>} /></td>
                           <td>
                             <div className="cell-main" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>{i.isPrivileged && <Icon name="lock" size={14} />}{i.title}</div>
-                            <div className="cell-sub">{v.kind[i.kind]} · <span className="mono">{i.subtitle}</span> · {i.applicationCode}</div>
+                            <div className="cell-sub">{v.kind[i.kind]}, <span className="mono">{i.subtitle}</span>, {i.applicationCode}</div>
                           </td>
                           <td>{i.reviewerName ?? <span className="muted">{v.adminPool}</span>}</td>
                           <td>
                             <span className={`badge ${decisionTone[i.decision]}`}>{v.decision[i.decision]}</span>
-                            {i.decidedAt && <div className="cell-sub" title={formatDateTime(i.decidedAt)}>{i.decidedByName ?? i.decidedBy} · {formatDate(i.decidedAt)}</div>}
+                            {i.decidedAt && <div className="cell-sub" title={formatDateTime(i.decidedAt)}>{i.decidedByName ?? i.decidedBy}, {formatDate(i.decidedAt)}</div>}
                             {i.comment && <div className="cell-sub">«{i.comment}»</div>}
                             {i.decision === 'Revoke' && <div className="cell-sub">{i.remediatedAt ? v.remediated : v.remediationPending}</div>}
                           </td>

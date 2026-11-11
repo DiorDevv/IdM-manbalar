@@ -47,7 +47,7 @@ export function IdentityDetailPage() {
           <Icon name="shield" size={18} />
           <div className="grow"><strong>{t.sod.identityAlert}</strong>
             {access.data.sod.map(v => <div key={v.ruleId} style={{ marginTop: 6 }}><div style={{ marginBottom: 4 }}>{v.ruleName} ({v.ruleCode})
-              {v.exception && <> · <span title={t.sod.exceptedBy(v.exception.approvedBy, v.exception.compensatingControl)}>
+              {v.exception && <>, <span title={t.sod.exceptedBy(v.exception.approvedBy, v.exception.compensatingControl)}>
                 {t.sod.excepted(formatDate(new Date(Date.parse(v.exception.validTo) - 60_000).toISOString()))}</span></>}</div>
               <Conflict left={v.left} right={v.right} /></div>)}
           </div>
@@ -55,7 +55,6 @@ export function IdentityDetailPage() {
       )}
 
       <section className="card profile-card">
-        <div className={`cover${i.status === 'Terminated' ? ' terminated' : ''}`} />
         <div className="profile-main">
           <div className={`avatar-xl avatar ${avatarClass(`${i.lastName} ${i.firstName}`)}`}>{initials(`${i.lastName} ${i.firstName}`)}</div>
           <div style={{ paddingBottom: 2 }}>
@@ -64,7 +63,7 @@ export function IdentityDetailPage() {
               <StatusBadge status={i.status} />
               <span className="badge neutral plain">{t.source[i.source]}</span>
               <span className="mono">{i.employeeNumber}</span>
-              {i.jobTitle && <span>· {i.jobTitle}</span>}
+              {i.jobTitle && <span>{i.jobTitle}</span>}
             </div>
           </div>
         </div>
@@ -84,7 +83,7 @@ export function IdentityDetailPage() {
           {access.data && <div className="chips">
             {access.data.roles.length === 0 ? <span className="muted" style={{ fontSize: 12.5 }}>{t.roles.noRoles}</span> : access.data.roles.map(r => (
               <Link key={`${r.roleId}-${r.source}`} to={`/roles/${r.roleId}`} className="chip" title={t.roles.source[r.source]}>
-                <Icon name="role" size={12} />{r.name}<span className="muted">· {t.roles.source[r.source]}</span>
+                <Icon name="role" size={12} />{r.name}<span className="muted">{t.roles.source[r.source]}</span>
               </Link>
             ))}
           </div>}
@@ -134,7 +133,7 @@ export function IdentityDetailPage() {
           {history.isError ? <ErrorBox error={history.error} /> : history.data?.items.length === 0 ? <Empty icon="clock" title={t.identities.noHistory} /> :
             history.data ? <ActivityFeed items={history.data.items} /> : <div className="card-body"><div className="skeleton" /></div>}
           <div className="card-body muted" style={{ fontSize: 12, borderTop: '1px solid var(--border)' }}>
-            {f.created}: {formatDateTime(i.createdAt)} · {f.updated}: {formatDateTime(i.updatedAt)}
+            {f.created}: {formatDateTime(i.createdAt)}, {f.updated}: {formatDateTime(i.updatedAt)}
           </div>
         </section>
       </div>

@@ -27,7 +27,7 @@ export function DelegationsPanel() {
       <span className="chip-icon"><Icon name="people" size={14} /></span>
       <div className="grow">
         <div className="cell-main">{given ? x.delegateName : d.actingFor(x.delegatorName)}</div>
-        <div className="cell-sub">{d.period(formatDate(x.validFrom), lastDay(x.validTo))}{x.reason ? ` · ${x.reason}` : ''}</div>
+        <div className="cell-sub">{d.period(formatDate(x.validFrom), lastDay(x.validTo))}{x.reason ? `, ${x.reason}` : ''}</div>
       </div>
       <span className={`badge ${x.active ? 'ok' : 'neutral'}`}>{x.active ? d.active : d.upcoming}</span>
       {given && <button className="btn ghost small" onClick={() => setRevoking(x)}>{d.revoke}</button>}
@@ -90,7 +90,7 @@ function AddDelegation({ onClose }: { onClose: () => void }) {
                 {people.data?.map(p => (
                   <button type="button" key={p.id} className="picker-item" role="option" aria-selected={who?.id === p.id}
                     onClick={() => { setWho(p); setSearch('') }} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}>
-                    <span className="name">{p.name}</span><span className="app-code">{p.employeeNumber}{p.department ? ` · ${p.department}` : ''}</span>
+                    <span className="name">{p.name}</span><span className="app-code">{p.employeeNumber}{p.department ? `, ${p.department}` : ''}</span>
                   </button>
                 ))}
               </div>

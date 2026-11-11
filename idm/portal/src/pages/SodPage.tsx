@@ -63,7 +63,7 @@ function Violations({ isAdmin }: { isAdmin: boolean }) {
           <tbody>
             {list.data?.items.map(v => (
               <tr key={`${v.ruleId}-${v.identityId}`}>
-                <td><Person name={v.identityName} sub={<><span className="mono">{v.employeeNumber}</span>{v.department ? ` · ${v.department}` : ''}</>} to={`/identities/${v.identityId}`} /></td>
+                <td><Person name={v.identityName} sub={<><span className="mono">{v.employeeNumber}</span>{v.department ? `, ${v.department}` : ''}</>} to={`/identities/${v.identityId}`} /></td>
                 <td><div className="cell-main">{v.ruleName}</div><div className="cell-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className="mono">{v.ruleCode}</span><RiskBadge risk={v.risk} /></div></td>
                 <td><Conflict left={v.left} right={v.right} /></td>
                 <td>
@@ -211,9 +211,9 @@ function CreateRule({ open, onClose }: { open: boolean; onClose: () => void }) {
           <span className="label">{s.sidesHelp}</span>
           {(fieldError(save.error, 'left') ?? fieldError(save.error, 'right')) && <span className="error">{fieldError(save.error, 'left') ?? fieldError(save.error, 'right')}</span>}
           <div className="sides">
-            <div className="field"><span className="label">{s.left} · {left.length}</span><EntitlementPicker selected={left} onChange={setLeft} exclude={right.map(x => x.id)} /></div>
+            <div className="field"><span className="label">{s.left} ({left.length})</span><EntitlementPicker selected={left} onChange={setLeft} exclude={right.map(x => x.id)} /></div>
             <span className="vs">VS</span>
-            <div className="field"><span className="label">{s.right} · {right.length}</span><EntitlementPicker selected={right} onChange={setRight} exclude={left.map(x => x.id)} /></div>
+            <div className="field"><span className="label">{s.right} ({right.length})</span><EntitlementPicker selected={right} onChange={setRight} exclude={left.map(x => x.id)} /></div>
           </div>
         </div>
       </div>
