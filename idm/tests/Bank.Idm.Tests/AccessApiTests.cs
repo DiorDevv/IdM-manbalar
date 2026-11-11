@@ -150,4 +150,34 @@ public class AccessApiTests : IAsyncLifetime
         Assert.Equal("Revoked", Assert.Single((await admin.GetFromJsonAsync<List<SodExceptionItem>>("/api/sod/exceptions?all=true", Json, Ct))!).State);
         Assert.Equal(1, Assert.Single((await admin.GetFromJsonAsync<List<SodRuleItem>>("/api/sod/rules", Json, Ct))!).ViolationCount);
     }
+
+    [Fact]
+    public async Task Control_center_shows_daily_trends_snapshots_and_the_risk_matrix()
+    {
+        var admin = Client("boss");
+        await admin.PostAsJsonAsync("/api/roles", new SaveRoleRequest("KREDIT", "Kredit", null, RiskLevel.Medium, true), Ct);
+
+        // Karimovning ikkala guruhi hech qaysi rol bilan asoslanmagan — "Kredit bo'limi" × AD
+        var matrix = (await admin.GetFromJsonAsync<RiskMatrixResponse>("/api/dashboard/risk-matrix", Json, Ct))!;
+        var cell = Assert.Single(matrix.Cells);
+        Assert.Equal(("Kredit bo'limi", "AD", 2, 1), (cell.Department, cell.Application, cell.Excess, cell.Identities));
+        Assert.Equal(["Kredit bo'limi"], matrix.Departments);
+        Assert.Equal(["AD"], matrix.Applications);
+        Assert.Equal(2, matrix.MaxExcess);
+
+        var trends = (await admin.GetFromJsonAsync<TrendsResponse>("/api/dashboard/trends?days=7", Json, Ct))!;
+        Assert.Equal(7, trends.Days.Count);
+        Assert.Equal(7, trends.Flows["requests"].Length);
+        Assert.Empty(trends.Levels);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+            await InsightEndpoints.CaptureSnapshotAsync(scope.ServiceProvider.GetRequiredService<Bank.Idm.Infrastructure.IdmDbContext>(),
+                scope.ServiceProvider.GetRequiredService<Bank.Idm.Infrastructure.Access.AccessAnalyzer>(), TimeProvider.System, Ct);
+        trends = (await admin.GetFromJsonAsync<TrendsResponse>("/api/dashboard/trends?days=30", Json, Ct))!;
+        Assert.Equal(30, trends.Days.Count);
+        Assert.Equal(2, Assert.Single(trends.Levels["excess_access"]).Value);
+        Assert.Equal(0, Assert.Single(trends.Levels["sod_open"]).Value);   // bu testda SoD qoidasi yo'q
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client("a.karimov").GetAsync("/api/dashboard/trends", Ct)).StatusCode);
+    }
 }
+

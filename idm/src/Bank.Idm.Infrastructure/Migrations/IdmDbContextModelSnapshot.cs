@@ -1081,6 +1081,31 @@ namespace Bank.Idm.Infrastructure.Migrations
                     b.ToTable("identity_roles");
                 });
 
+            modelBuilder.Entity("Bank.Idm.Domain.MetricSnapshot", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date")
+                        .HasColumnName("day");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<double>("Value")
+                        .HasColumnType("double precision")
+                        .HasColumnName("value");
+
+                    b.HasKey("Day", "Key")
+                        .HasName("pk_metric_snapshots");
+
+                    b.ToTable("metric_snapshots");
+                });
+
             modelBuilder.Entity("Bank.Idm.Domain.Notification", b =>
                 {
                     b.Property<Guid>("Id")

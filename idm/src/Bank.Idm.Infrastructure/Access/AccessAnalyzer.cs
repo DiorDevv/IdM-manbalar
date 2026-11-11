@@ -22,6 +22,9 @@ public record AccessLine(Guid EntitlementId, string ApplicationCode, string Enti
 
 public record DriftSummary(Guid IdentityId, int Missing, int Excess);
 
+/// <param name="Excess">Asossiz ruxsatlar soni; <paramref name="Privileged"/> — ulardan imtiyozlilari; <paramref name="Identities"/> — nechta xodimda.</param>
+public record RiskCell(string Department, string Application, int Excess, int Privileged, int Identities);
+
 public record SodViolation(Guid RuleId, string RuleCode, string RuleName, RiskLevel Risk, Guid IdentityId,
     IReadOnlyList<string> LeftEntitlements, IReadOnlyList<string> RightEntitlements)
 {
@@ -93,6 +96,26 @@ public class AccessAnalyzer(IdmDbContext db, TimeProvider time)
         var excess = actual.Except(expected).GroupBy(x => x.IdentityId).ToDictionary(g => g.Key, g => g.Count());
         return missing.Keys.Union(excess.Keys)
             .Select(id => new DriftSummary(id, missing.GetValueOrDefault(id), excess.GetValueOrDefault(id))).ToList();
+    }
+
+    /// <summary>
+    /// Xavf xaritasi: bo'lim × tizim bo'yicha asossiz ruxsatlar (tizimda bor, hech qaysi rol bilan asoslanmagan; ishdan ketmagan xodimlar)
+    /// va ulardan imtiyozlilari. Bo'limsiz xodimlar — bo'sh satr.
+    /// </summary>
+    public async Task<IReadOnlyList<RiskCell>> RiskMatrixAsync(CancellationToken ct = default)
+    {
+        var expected = (await ExpectedQuery().Select(e => new { e.IdentityId, e.EntitlementId }).Distinct().ToListAsync(ct))
+            .Select(e => (e.IdentityId, e.EntitlementId)).ToHashSet();
+        var actual = await (
+            from ae in db.AccountEntitlements
+            where ae.Account.IdentityId != null && ae.Account.Status != AccountStatus.Deleted && ae.Entitlement.DeletedAt == null
+                && ae.Account.Identity!.Status != IdentityStatus.Terminated
+            select new { IdentityId = ae.Account.IdentityId!.Value, ae.EntitlementId, ae.Account.Identity!.Department, App = ae.Entitlement.Application.Code,
+                ae.Entitlement.IsPrivileged }).Distinct().ToListAsync(ct);
+        return actual.Where(a => !expected.Contains((a.IdentityId, a.EntitlementId)))
+            .GroupBy(a => (Department: a.Department?.Trim() ?? "", a.App))
+            .Select(g => new RiskCell(g.Key.Department, g.Key.App, g.Count(), g.Count(x => x.IsPrivileged), g.Select(x => x.IdentityId).Distinct().Count()))
+            .ToList();
     }
 
     /// <summary>Haqiqiy ruxsatlar bo'yicha SoD buzilishlari: xodimda qoidaning ikkala tomonidan kamida bittadan ruxsat bor.</summary>

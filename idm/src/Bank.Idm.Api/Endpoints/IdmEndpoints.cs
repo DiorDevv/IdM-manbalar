@@ -142,6 +142,7 @@ public static class IdmEndpoints
         api.MapApplicationEndpoints();
         api.MapReportEndpoints();
         api.MapAccessEndpoints();
+        api.MapInsightEndpoints();
         api.MapRequestEndpoints();
         api.MapProvisioningEndpoints();
         api.MapReviewEndpoints();

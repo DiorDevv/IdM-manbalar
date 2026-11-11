@@ -31,6 +31,7 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
     public DbSet<SodException> SodExceptions => Set<SodException>();
     public DbSet<ApproverDelegation> ApproverDelegations => Set<ApproverDelegation>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<MetricSnapshot> MetricSnapshots => Set<MetricSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -168,6 +169,11 @@ public class IdmDbContext(DbContextOptions<IdmDbContext> options) : DbContext(op
             e.HasOne(x => x.Identity).WithMany().HasForeignKey(x => x.IdentityId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Entitlement).WithMany().HasForeignKey(x => x.EntitlementId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<MetricSnapshot>(e =>
+        {
+            e.HasKey(x => new { x.Day, x.Key });
+            e.Property(x => x.Key).HasMaxLength(64);
         });
         b.Entity<Notification>(e =>
         {

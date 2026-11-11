@@ -24,6 +24,10 @@ public class IdmOptions
     public string? MetricsToken { get; set; }
     /// <summary>Tizimga yozish aylanishi oralig'i (reja + navbat); 0 — fon ishlovchisi o'chiq.</summary>
     public int ProvisioningIntervalSeconds { get; set; } = 30;
+    /// <summary>Takrorlanadigan attestatsiya: kalit — jadval kodi (masalan "monthly"). Batafsil: README, "Attestatsiya jadvali".</summary>
+    public Dictionary<string, Bank.Idm.Infrastructure.Reviews.ReviewScheduleDefinition> ReviewSchedules { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Jadvalni tekshirish oralig'i, soniya (0 — o'chiq).</summary>
+    public int ReviewScheduleIntervalSeconds { get; set; } = 300;
     /// <summary>Bosh sahifa hisoblari shuncha soniya keshlanadi (0 — har safar hisoblanadi).</summary>
     public int DashboardCacheSeconds { get; set; } = 30;
     /// <summary>JSON javoblarni siqish (brotli/gzip). Proksi siqsa, o'chirish mumkin.</summary>

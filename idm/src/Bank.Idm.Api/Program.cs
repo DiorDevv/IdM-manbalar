@@ -44,6 +44,7 @@ builder.Services.AddScoped<ProvisioningPlanner>();
 builder.Services.AddScoped<ProvisioningExecutor>();
 builder.Services.AddScoped<ProvisioningService>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.AccessReviewService>();
+builder.Services.AddScoped<Bank.Idm.Infrastructure.Reviews.ReviewScheduler>();
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Reports.ReportBuilder>();
 builder.Services.AddSingleton<IConnectorFactory, ConnectorFactory>();
 builder.Services.AddSingleton<ClusterMembership>();
@@ -59,6 +60,8 @@ builder.Services.AddScoped<Bank.Idm.Infrastructure.Notifications.NotificationSer
 builder.Services.AddScoped<Bank.Idm.Infrastructure.Notifications.INotificationSender>(sp => new Bank.Idm.Infrastructure.Notifications.SmtpNotificationSender(
     sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<IdmOptions>>().CurrentValue.Notifications));
 builder.Services.AddHostedService<NotificationWorker>();
+builder.Services.AddHostedService<ReviewScheduleWorker>();
+builder.Services.AddHostedService<MetricSnapshotWorker>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, PortalRolesClaimsTransformation>();

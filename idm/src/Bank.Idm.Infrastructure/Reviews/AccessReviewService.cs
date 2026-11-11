@@ -6,8 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bank.Idm.Infrastructure.Reviews;
 
+/// <param name="ChangedSince">Berilsa — faqat shu vaqtdan keyin berilgan ruxsatlar va barcha imtiyozlilar (oylik "o'zgarishlar" attestatsiyasi).</param>
 public record CampaignScope(string? Name, string? Description, string? Department, Guid? ApplicationId, bool PrivilegedOnly, DateOnly DueDate,
-    bool RevokeUnreviewed = false);
+    bool RevokeUnreviewed = false, DateTimeOffset? ChangedSince = null);
 
 /// <summary>Kampaniya ishga tushsa nima bo'lishi: yozuvlar, xodimlar, tekshiruvchilar va administratorlar navbatiga tushadiganlar.</summary>
 public record CampaignPreview(int Items, int Roles, int Entitlements, int Privileged, int Identities, int Reviewers, int AdminPool);
@@ -26,6 +27,7 @@ public record ReviewResult<T>(T? Value, int Status = 200, string? Error = null)
 public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider time)
 {
     public const int MaxBatch = 500;
+    public const string NothingToReview = "Qamrovda ko'rib chiqiladigan ruxsat yo'q";
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public async Task<ReviewResult<CampaignPreview>> PreviewAsync(CampaignScope scope, CancellationToken ct = default)
@@ -39,7 +41,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
     {
         if (await ValidateAsync(scope, ct) is { } error) return ReviewResult<AccessReviewCampaign>.Fail(400, error);
         var items = await BuildItemsAsync(scope, ct);
-        if (items.Count == 0) return ReviewResult<AccessReviewCampaign>.Fail(400, "Qamrovda ko'rib chiqiladigan ruxsat yo'q");
+        if (items.Count == 0) return ReviewResult<AccessReviewCampaign>.Fail(400, NothingToReview);
         var campaign = new AccessReviewCampaign
         {
             Name = scope.Name!.Trim(), Description = Clean(scope.Description), Department = Clean(scope.Department), ApplicationId = scope.ApplicationId,
@@ -53,7 +55,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         {
             await audit.SaveChangesAsync(new AuditEntry(actor.Login, actor.Name, "review.campaign-created", "review-campaign", campaign.Id.ToString(),
                 JsonSerializer.Serialize(new { name = campaign.Name, campaign.Department, campaign.ApplicationId, campaign.PrivilegedOnly, campaign.DueDate,
-                    campaign.RevokeUnreviewed, summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
+                    campaign.RevokeUnreviewed, changedSince = scope.ChangedSince, summary.Items, summary.Identities, summary.Reviewers, summary.AdminPool }, Json), actor.IpAddress, actor.CorrelationId), ct);
             await CopyItemsAsync(campaign.Id, items, ct);
             await transaction.CommitAsync(ct);
         }
@@ -286,7 +288,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         var assignments = await db.IdentityRoles.AsNoTracking().Where(r => ids.Contains(r.IdentityId) && r.ValidFrom <= now && (r.ValidTo == null || r.ValidTo > now))
             .Select(r => new
             {
-                r.Id, r.IdentityId, r.RoleId, r.Source, r.Role.Code, r.Role.Name, r.Role.Risk,
+                r.Id, r.IdentityId, r.RoleId, r.Source, r.Role.Code, r.Role.Name, r.Role.Risk, r.ValidFrom,
                 Entitlements = r.Role.Entitlements.Where(e => e.Entitlement.DeletedAt == null)
                     .Select(e => new { e.EntitlementId, e.Entitlement.ApplicationId, e.Entitlement.Application.Code, e.Entitlement.IsPrivileged }).ToList()
             }).ToListAsync(ct);
@@ -298,7 +300,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
             .Select(ae => new
             {
                 IdentityId = ae.Account.IdentityId!.Value, ae.AccountId, ae.Account.Login, ae.EntitlementId, ae.Entitlement.Name, ae.Entitlement.IsPrivileged,
-                ae.Entitlement.ApplicationId, ae.Entitlement.Application.Code
+                ae.Entitlement.ApplicationId, ae.Entitlement.Application.Code, ae.GrantedAt
             }).ToListAsync(ct);
 
         Guid? Reviewer(Guid identityId)
@@ -312,6 +314,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
             if (scope.ApplicationId is { } app && a.Entitlements.All(e => e.ApplicationId != app)) continue;
             var privileged = a.Risk >= RiskLevel.High || a.Entitlements.Any(e => e.IsPrivileged);
             if (scope.PrivilegedOnly && !privileged) continue;
+            if (scope.ChangedSince is { } since && !privileged && a.ValidFrom < since) continue;
             var apps = string.Join(", ", a.Entitlements.Select(e => e.Code).Distinct().Order());
             items.Add(new AccessReviewItem
             {
@@ -323,6 +326,7 @@ public class AccessReviewService(IdmDbContext db, AuditLog audit, TimeProvider t
         {
             if (scope.ApplicationId is { } app && m.ApplicationId != app) continue;
             if (scope.PrivilegedOnly && !m.IsPrivileged) continue;
+            if (scope.ChangedSince is { } since && !m.IsPrivileged && m.GrantedAt < since) continue;
             items.Add(new AccessReviewItem
             {
                 Kind = AccessReviewItemKind.Entitlement, IdentityId = m.IdentityId, ReviewerId = Reviewer(m.IdentityId), AccountId = m.AccountId,
