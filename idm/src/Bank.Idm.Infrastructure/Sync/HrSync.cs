@@ -198,14 +198,16 @@ public class HrSync(IdmDbContext db, AuditLog audit, TimeProvider time) : SyncRu
     }
 
     /// <summary>
-    /// Filial (manba bersa) yoki bo'lim o'zgardimi. Bo'shliqlar va katta-kichik harf hisobga olinmaydi: HR'da yozilishi
-    /// tuzatilgani o'tish emas. Lavozim yoki rahbar o'zgarishi o'tish hisoblanmaydi (avtomatik rollar o'zi yangilanadi).
+    /// Filial (manba bersa) yoki bo'lim bir aniq qiymatdan boshqasiga o'zgardimi. Bo'sh qiymat to'ldirilishi (masalan filial ustuni
+    /// birinchi marta ulanganda) yoki bo'shab qolishi (HR'dagi xato) o'tish emas; bo'shliqlar va katta-kichik harf ham hisobga olinmaydi.
+    /// Lavozim yoki rahbar o'zgarishi o'tish hisoblanmaydi (avtomatik rollar o'zi yangilanadi).
     /// </summary>
     internal static bool OrgMoved(Identity i, HrRecord r, bool hasBranch) =>
-        (hasBranch && !SameUnit(i.Branch, r.Branch)) || !SameUnit(i.Department, r.Department);
+        (hasBranch && Changed(i.Branch, r.Branch)) || Changed(i.Department, r.Department);
 
-    private static bool SameUnit(string? a, string? b) =>
-        string.Equals(a?.Trim() ?? "", b?.Trim() ?? "", StringComparison.OrdinalIgnoreCase);
+    private static bool Changed(string? from, string? to) =>
+        !string.IsNullOrWhiteSpace(from) && !string.IsNullOrWhiteSpace(to)
+        && !string.Equals(from.Trim(), to.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private async Task<List<AuditEntry>> ApplyMoverAsync(List<Identity> moved, int graceDays, DateTimeOffset now, Actor actor, CancellationToken ct)
     {

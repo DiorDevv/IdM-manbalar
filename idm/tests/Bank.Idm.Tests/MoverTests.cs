@@ -127,6 +127,35 @@ public class MoverTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Filling_in_or_clearing_a_branch_or_department_is_not_a_move()
+    {
+        // Filial ustuni birinchi marta ulanadi: hammada bo'sh → qiymat. Ommaviy "o'tish" bo'lmasligi kerak (stendda topilgan xato)
+        _hr.Snapshot = new HrSnapshot([Karimov with { Branch = null }, OldBoss with { Branch = null }, NewBoss with { Branch = null },
+            .. Others.Select(o => o with { Branch = null })]) { HasBranch = true };
+        await SyncAsync();
+        Guid request;
+        await using (var db = pg.CreateContext())
+        {
+            var a = new IdentityRole { IdentityId = (await GetAsync(db, "1")).Id, RoleId = _roleId, Source = RoleAssignmentSource.Request, ValidFrom = Start.AddDays(-1) };
+            db.IdentityRoles.Add(a);
+            await db.SaveChangesAsync(Ct);
+            request = a.Id;
+        }
+
+        SetHr(true, Karimov, OldBoss, NewBoss);
+        Assert.Equal(ConnectorRunStatus.Succeeded, (await SyncAsync()).Status);
+        SetHr(true, Karimov with { Department = null }, OldBoss, NewBoss);
+        Assert.Equal(ConnectorRunStatus.Succeeded, (await SyncAsync()).Status);
+
+        await using (var db = pg.CreateContext())
+        {
+            var k = await GetAsync(db, "1");
+            Assert.Equal(("Chilonzor", (string?)null), (k.Branch, k.Department));
+            Assert.Null((await db.IdentityRoles.SingleAsync(r => r.Id == request, Ct)).MoverDueAt);
+        }
+    }
+
+    [Fact]
     public async Task Branch_change_alone_is_a_move()
     {
         var (request, _, _) = await SeedAsync();
